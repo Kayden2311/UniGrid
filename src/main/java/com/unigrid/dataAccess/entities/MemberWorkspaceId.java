@@ -1,4 +1,4 @@
-package com.unigrid.DataAccess.entity;
+package com.unigrid.dataAccess.entities;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;

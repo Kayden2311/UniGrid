@@ -1,4 +1,4 @@
-package com.unigrid.DataAccess.entity;
+package com.unigrid.dataAccess.entities;
 
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -12,30 +12,33 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Table(name = "Comment", schema = "dbo")
-public class Comment {
+@Table(name = "Schedule", schema = "dbo")
+public class Schedule {
     @Id
-    @ColumnDefault("newsequentialid()")
-    @Column(name = "commentId", nullable = false)
+    @Column(name = "scheduleId", nullable = false)
     private UUID id;
-
-    @Column(name = "taskId", nullable = false)
-    private UUID taskId;
 
     @Column(name = "memberId", nullable = false)
     private UUID memberId;
 
     @Nationalized
+    @Column(name = "title", nullable = false)
+    private String title;
+
+    @Nationalized
     @Lob
-    @Column(name = "content", nullable = false)
-    private String content;
+    @Column(name = "description")
+    private String description;
+
+    @Column(name = "startTime")
+    private Instant startTime;
+
+    @Column(name = "endTime")
+    private Instant endTime;
 
     @ColumnDefault("sysdatetime()")
     @Column(name = "createdAt")
     private Instant createdAt;
-
-    @Column(name = "updatedAt")
-    private Instant updatedAt;
 
 
 }
