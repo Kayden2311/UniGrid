@@ -1,0 +1,695 @@
+@page
+@model unigrid.Pages.ScheduleModel
+@{
+    ViewData["Title"] = "Schedule";
+    
+    var serializerSettings = new System.Text.Json.JsonSerializerOptions 
+    { 
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase 
+    };
+    var jsonEvents = System.Text.Json.JsonSerializer.Serialize(Model.PersonalEvents.Select(e => new {
+        id = e.Id,
+        title = e.Title,
+        description = e.Description ?? "",
+        startTime = e.StartTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+        endTime = e.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
+    }), serializerSettings);
+
+    var jsonTasks = System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceTasks.Select(t => new {
+        id = t.Id,
+        title = t.Title,
+        workspaceName = t.Workspace?.Name ?? "Workspace",
+        dueDate = t.DueDate?.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+        priority = t.Priority == 3 ? "high" : (t.Priority == 2 ? "medium" : "low")
+    }), serializerSettings);
+}
+
+<div class="space-y-6" x-data="scheduleComponent()">>
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+            <h2 class="text-3xl font-black text-slate-800 tracking-tight">Schedule</h2>
+            <p class="text-slate-500 mt-1 text-sm font-medium">Coordinate your calendar, database events, and homework deadlines.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-1 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                <button @@click="weekOffset--" class="p-2 hover:bg-white hover:shadow-sm rounded-xl text-slate-600 transition-all">
+                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                </button>
+                <span class="px-3 text-xs font-bold text-slate-700 min-w-[180px] text-center" x-text="weekLabel"></span>
+                <button @@click="weekOffset++" class="p-2 hover:bg-white hover:shadow-sm rounded-xl text-slate-600 transition-all">
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <button @@click="weekOffset = 0" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-2xl hover:bg-slate-50 transition-all shadow-sm">
+                Today
+            </button>
+            <button @@click="openAdd(0, 4)" class="bg-indigo-600 text-white px-5 py-2.5 rounded-2xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center gap-2">
+                <i data-lucide="plus" class="w-4 h-4"></i> Add Event
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Board Grid (Responsive columns stacked on mobile) -->
+    <div class="flex flex-col xl:flex-row gap-6 items-start">
+        
+        <!-- Left Side: Interactive Calendar Sheet -->
+        <div class="flex-1 w-full glass rounded-[3.5rem] shadow-sm border border-slate-200 overflow-hidden bg-white/50 backdrop-blur-md">
+            
+            <div class="min-w-[760px] overflow-x-auto">
+                <!-- Day Headers -->
+                <div class="grid grid-cols-[80px_repeat(7,1fr)] border-b border-slate-100 bg-slate-50/50 sticky top-0 z-10">
+                    <div class="border-r border-slate-100 py-4 flex items-center justify-center">
+                        <i data-lucide="clock" class="w-4 h-4 text-slate-400"></i>
+                    </div>
+                    <template x-for="(day, idx) in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']">
+                        <div class="py-4 text-center border-r border-slate-100 last:border-r-0">
+                            <span class="text-xs font-black text-slate-400 uppercase tracking-widest block" x-text="day"></span>
+                            <span class="text-lg font-black text-slate-700 mt-0.5 block" x-text="weekDates[idx].getDate()"></span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Calendar Content Sheet -->
+                <div class="grid grid-cols-[80px_repeat(7,1fr)] relative" style="height: 1632px;">
+                    <!-- Vertical Time Grid Rails -->
+                    <div class="border-r border-slate-100 relative bg-slate-50/20">
+                        <template x-for="i in 17">
+                            <div class="absolute left-0 right-0 text-[10px] font-bold text-slate-400/80 pr-2 text-right" 
+                                 :style="'top: ' + ((i - 1) * 96) + 'px; height: 96px; line-height: 24px;'">
+                                <span x-text="slotToTime((i - 1) * 2)"></span>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Seven columns for Mon to Sun -->
+                    <template x-for="dayIdx in 7">
+                        <div class="border-r border-slate-100 last:border-r-0 relative group h-full bg-white/40">
+                            <!-- Half-hour lines and cell triggers -->
+                            <template x-for="slotIdx in 34">
+                                <div @@click="openAdd(dayIdx - 1, slotIdx - 1)" 
+                                     @@dragover.prevent
+                                     @@drop="dropEvent($event, dayIdx - 1, slotIdx - 1)"
+                                     class="absolute left-0 right-0 border-b transition-colors cursor-crosshair hover:bg-slate-50/60"
+                                     :class="(slotIdx - 1) % 2 === 0 ? 'border-slate-100' : 'border-slate-50/40'"
+                                     :style="'top: ' + ((slotIdx - 1) * 48) + 'px; height: 48px;'"></div>
+                            </template>
+
+                            <!-- Rendered Event Cards (Enables responsive drag, move and resize rescheduling) -->
+                            <template x-for="ev in getEventsForDay(dayIdx - 1)">
+                                <div @@click.stop="openEdit(ev)" 
+                                     @@mousedown.stop="startPointerMove($event, ev, dayIdx - 1, 'move')"
+                                     @@touchstart.stop="startPointerMove($event, ev, dayIdx - 1, 'move')"
+                                     class="absolute rounded-2xl border px-3 py-2 text-xs leading-snug cursor-grab active:cursor-grabbing select-none z-20 shadow-sm transition-all hover:shadow-md flex flex-col justify-between"
+                                     :class="{
+                                         'bg-indigo-50/90 border-indigo-200/80 text-indigo-700': ev.color === 'indigo',
+                                         'bg-violet-50/90 border-violet-200/80 text-violet-700': ev.color === 'violet',
+                                         'bg-emerald-50/90 border-emerald-200/80 text-emerald-700': ev.color === 'emerald',
+                                         'bg-rose-50/90 border-rose-200/80 text-rose-700': ev.color === 'rose'
+                                     }"
+                                     :style="'top: ' + (ev.startSlot * 48 + 2) + 'px; height: ' + (ev.duration * 48 - 4) + 'px; left: 4px; right: 4px;'">
+                                     
+                                     <div>
+                                         <p class="font-black truncate" x-text="ev.title"></p>
+                                         <p class="text-[10px] opacity-75 mt-0.5 line-clamp-2" x-text="ev.description" x-show="ev.duration >= 2"></p>
+                                     </div>
+                                     <div class="flex items-center gap-1 opacity-60 text-[9px] font-bold mt-1">
+                                         <i data-lucide="clock" class="w-3 h-3 shrink-0"></i>
+                                         <span x-text="slotToTime(ev.startSlot) + ' - ' + slotToTime(ev.startSlot + ev.duration)"></span>
+                                     </div>
+
+                                     <!-- Resizing handle at the bottom edge -->
+                                     <div @@mousedown.stop.prevent="startPointerMove($event, ev, dayIdx - 1, 'resize')"
+                                          @@touchstart.stop.prevent="startPointerMove($event, ev, dayIdx - 1, 'resize')"
+                                          class="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize z-30 flex items-center justify-center group">
+                                         <span class="w-8 h-1 bg-slate-400/20 group-hover:bg-slate-400/60 rounded-full transition-colors"></span>
+                                     </div>
+                                 </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: Deadlines Widget Panel -->
+        <div class="w-full xl:w-80 shrink-0 glass bg-white/60 p-6 rounded-[3rem] shadow-sm border border-slate-200/60 sticky top-6">
+            <div class="flex items-center gap-2 mb-6">
+                <div class="p-2 bg-rose-50 text-rose-500 rounded-xl">
+                    <i data-lucide="bell-ring" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <h3 class="text-sm font-black text-slate-800">Deadlines This Week</h3>
+                    <p class="text-[10px] text-slate-400 font-bold tracking-wide uppercase">From workspaces</p>
+                </div>
+            </div>
+
+            <div class="space-y-3.5">
+                <!-- Fallback empty state -->
+                <div x-show="weeklyDeadlines.length === 0" class="text-center py-10 bg-slate-50/50 rounded-[2rem] border border-dashed border-slate-200 p-4">
+                    <p class="text-xs font-bold text-slate-400">No deadlines due this week.</p>
+                </div>
+
+                <!-- Deadline List Items -->
+                <template x-for="dl in weeklyDeadlines" :key="dl.id">
+                    <div class="p-4 rounded-3xl border transition-all hover:scale-[1.01]"
+                         :class="{
+                             'border-rose-100 bg-rose-50/30 text-rose-900': dl.priority === 'high',
+                             'border-amber-100 bg-amber-50/20 text-amber-900': dl.priority === 'medium',
+                             'border-slate-100 bg-slate-50/60 text-slate-600': dl.priority === 'low'
+                         }">
+                        <div class="flex items-start justify-between gap-2">
+                            <span class="font-black text-xs block truncate" x-text="dl.title"></span>
+                            <span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest shrink-0"
+                                  :class="{
+                                      'bg-rose-500/10 text-rose-600': dl.priority === 'high',
+                                      'bg-amber-500/10 text-amber-600': dl.priority === 'medium',
+                                      'bg-slate-200/50 text-slate-500': dl.priority === 'low'
+                                  }" x-text="dl.priority"></span>
+                        </div>
+                        <p class="text-[10px] font-bold opacity-60 mt-1" x-text="dl.workspaceName"></p>
+                        <div class="flex items-center gap-1.5 mt-3 text-[10px] font-black opacity-80">
+                            <i data-lucide="calendar" class="w-3.5 h-3.5 shrink-0"></i>
+                            <span x-text="dl.formattedDate"></span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Help Legend -->
+            <div class="mt-6 pt-5 border-t border-slate-100 space-y-2 text-[10px] font-bold text-slate-400 leading-relaxed">
+                <p class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-indigo-500 shrink-0"></span> Personal Events</p>
+                <p class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-violet-500 shrink-0"></span> Academic Sprint / Study Syncs</p>
+                <p class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0"></span> Personal Breaks & Meals</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden standard forms linked to C# page model CRUD endpoints -->
+    <form id="createEventForm" method="post" asp-page-handler="CreateEvent" style="display:none;">
+        <input type="text" name="title" x-model="formTitle" />
+        <input type="text" name="description" x-model="formDesc" />
+        <input type="datetime-local" name="startTime" x-model="formStartTime" />
+        <input type="datetime-local" name="endTime" x-model="formEndTime" />
+        @Html.AntiForgeryToken()
+    </form>
+
+    <form id="editEventForm" method="post" asp-page-handler="EditEvent" style="display:none;">
+        <input type="hidden" name="eventId" x-model="formId" />
+        <input type="text" name="title" x-model="formTitle" />
+        <input type="text" name="description" x-model="formDesc" />
+        <input type="datetime-local" name="startTime" x-model="formStartTime" />
+        <input type="datetime-local" name="endTime" x-model="formEndTime" />
+        @Html.AntiForgeryToken()
+    </form>
+
+    <form id="deleteEventForm" method="post" asp-page-handler="DeleteEvent" style="display:none;">
+        <input type="hidden" name="eventId" x-model="formId" />
+        @Html.AntiForgeryToken()
+    </form>
+
+    <!-- Create/Edit Event Dialog Modal (Glassmorphism layout matching React) -->
+    <div x-show="dialogOpen" 
+         class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+         x-transition x-cloak>
+        
+        <div @@click.away="dialogOpen = false" 
+             class="w-full max-w-md glass bg-white p-8 rounded-[3.5rem] shadow-2xl border border-white/80 space-y-6 relative animate-in fade-in zoom-in-95 duration-200">
+            
+            <div class="flex items-center justify-between">
+                <h3 class="text-2xl font-black text-slate-800" x-text="isEdit ? 'Modify Schedule Node' : 'Compose Event'"></h3>
+                <button @@click="dialogOpen = false" class="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-50 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Title -->
+                <div class="space-y-1.5">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Event Name</label>
+                    <input type="text" x-model="formTitle" placeholder="e.g. Calculus midterm prep"
+                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-semibold text-slate-700">
+                </div>
+
+                <!-- Description -->
+                <div class="space-y-1.5">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Description / Notes</label>
+                    <textarea x-model="formDesc" placeholder="Describe tasks or location info..." rows="2"
+                              class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-semibold text-slate-700"></textarea>
+                </div>
+
+                <!-- Premium Custom AM/PM Date & Time Picker Grid -->
+                <div class="space-y-4">
+                    <!-- Date Selector -->
+                    <div class="space-y-1.5">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Event Date</label>
+                        <input type="date" x-model="pickerDate"
+                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-semibold text-slate-700 text-sm">
+                    </div>
+
+                    <!-- Start Time Row -->
+                    <div class="space-y-1.5">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starts At</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <!-- Hour Selector -->
+                            <select x-model="pickerStartHour" class="px-3 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold text-xs text-slate-700">
+                                <template x-for="h in [1,2,3,4,5,6,7,8,9,10,11,12]">
+                                    <option :value="h" x-text="h"></option>
+                                </template>
+                            </select>
+                            <!-- Minute Selector -->
+                            <select x-model="pickerStartMin" class="px-3 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold text-xs text-slate-700">
+                                <option value="00">:00</option>
+                                <option value="30">:30</option>
+                            </select>
+                            <!-- AM/PM Buttons -->
+                            <div class="flex bg-slate-50 p-1 border border-slate-200 rounded-2xl gap-1">
+                                <button type="button" @@click="pickerStartAmpm = 'AM'"
+                                        :class="pickerStartAmpm === 'AM' ? 'bg-indigo-600 text-white shadow-sm font-black' : 'text-slate-400 font-bold'"
+                                        class="flex-1 text-[9px] uppercase rounded-xl transition-all">AM</button>
+                                <button type="button" @@click="pickerStartAmpm = 'PM'"
+                                        :class="pickerStartAmpm === 'PM' ? 'bg-indigo-600 text-white shadow-sm font-black' : 'text-slate-400 font-bold'"
+                                        class="flex-1 text-[9px] uppercase rounded-xl transition-all">PM</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- End Time Row -->
+                    <div class="space-y-1.5">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ends At</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <!-- Hour Selector -->
+                            <select x-model="pickerEndHour" class="px-3 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold text-xs text-slate-700">
+                                <template x-for="h in [1,2,3,4,5,6,7,8,9,10,11,12]">
+                                    <option :value="h" x-text="h"></option>
+                                </template>
+                            </select>
+                            <!-- Minute Selector -->
+                            <select x-model="pickerEndMin" class="px-3 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold text-xs text-slate-700">
+                                <option value="00">:00</option>
+                                <option value="30">:30</option>
+                            </select>
+                            <!-- AM/PM Buttons -->
+                            <div class="flex bg-slate-50 p-1 border border-slate-200 rounded-2xl gap-1">
+                                <button type="button" @@click="pickerEndAmpm = 'AM'"
+                                        :class="pickerEndAmpm === 'AM' ? 'bg-indigo-600 text-white shadow-sm font-black' : 'text-slate-400 font-bold'"
+                                        class="flex-1 text-[9px] uppercase rounded-xl transition-all">AM</button>
+                                <button type="button" @@click="pickerEndAmpm = 'PM'"
+                                        :class="pickerEndAmpm === 'PM' ? 'bg-indigo-600 text-white shadow-sm font-black' : 'text-slate-400 font-bold'"
+                                        class="flex-1 text-[9px] uppercase rounded-xl transition-all">PM</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex items-center justify-between pt-2">
+                <div>
+                    <button x-show="isEdit" @@click="deleteEvent()" 
+                            class="px-4 py-3 bg-rose-50 text-rose-600 rounded-2xl text-xs font-black shadow-sm shadow-rose-100 hover:bg-rose-100 hover:scale-[1.01] transition-all flex items-center gap-1.5">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
+                    </button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button @@click="dialogOpen = false" class="px-5 py-3 border border-slate-200 text-slate-500 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all">Cancel</button>
+                    <button @@click="saveEvent()" :disabled="!formTitle.trim()" 
+                            class="px-5 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-text="isEdit ? 'Save Changes' : 'Create Event'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function scheduleComponent() {
+            return {
+                weekOffset: 0,
+                events: @Html.Raw(jsonEvents),
+                tasks: @Html.Raw(jsonTasks),
+                dialogOpen: false,
+                isEdit: false,
+                
+                // Form fields
+                formId: '',
+                formTitle: '',
+                formDesc: '',
+                formStartTime: '',
+                formEndTime: '',
+                formColor: 'indigo',
+
+                // Custom AM/PM picker helper fields
+                pickerDate: '',
+                pickerStartHour: '12',
+                pickerStartMin: '00',
+                pickerStartAmpm: 'AM',
+                pickerEndHour: '12',
+                pickerEndMin: '00',
+                pickerEndAmpm: 'AM',
+
+                // Pointer interaction states for drag & drop and resize
+                dragState: {
+                    active: false,
+                    mode: '', // 'move' or 'resize'
+                    eventId: '',
+                    startX: 0,
+                    startY: 0,
+                    origStartTime: null,
+                    origEndTime: null,
+                    origDayIdx: 0,
+                    lastSlotDelta: 0,
+                    lastDayDelta: 0
+                },
+
+                // GMT/timezone date-time utility
+                toLocalISOString(date) {
+                    let tzOffset = date.getTimezoneOffset() * 60000;
+                    return (new Date(date.getTime() - tzOffset)).toISOString().slice(0, 16);
+                },
+
+                get weekDates() {
+                    return this.getWeekDates(this.weekOffset);
+                },
+
+                get weekLabel() {
+                    let dates = this.weekDates;
+                    let startOpt = { month: 'short', day: 'numeric' };
+                    let endOpt = { month: 'short', day: 'numeric', year: 'numeric' };
+                    return dates[0].toLocaleDateString('en-US', startOpt) + ' – ' + dates[6].toLocaleDateString('en-US', endOpt);
+                },
+
+                getWeekDates(offset) {
+                    let now = new Date();
+                    let monday = new Date(now);
+                    let diff = now.getDay() === 0 ? -6 : 1 - now.getDay();
+                    monday.setDate(now.getDate() + diff + offset * 7);
+                    let dates = [];
+                    for (let i = 0; i < 7; i++) {
+                        let d = new Date(monday);
+                        d.setDate(monday.getDate() + i);
+                        dates.push(d);
+                    }
+                    return dates;
+                },
+
+                getEventsForDay(dayIdx) {
+                    let dateStr = this.weekDates[dayIdx].toDateString();
+                    return this.events.filter(e => {
+                        let eDate = new Date(e.startTime);
+                        return eDate.toDateString() === dateStr;
+                    }).map(e => {
+                        let startDate = new Date(e.startTime);
+                        let endDate = new Date(e.endTime);
+                        
+                        // Map 7:00 AM to Midnight (17 hours)
+                        let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
+                        let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
+                        let duration = Math.max(1, endSlot - startSlot);
+                        
+                        // Auto-assign nice color scheme based on title
+                        let lowerTitle = e.title.toLowerCase();
+                        let color = 'indigo';
+                        if (lowerTitle.includes('calculus') || lowerTitle.includes('math') || lowerTitle.includes('sprint') || lowerTitle.includes('sync')) color = 'violet';
+                        else if (lowerTitle.includes('gym') || lowerTitle.includes('sport') || lowerTitle.includes('break') || lowerTitle.includes('dinner')) color = 'emerald';
+                        else if (lowerTitle.includes('deadline') || lowerTitle.includes('exam') || lowerTitle.includes('test')) color = 'rose';
+
+                        return {
+                            id: e.id,
+                            title: e.title,
+                            description: e.description,
+                            startSlot: startSlot,
+                            duration: duration,
+                            color: color,
+                            startTime: e.startTime,
+                            endTime: e.endTime
+                        };
+                    });
+                },
+
+                get weeklyDeadlines() {
+                    let dates = this.weekDates;
+                    let startOfWeek = new Date(dates[0]);
+                    startOfWeek.setHours(0, 0, 0, 0);
+                    let endOfWeek = new Date(dates[6]);
+                    endOfWeek.setHours(23, 59, 59, 999);
+                    
+                    return this.tasks.filter(t => {
+                        if (!t.dueDate) return false;
+                        let dDate = new Date(t.dueDate);
+                        return dDate >= startOfWeek && dDate <= endOfWeek;
+                    }).map(t => {
+                        let dDate = new Date(t.dueDate);
+                        let options = { weekday: 'short', hour: '2-digit', minute: '2-digit' };
+                        return {
+                            id: t.id,
+                            title: t.title,
+                            workspaceName: t.workspaceName,
+                            formattedDate: dDate.toLocaleDateString('en-US', options),
+                            priority: t.priority
+                        };
+                    });
+                },
+
+                // Force standard English AM/PM representation rather than local SA/CH formatting
+                slotToTime(slot) {
+                    let h = 7 + Math.floor(slot / 2);
+                    let m = slot % 2 === 0 ? '00' : '30';
+                    let suffix = h >= 12 ? 'PM' : 'AM';
+                    let displayHour = h % 12;
+                    if (displayHour === 0) displayHour = 12;
+                    return displayHour + ':' + m + ' ' + suffix;
+                },
+
+                parseDateTimes() {
+                    let start = new Date(this.formStartTime);
+                    let end = new Date(this.formEndTime);
+                    
+                    this.pickerDate = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
+                    
+                    let sh = start.getHours();
+                    this.pickerStartAmpm = sh >= 12 ? 'PM' : 'AM';
+                    let sh12 = sh % 12;
+                    this.pickerStartHour = sh12 === 0 ? 12 : sh12;
+                    this.pickerStartMin = start.getMinutes() >= 30 ? '30' : '00';
+                    
+                    let eh = end.getHours();
+                    this.pickerEndAmpm = eh >= 12 ? 'PM' : 'AM';
+                    let eh12 = eh % 12;
+                    this.pickerEndHour = eh12 === 0 ? 12 : eh12;
+                    this.pickerEndMin = end.getMinutes() >= 30 ? '30' : '00';
+                },
+
+                compileDateTimes() {
+                    let sh = parseInt(this.pickerStartHour);
+                    if (this.pickerStartAmpm === 'PM' && sh < 12) sh += 12;
+                    if (this.pickerStartAmpm === 'AM' && sh === 12) sh = 0;
+                    let sm = parseInt(this.pickerStartMin);
+                    
+                    let start = new Date(this.pickerDate + 'T00:00:00');
+                    start.setHours(sh, sm, 0, 0);
+                    this.formStartTime = this.toLocalISOString(start);
+                    
+                    let eh = parseInt(this.pickerEndHour);
+                    if (this.pickerEndAmpm === 'PM' && eh < 12) eh += 12;
+                    if (this.pickerEndAmpm === 'AM' && eh === 12) eh = 0;
+                    let em = parseInt(this.pickerEndMin);
+                    
+                    let end = new Date(this.pickerDate + 'T00:00:00');
+                    end.setHours(eh, em, 0, 0);
+                    this.formEndTime = this.toLocalISOString(end);
+                },
+
+                openAdd(dayIdx, slotIdx) {
+                    this.isEdit = false;
+                    this.formId = '';
+                    this.formTitle = '';
+                    this.formDesc = '';
+                    
+                    let date = this.weekDates[dayIdx];
+                    let h = 7 + Math.floor(slotIdx / 2);
+                    let m = slotIdx % 2 === 0 ? 0 : 30;
+                    
+                    let startDate = new Date(date);
+                    startDate.setHours(h, m, 0, 0);
+                    
+                    let endDate = new Date(startDate);
+                    endDate.setHours(startDate.getHours() + 1);
+                    
+                    this.formStartTime = this.toLocalISOString(startDate);
+                    this.formEndTime = this.toLocalISOString(endDate);
+                    
+                    this.parseDateTimes();
+                    this.dialogOpen = true;
+                },
+
+                openEdit(event) {
+                    this.isEdit = true;
+                    this.formId = event.id;
+                    this.formTitle = event.title;
+                    this.formDesc = event.description;
+                    
+                    let startDate = new Date(event.startTime);
+                    let endDate = new Date(event.endTime);
+                    
+                    this.formStartTime = this.toLocalISOString(startDate);
+                    this.formEndTime = this.toLocalISOString(endDate);
+                    
+                    this.parseDateTimes();
+                    this.dialogOpen = true;
+                },
+
+                // Pointer interaction states for drag/drop and edge-resizing (Unified mouse & touch)
+                startPointerMove(e, ev, dayIdx, mode) {
+                    // Prevent normal text highlights or browser scrolls during action
+                    let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    
+                    this.dragState = {
+                        active: true,
+                        mode: mode,
+                        eventId: ev.id,
+                        startX: clientX,
+                        startY: clientY,
+                        origStartTime: new Date(ev.startTime),
+                        origEndTime: new Date(ev.endTime),
+                        origDayIdx: dayIdx,
+                        lastSlotDelta: 0,
+                        lastDayDelta: 0
+                    };
+
+                    this._moveHandler = (event) => this.handlePointerMove(event);
+                    this._upHandler = () => this.handlePointerUp();
+
+                    window.addEventListener('mousemove', this._moveHandler);
+                    window.addEventListener('touchmove', this._moveHandler, { passive: false });
+                    window.addEventListener('mouseup', this._upHandler);
+                    window.addEventListener('touchend', this._upHandler);
+                },
+
+                handlePointerMove(e) {
+                    if (!this.dragState.active) return;
+                    if (e.cancelable) e.preventDefault();
+
+                    let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                    let dx = clientX - this.dragState.startX;
+                    let dy = clientY - this.dragState.startY;
+
+                    let gridEl = document.querySelector('.grid-cols-7');
+                    let colWidth = gridEl ? (gridEl.getBoundingClientRect().width / 7) : 120;
+
+                    let slotDelta = Math.round(dy / 48);
+                    let dayDelta = this.dragState.mode === 'move' ? Math.round(dx / colWidth) : 0;
+
+                    if (slotDelta === this.dragState.lastSlotDelta && dayDelta === this.dragState.lastDayDelta) {
+                        return;
+                    }
+
+                    this.dragState.lastSlotDelta = slotDelta;
+                    this.dragState.lastDayDelta = dayDelta;
+
+                    let ev = this.events.find(x => x.id === this.dragState.eventId);
+                    if (!ev) return;
+
+                    let start = new Date(this.dragState.origStartTime.getTime());
+                    let end = new Date(this.dragState.origEndTime.getTime());
+
+                    if (this.dragState.mode === 'move') {
+                        start.setMinutes(start.getMinutes() + slotDelta * 30);
+                        end.setMinutes(end.getMinutes() + slotDelta * 30);
+
+                        let targetDayIdx = Math.max(0, Math.min(6, this.dragState.origDayIdx + dayDelta));
+                        let targetDate = this.weekDates[targetDayIdx];
+                        start.setFullYear(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+                        end.setFullYear(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+                    } else if (this.dragState.mode === 'resize') {
+                        end.setMinutes(end.getMinutes() + slotDelta * 30);
+                        let minEnd = new Date(start.getTime() + 30 * 60000);
+                        if (end < minEnd) end = minEnd;
+                    }
+
+                    ev.startTime = this.toLocalISOString(start) + 'Z';
+                    ev.endTime = this.toLocalISOString(end) + 'Z';
+                },
+
+                handlePointerUp() {
+                    if (!this.dragState.active) return;
+                    
+                    window.removeEventListener('mousemove', this._moveHandler);
+                    window.removeEventListener('touchmove', this._moveHandler);
+                    window.removeEventListener('mouseup', this._upHandler);
+                    window.removeEventListener('touchend', this._upHandler);
+
+                    let ev = this.events.find(x => x.id === this.dragState.eventId);
+                    this.dragState.active = false;
+
+                    if (ev) {
+                        this.formId = ev.id;
+                        this.formTitle = ev.title;
+                        this.formDesc = ev.description;
+                        this.formStartTime = ev.startTime.substring(0, 16);
+                        this.formEndTime = ev.endTime.substring(0, 16);
+
+                        this.$nextTick(() => {
+                            document.getElementById('editEventForm').submit();
+                        });
+                    }
+                },
+
+                // Keep dragStart/dropEvent for alternative HTML5 drag & drop supports
+                dragStart(e, ev) {
+                    e.dataTransfer.setData('text/plain', ev.id);
+                },
+
+                dropEvent(e, targetDayIdx, targetSlotIdx) {
+                    let eventId = e.dataTransfer.getData('text/plain');
+                    let ev = this.events.find(x => x.id === eventId);
+                    if (!ev) return;
+                    
+                    let targetDate = this.weekDates[targetDayIdx];
+                    let h = 7 + Math.floor(targetSlotIdx / 2);
+                    let m = targetSlotIdx % 2 === 0 ? 0 : 30;
+                    
+                    let newStartDate = new Date(targetDate);
+                    newStartDate.setHours(h, m, 0, 0);
+                    
+                    let origStartDate = new Date(ev.startTime);
+                    let origEndDate = new Date(ev.endTime);
+                    let durationMs = origEndDate.getTime() - origStartDate.getTime();
+                    
+                    let newEndDate = new Date(newStartDate.getTime() + durationMs);
+                    
+                    this.formId = ev.id;
+                    this.formTitle = ev.title;
+                    this.formDesc = ev.description;
+                    this.formStartTime = this.toLocalISOString(newStartDate);
+                    this.formEndTime = this.toLocalISOString(newEndDate);
+                    
+                    this.$nextTick(() => {
+                        document.getElementById('editEventForm').submit();
+                    });
+                },
+
+                saveEvent() {
+                    if (!this.formTitle.trim()) return;
+                    this.compileDateTimes();
+                    if (this.isEdit) {
+                        document.getElementById('editEventForm').submit();
+                    } else {
+                        document.getElementById('createEventForm').submit();
+                    }
+                },
+
+                deleteEvent() {
+                    if (confirm('Are you sure you want to delete this event?')) {
+                        document.getElementById('deleteEventForm').submit();
+                    }
+                }
+            };
+        }
+    </script>
+}

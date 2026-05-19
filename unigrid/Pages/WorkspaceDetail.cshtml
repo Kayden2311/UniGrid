@@ -1,0 +1,958 @@
+@page "{id:Guid}"
+@model unigrid.Pages.WorkspaceDetailModel
+@{
+    ViewData["Title"] = Model.Workspace.Name;
+    Layout = "_Layout";
+
+    // Compute Metrics
+    var totalTasks = Model.WorkspaceTasks.Count;
+    var inProgressTasks = Model.WorkspaceTasks.Count(t => t.Status == 1);
+    var reviewTasks = Model.WorkspaceTasks.Count(t => t.Status == 2);
+    var completedTasks = Model.WorkspaceTasks.Count(t => t.Status == 3);
+    var todoTasks = Model.WorkspaceTasks.Count(t => t.Status == 0);
+    var overdueTasks = Model.WorkspaceTasks.Count(t => t.Status != 3 && t.DueDate < DateTime.UtcNow);
+
+    // Dynamic Color Palette for SVGs
+    var todoColor = "#94a3b8"; // Slate
+    var inProgressColor = "#4f46e5"; // Indigo
+    var reviewColor = "#a855f7"; // Purple
+    var doneColor = "#22c55e"; // Green
+
+    // Member data serialization for charts
+    var memberChartData = Model.Members.Select(m => {
+        var assigned = Model.WorkspaceTasks.Count(t => t.AssigneeId == m.UserId);
+        var completed = Model.WorkspaceTasks.Count(t => t.AssigneeId == m.UserId && t.Status == 3);
+        var rate = assigned > 0 ? (int)Math.Round((double)completed / assigned * 100) : 0;
+        return new {
+            Name = m.User.FullName.Split(' ')[0],
+            FullName = m.User.FullName,
+            Assigned = assigned,
+            Completed = completed,
+            Rate = rate,
+            Initials = string.Concat(m.User.FullName.Split(' ').Select(n => n[0]))
+        };
+    }).OrderByDescending(m => m.Completed).ToList();
+}
+
+<div class="space-y-6" 
+     x-data="{ 
+        activeTab: 'dashboard',
+        searchQuery: '',
+        filterPriority: '',
+        filterAssignee: '',
+        detailOpen: false,
+        createOpen: false,
+        inviteOpen: false,
+        previewFile: null,
+        renameOpen: false,
+        renameFileId: null,
+        renameFileName: '',
+        selectedTask: null,
+        createTaskStatus: 0,
+        activeFileSection: 'files',
+        viewMode: 'grid',
+        newCommentContent: '',
+        newChatContent: '',
+        
+        // Auto-scroll chat to bottom
+        scrollChatToBottom() {
+            this.$nextTick(() => {
+                const el = document.getElementById('chat-messages-container');
+                if (el) el.scrollTop = el.scrollHeight;
+            });
+        }
+     }"
+     x-init="
+        scrollChatToBottom();
+        $watch('activeTab', value => { if (value === 'chat') scrollChatToBottom(); });
+     ">
+
+    <!-- ─── Workspace Header ─── -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+            <div class="h-14 w-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                <i data-lucide="layers" class="w-8 h-8"></i>
+            </div>
+            <div>
+                <h2 class="text-3xl font-black text-slate-800 tracking-tight">@Model.Workspace.Name</h2>
+                <div class="flex items-center gap-2 mt-1 text-slate-500 text-sm">
+                    <span class="font-bold text-slate-400 font-mono">#@Model.Workspace.JoinCode</span>
+                    <span>•</span>
+                    <span>Owner: <strong>@Model.Workspace.Owner.FullName</strong></span>
+                    <span>•</span>
+                    <span class="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-full uppercase tracking-wider">@Model.Workspace.PackageTier Plan</span>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="/Pricing" class="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-orange-100 hover:shadow-orange-200 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2">
+                <i data-lucide="crown" class="w-4 h-4"></i> Upgrade Package
+            </a>
+            <button @@click="inviteOpen = true" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2">
+                <i data-lucide="user-plus" class="w-4 h-4"></i> Invite Member
+            </button>
+        </div>
+    </div>
+
+    <!-- ─── View Tabs ─── -->
+    <div class="flex items-center gap-1 border-b border-slate-200 scrollbar-none overflow-x-auto whitespace-nowrap">
+        <button @@click="activeTab = 'dashboard'"
+                :class="activeTab === 'dashboard' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+        </button>
+        <button @@click="activeTab = 'tasks'"
+                :class="activeTab === 'tasks' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
+            <i data-lucide="kanban-square" class="w-4 h-4"></i> Tasks
+        </button>
+        <button @@click="activeTab = 'chat'"
+                :class="activeTab === 'chat' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all relative">
+            <i data-lucide="messages-square" class="w-4 h-4"></i> Chat
+            <span class="absolute top-2.5 right-1 w-2 h-2 bg-indigo-600 rounded-full"></span>
+        </button>
+        <button @@click="activeTab = 'members'"
+                :class="activeTab === 'members' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
+            <i data-lucide="users" class="w-4 h-4"></i> Members
+        </button>
+        <button @@click="activeTab = 'files'"
+                :class="activeTab === 'files' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
+            <i data-lucide="folder-open" class="w-4 h-4"></i> Files
+        </button>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── TAB 1: DASHBOARD ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="activeTab === 'dashboard'" class="space-y-6" x-transition>
+        <!-- Metric Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="glass p-6 rounded-[2rem] border border-l-4 border-slate-300 flex items-center gap-4 shadow-sm">
+                <div class="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500">
+                    <i data-lucide="clipboard-list" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h4 class="text-2xl font-black text-slate-800">@totalTasks</h4>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mt-0.5">Total Tasks</p>
+                </div>
+            </div>
+            <div class="glass p-6 rounded-[2rem] border border-l-4 border-indigo-500 flex items-center gap-4 shadow-sm">
+                <div class="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                    <i data-lucide="clock" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h4 class="text-2xl font-black text-indigo-600">@inProgressTasks</h4>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mt-0.5">In Progress</p>
+                </div>
+            </div>
+            <div class="glass p-6 rounded-[2rem] border border-l-4 border-green-500 flex items-center gap-4 shadow-sm">
+                <div class="h-12 w-12 rounded-2xl bg-green-50 flex items-center justify-center text-green-600">
+                    <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h4 class="text-2xl font-black text-green-600">@completedTasks</h4>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mt-0.5">Completed</p>
+                </div>
+            </div>
+            <div class="glass p-6 rounded-[2rem] border border-l-4 border-rose-500 flex items-center gap-4 shadow-sm">
+                <div class="h-12 w-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600">
+                    <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h4 class="text-2xl font-black text-rose-600">@overdueTasks</h4>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mt-0.5">Overdue</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 1. Task Distribution Donut Chart -->
+            <div class="glass p-6 rounded-[2.5rem] shadow-sm flex flex-col justify-between">
+                <div class="flex items-center gap-2 mb-4">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5 text-indigo-600"></i>
+                    <h3 class="text-base font-black text-slate-800">Task Distribution</h3>
+                </div>
+                <div class="flex items-center justify-center py-4 relative">
+                    <!-- Pure Responsive SVG Donut Chart -->
+                    <svg viewBox="0 0 36 36" class="w-48 h-48 transform -rotate-90">
+                        <!-- Background Circle -->
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f1f5f9" stroke-width="4.2"></circle>
+                        
+                        @{
+                            double total = totalTasks == 0 ? 1 : totalTasks;
+                            double pTodo = (double)todoTasks / total * 100;
+                            double pInProg = (double)inProgressTasks / total * 100;
+                            double pReview = (double)reviewTasks / total * 100;
+                            double pDone = (double)completedTasks / total * 100;
+
+                            double offset = 0;
+                        }
+
+                        @if (todoTasks > 0)
+                        {
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="@todoColor" stroke-width="4.2" 
+                                    stroke-dasharray="@pTodo @(100 - pTodo)" stroke-dashoffset="@offset"></circle>
+                            offset -= pTodo;
+                        }
+                        @if (inProgressTasks > 0)
+                        {
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="@inProgressColor" stroke-width="4.2" 
+                                    stroke-dasharray="@pInProg @(100 - pInProg)" stroke-dashoffset="@offset"></circle>
+                            offset -= pInProg;
+                        }
+                        @if (reviewTasks > 0)
+                        {
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="@reviewColor" stroke-width="4.2" 
+                                    stroke-dasharray="@pReview @(100 - pReview)" stroke-dashoffset="@offset"></circle>
+                            offset -= pReview;
+                        }
+                        @if (completedTasks > 0)
+                        {
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="@doneColor" stroke-width="4.2" 
+                                    stroke-dasharray="@pDone @(100 - pDone)" stroke-dashoffset="@offset"></circle>
+                        }
+                    </svg>
+                    <!-- Center Metric -->
+                    <div class="absolute flex flex-col items-center justify-center">
+                        <span class="text-3xl font-black text-slate-800">@totalTasks</span>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tasks</span>
+                    </div>
+                </div>
+                <!-- Legend -->
+                <div class="grid grid-cols-2 gap-3 mt-4 text-xs font-bold text-slate-500">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-slate-400"></span>
+                        <span>Todo: @todoTasks</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-indigo-500"></span>
+                        <span>Working: @inProgressTasks</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-purple-500"></span>
+                        <span>Review: @reviewTasks</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-green-500"></span>
+                        <span>Done: @completedTasks</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Member Contributions Chart -->
+            <div class="glass p-6 rounded-[2.5rem] shadow-sm flex flex-col justify-between lg:col-span-2">
+                <div class="flex items-center gap-2 mb-4">
+                    <i data-lucide="trending-up" class="w-5 h-5 text-indigo-600"></i>
+                    <h3 class="text-base font-black text-slate-800">Member Contributions</h3>
+                </div>
+                <div class="flex-1 flex flex-col justify-center gap-4">
+                    @foreach (var m in memberChartData.Take(4))
+                    {
+                        <div class="space-y-1.5">
+                            <div class="flex items-center justify-between text-xs font-bold text-slate-600">
+                                <div class="flex items-center gap-2">
+                                    <div class="h-6 w-6 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] text-indigo-600">
+                                        @m.Initials
+                                    </div>
+                                    <span>@m.FullName</span>
+                                </div>
+                                <span>@m.Completed / @m.Assigned Tasks Done (@m.Rate%)</span>
+                            </div>
+                            <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
+                                <div class="bg-indigo-600 rounded-full transition-all duration-500" style="width: @m.Rate%"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="mt-4 text-[10px] text-slate-400 font-medium">
+                    Showing top contributing members in this workspace based on completed assignments.
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Priority Tasks -->
+            <div class="glass p-6 rounded-[2.5rem] shadow-sm flex flex-col">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="flag" class="w-5 h-5 text-rose-500"></i>
+                        <h3 class="text-base font-black text-slate-800">Critical Priority Tasks</h3>
+                    </div>
+                    <span class="px-2.5 py-1 bg-rose-50 text-rose-600 text-[10px] font-black rounded-full uppercase tracking-wider">High</span>
+                </div>
+                <div class="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    @{
+                        var highPriority = Model.WorkspaceTasks.Where(t => t.Priority == 3 && t.Status != 3).OrderBy(t => t.DueDate).ToList();
+                    }
+                    @if (!highPriority.Any())
+                    {
+                        <div class="text-center py-12 text-slate-400 font-bold">
+                            No high priority tasks remaining. Good job!
+                        </div>
+                    }
+                    @foreach (var task in highPriority)
+                    {
+                        <div @@click="selectedTask = @Html.Raw(Model.SerializeTask(task)); detailOpen = true;"
+                             class="p-4 bg-white/60 hover:bg-white border border-slate-100 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer hover:shadow transition-all group">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="h-9 w-9 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
+                                    <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-sm font-bold text-slate-700 truncate group-hover:text-indigo-600 transition-colors">@task.Title</p>
+                                    <p class="text-xs text-slate-400 font-medium">Assigned to: @(task.Assignee?.FullName ?? "Unassigned")</p>
+                                </div>
+                            </div>
+                            <div class="text-right shrink-0">
+                                <span class="px-2 py-0.5 bg-rose-50 text-rose-500 text-[9px] font-bold rounded uppercase">
+                                    Due: @(task.DueDate?.ToString("MMM dd") ?? "N/A")
+                                </span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Upcoming Deadlines -->
+            <div class="glass p-6 rounded-[2.5rem] shadow-sm flex flex-col">
+                <div class="flex items-center gap-2 mb-4">
+                    <i data-lucide="calendar" class="w-5 h-5 text-amber-500"></i>
+                    <h3 class="text-base font-black text-slate-800">Upcoming Deadlines</h3>
+                </div>
+                <div class="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    @{
+                        var upcoming = Model.WorkspaceTasks.Where(t => t.Status != 3 && t.DueDate.HasValue).OrderBy(t => t.DueDate).Take(5).ToList();
+                    }
+                    @if (!upcoming.Any())
+                    {
+                        <div class="text-center py-12 text-slate-400 font-bold">
+                            No upcoming due dates.
+                        </div>
+                    }
+                    @foreach (var task in upcoming)
+                    {
+                        var remainingDays = (task.DueDate.Value - DateTime.UtcNow).Days;
+                        <div @@click="selectedTask = @Html.Raw(Model.SerializeTask(task)); detailOpen = true;"
+                             class="p-4 bg-white/60 hover:bg-white border border-slate-100 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer hover:shadow transition-all group">
+                            <div class="min-w-0">
+                                <p class="text-sm font-bold text-slate-700 truncate group-hover:text-indigo-600 transition-colors">@task.Title</p>
+                                <p class="text-xs text-slate-400 font-medium">Assigned to: @(task.Assignee?.FullName ?? "Unassigned")</p>
+                            </div>
+                            <div class="text-right shrink-0">
+                                @if (remainingDays < 0)
+                                {
+                                    <span class="text-xs font-black text-rose-500">Overdue by @Math.Abs(remainingDays)d</span>
+                                }
+                                else if (remainingDays == 0)
+                                {
+                                    <span class="text-xs font-black text-amber-500">Due Today</span>
+                                }
+                                else
+                                {
+                                    <span class="text-xs font-black text-slate-400">@remainingDays days left</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── TAB 2: KANBAN TASKS ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="activeTab === 'tasks'" class="space-y-4" x-transition>
+        <!-- Search & Filter Controls -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="relative">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                    <input type="text" x-model="searchQuery" placeholder="Search tasks..." 
+                           class="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-64 transition-all">
+                </div>
+                <select x-model="filterPriority" class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    <option value="">All Priorities</option>
+                    <option value="1">Low</option>
+                    <option value="2">Medium</option>
+                    <option value="3">High</option>
+                </select>
+                <select x-model="filterAssignee" class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    <option value="">All Members</option>
+                    @foreach (var m in Model.Members)
+                    {
+                        <option value="@m.UserId">@m.User.FullName</option>
+                    }
+                </select>
+            </div>
+            <button @@click="createTaskStatus = 0; createOpen = true;" class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2">
+                <i data-lucide="plus" class="w-4 h-4"></i> Create Task
+            </button>
+        </div>
+
+        <!-- 4-Column Kanban Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 min-h-[500px]">
+            @for (int colIndex = 0; colIndex < 4; colIndex++)
+            {
+                var colStatus = colIndex;
+                var colLabel = colStatus == 0 ? "To Do" : colStatus == 1 ? "In Progress" : colStatus == 2 ? "Review" : "Done";
+                var colBg = colStatus == 0 ? "bg-slate-50" : colStatus == 1 ? "bg-indigo-50/40" : colStatus == 2 ? "bg-purple-50/40" : "bg-green-50/40";
+                var colBorder = colStatus == 0 ? "border-slate-200" : colStatus == 1 ? "border-indigo-100" : colStatus == 2 ? "border-purple-100" : "border-green-100";
+                var colText = colStatus == 0 ? "text-slate-500" : colStatus == 1 ? "text-indigo-600" : colStatus == 2 ? "text-purple-600" : "text-green-600";
+                
+                var statusTasks = Model.WorkspaceTasks.Where(t => t.Status == colStatus).ToList();
+
+                <div class="rounded-3xl p-4 @colBg border @colBorder flex flex-col gap-3">
+                    <div class="flex items-center justify-between px-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-black @colText">@colLabel</span>
+                            <span class="px-2 py-0.5 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400">@statusTasks.Count</span>
+                        </div>
+                        <button @@click="createTaskStatus = @colStatus; createOpen = true;" class="h-6 w-6 rounded hover:bg-white/80 flex items-center justify-center text-slate-400">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <!-- Tasks Container -->
+                    <div class="flex-1 space-y-3 overflow-y-auto max-h-[600px] pr-0.5">
+                        @foreach (var task in statusTasks)
+                        {
+                            var priorityLabel = task.Priority == 1 ? "Low" : task.Priority == 2 ? "Medium" : "High";
+                            var priorityDot = task.Priority == 1 ? "bg-blue-500" : task.Priority == 2 ? "bg-amber-500" : "bg-rose-500";
+                            var isOverdue = task.Status != 3 && task.DueDate < DateTime.UtcNow;
+
+                            <div @@click="selectedTask = @Html.Raw(Model.SerializeTask(task)); detailOpen = true;"
+                                 x-show="(searchQuery === '' || '@task.Title.ToLower()'.includes(searchQuery.toLowerCase())) && 
+                                         (filterPriority === '' || '@task.Priority' === filterPriority) && 
+                                         (filterAssignee === '' || '@task.AssigneeId' === filterAssignee)"
+                                 class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md cursor-pointer hover:border-slate-200 transition-all space-y-3 group">
+                                
+                                <div class="flex items-start justify-between gap-2">
+                                    <span class="text-sm font-bold text-slate-700 leading-snug group-hover:text-indigo-600 transition-colors">@task.Title</span>
+                                    <div class="h-6 w-6 rounded-full bg-slate-100 border border-slate-50 flex items-center justify-center text-[8px] font-bold text-slate-500 shrink-0 uppercase">
+                                        @(task.Assignee != null ? string.Concat(task.Assignee.FullName.Split(' ').Select(n => n[0])) : "??")
+                                    </div>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(task.Description))
+                                {
+                                    <p class="text-xs text-slate-400 line-clamp-2 leading-relaxed">@task.Description</p>
+                                }
+
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-50">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="w-2 h-2 rounded-full @priorityDot"></span>
+                                        <span class="text-[10px] font-bold text-slate-400">@priorityLabel</span>
+                                    </div>
+                                    <span class="text-[10px] font-bold @(isOverdue ? "text-rose-500" : "text-slate-400")">
+                                        @(task.DueDate?.ToString("MMM dd") ?? "No date")
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── TAB 3: CHAT ROOM ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="activeTab === 'chat'" class="h-[calc(100vh-22rem)] min-h-[500px] border border-slate-200 rounded-[2.5rem] bg-white flex overflow-hidden shadow-sm" x-transition>
+        <!-- Left panel - Channels -->
+        <div class="w-64 border-r border-slate-100 flex flex-col bg-slate-50/50 shrink-0">
+            <div class="p-4 border-b border-slate-100">
+                <h3 class="text-sm font-black text-slate-700">Workspace Chats</h3>
+            </div>
+            <div class="flex-1 p-2 space-y-1">
+                <button class="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 border border-indigo-100/50 text-indigo-600 text-left text-xs font-bold transition-all">
+                    <i data-lucide="hash" class="w-4 h-4"></i> general
+                </button>
+            </div>
+        </div>
+
+        <!-- Right panel - Chat Timeline -->
+        <div class="flex-1 flex flex-col min-w-0 bg-white">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="hash" class="w-4 h-4 text-slate-400"></i>
+                    <span class="text-sm font-black text-slate-700">general</span>
+                </div>
+                <span class="text-xs font-bold text-slate-400">@Model.Members.Count members active</span>
+            </div>
+
+            <!-- Messages Stream -->
+            <div id="chat-messages-container" class="flex-1 p-6 overflow-y-auto space-y-4">
+                @if (!Model.ChatMessages.Any())
+                {
+                    <div class="text-center py-20 text-slate-400">
+                        <i data-lucide="message-square" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+                        <p class="font-bold">No messages in general yet.</p>
+                        <p class="text-xs text-slate-400 mt-1">Start the conversation below!</p>
+                    </div>
+                }
+                @foreach (var msg in Model.ChatMessages)
+                {
+                    var isMe = msg.SenderId == Model.CurrentUser.Id;
+                    var initials = string.Concat(msg.Sender.FullName.Split(' ').Select(n => n[0]));
+                    
+                    <div class="flex gap-3 max-w-[80%] @(isMe ? "ml-auto flex-row-reverse" : "")">
+                        <div class="h-8 w-8 rounded-full bg-slate-100 border flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0">
+                            @initials
+                        </div>
+                        <div class="space-y-1">
+                            @if (!isMe)
+                            {
+                                <p class="text-[10px] font-bold text-slate-400">@msg.Sender.FullName</p>
+                            }
+                            <div class="p-3.5 rounded-2xl text-sm leading-relaxed @(isMe ? "bg-indigo-600 text-white rounded-tr-none" : "bg-slate-100 text-slate-700 rounded-tl-none")">
+                                @msg.Content
+                            </div>
+                            <p class="text-[9px] text-slate-400 font-bold @(isMe ? "text-right" : "")">
+                                @msg.SentAt?.ToString("hh:mm tt")
+                            </p>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Message Input Area -->
+            <div class="p-4 border-t border-slate-100">
+                <form method="post" asp-page-handler="SendChatMessage" class="flex gap-2">
+                    <input type="text" asp-for="ChatContent" placeholder="Type a message to general..." required
+                           class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    <button type="submit" class="bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── TAB 4: MEMBERS LIST ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="activeTab === 'members'" class="space-y-4" x-transition>
+        <div class="flex items-center justify-between mb-2">
+            <div>
+                <h3 class="text-lg font-black text-slate-800">Workspace Members</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Manage access, roles, and review contribution details.</p>
+            </div>
+        </div>
+
+        <div class="glass rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-sm">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                        <th class="px-6 py-4">Member Name</th>
+                        <th class="px-6 py-4">Role Badge</th>
+                        <th class="px-6 py-4 text-center">Assigned</th>
+                        <th class="px-6 py-4 text-center text-green-600">Completed</th>
+                        <th class="px-6 py-4 text-center text-indigo-600">Working</th>
+                        <th class="px-6 py-4">Task Completion Rate</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-sm font-medium text-slate-600">
+                    @foreach (var member in Model.Members)
+                    {
+                        var assignedCount = Model.WorkspaceTasks.Count(t => t.AssigneeId == member.UserId);
+                        var completedCount = Model.WorkspaceTasks.Count(t => t.AssigneeId == member.UserId && t.Status == 3);
+                        var workingCount = Model.WorkspaceTasks.Count(t => t.AssigneeId == member.UserId && t.Status == 1);
+                        var rate = assignedCount > 0 ? (int)Math.Round((double)completedCount / assignedCount * 100) : 0;
+                        var initials = string.Concat(member.User.FullName.Split(' ').Select(n => n[0]));
+
+                        var roleBadgeBg = member.Role == "Owner" ? "bg-amber-50 text-amber-600" : member.Role == "Manager" ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-500";
+
+                        <tr class="hover:bg-slate-50/50 transition-colors">
+                            <td class="px-6 py-4 flex items-center gap-3">
+                                <div class="h-9 w-9 rounded-full bg-slate-100 border flex items-center justify-center text-xs font-bold text-slate-500">
+                                    @initials
+                                </div>
+                                <div>
+                                    <p class="font-bold text-slate-700">@member.User.FullName</p>
+                                    <p class="text-[10px] text-slate-400 font-bold">@member.User.SubscriptionTier User</p>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold @roleBadgeBg">
+                                    @member.Role
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center font-bold text-slate-700">@assignedCount</td>
+                            <td class="px-6 py-4 text-center font-bold text-green-600">@completedCount</td>
+                            <td class="px-6 py-4 text-center font-bold text-indigo-600">@workingCount</td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3 w-48">
+                                    <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                        <div class="h-full bg-indigo-600 rounded-full" style="width: @rate%"></div>
+                                    </div>
+                                    <span class="text-xs font-bold text-slate-500 w-8 text-right">@rate%</span>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── TAB 5: FILES REPOSITORY ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="activeTab === 'files'" class="h-[calc(100vh-22rem)] min-h-[500px] border border-slate-200 rounded-[2.5rem] bg-white flex overflow-hidden shadow-sm" x-transition>
+        <!-- Left panel - Categories -->
+        <div class="w-64 border-r border-slate-100 flex flex-col bg-slate-50/50 shrink-0">
+            <div class="p-4 border-b border-slate-100">
+                <h3 class="text-sm font-black text-slate-700">Workspace Storage</h3>
+            </div>
+            <div class="flex-1 p-2 space-y-1">
+                <button @@click="activeFileSection = 'files'" :class="activeFileSection === 'files' ? 'bg-indigo-50 border border-indigo-100/50 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'" class="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-left text-xs font-bold transition-all">
+                    <i data-lucide="folder" class="w-4 h-4"></i> My Workspace Files
+                </button>
+            </div>
+            <!-- Progress Bar -->
+            <div class="p-4 border-t border-slate-100 text-xs font-bold text-slate-400">
+                <div class="flex justify-between mb-1.5">
+                    <span>Usage</span>
+                    <span class="text-slate-600">8.9 MB / 100 MB</span>
+                </div>
+                <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div class="h-full bg-indigo-600 rounded-full" style="width: 8.9%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right panel - Repository Files List/Grid -->
+        <div class="flex-1 flex flex-col min-w-0 bg-white">
+            <!-- Toolbar -->
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-2">
+                    <!-- Form for simulated file upload -->
+                    <form method="post" asp-page-handler="UploadFile" class="flex items-center gap-2">
+                        <input type="text" asp-for="NewFileName" placeholder="File name to upload..." required
+                               class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none w-48">
+                        <select asp-for="NewFileType" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="pdf">PDF Spec</option>
+                            <option value="doc">Document</option>
+                            <option value="spreadsheet">Spreadsheet</option>
+                            <option value="image">Image Asset</option>
+                        </select>
+                        <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 shadow-sm flex items-center gap-1.5 transition-all">
+                            <i data-lucide="upload" class="w-3.5 h-3.5"></i> Upload Document
+                        </button>
+                    </form>
+                </div>
+                <!-- Layout switcher -->
+                <div class="flex items-center border border-slate-200 rounded-xl overflow-hidden shrink-0">
+                    <button @@click="viewMode = 'grid'" :class="viewMode === 'grid' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'" class="p-2 transition-all">
+                        <i data-lucide="grid-3x3" class="w-4 h-4"></i>
+                    </button>
+                    <button @@click="viewMode = 'list'" :class="viewMode === 'list' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'" class="p-2 transition-all">
+                        <i data-lucide="list" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Documents Grid -->
+            <div class="flex-1 p-6 overflow-y-auto">
+                @if (!Model.Files.Any())
+                {
+                    <div class="text-center py-20 text-slate-400">
+                        <i data-lucide="folder-open" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+                        <p class="font-bold">No files uploaded yet.</p>
+                        <p class="text-xs text-slate-400 mt-1">Simulate an upload above!</p>
+                    </div>
+                }
+
+                <div x-show="viewMode === 'grid'" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    @foreach (var file in Model.Files)
+                    {
+                        var icon = file.FileType == "pdf" ? "file-text" : file.FileType == "doc" ? "file-text" : file.FileType == "spreadsheet" ? "file-spreadsheet" : "image";
+                        var iconColor = file.FileType == "pdf" ? "text-rose-500 bg-rose-50" : file.FileType == "doc" ? "text-indigo-600 bg-indigo-50" : file.FileType == "spreadsheet" ? "text-green-600 bg-green-50" : "text-purple-500 bg-purple-50";
+
+                        <div @@click="previewFile = @Html.Raw(Model.SerializeFile(file))"
+                             class="p-4 bg-white/60 hover:bg-white border border-slate-100 hover:border-slate-200 hover:shadow shadow-sm rounded-2xl flex flex-col items-center text-center cursor-pointer transition-all relative group">
+                            
+                            <div class="h-12 w-12 rounded-xl flex items-center justify-center mb-3 @iconColor">
+                                <i data-lucide="@icon" class="w-6 h-6"></i>
+                            </div>
+                            <span class="text-xs font-bold text-slate-700 truncate w-full">@file.FileName</span>
+                            <span class="text-[9px] font-bold text-slate-400 mt-1 uppercase">@(file.FileSize / 1024) KB</span>
+                        </div>
+                    }
+                </div>
+
+                <div x-show="viewMode === 'list'" class="glass rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm" style="display: none;">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                <th class="px-6 py-3">File Name</th>
+                                <th class="px-6 py-3">Uploaded By</th>
+                                <th class="px-6 py-3">Modified</th>
+                                <th class="px-6 py-3">File Size</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-xs font-bold text-slate-500">
+                            @foreach (var file in Model.Files)
+                            {
+                                <tr @@click="previewFile = @Html.Raw(Model.SerializeFile(file))" class="hover:bg-slate-50/50 transition-colors cursor-pointer">
+                                    <td class="px-6 py-3 text-slate-700">@file.FileName</td>
+                                    <td class="px-6 py-3">@file.User.FullName</td>
+                                    <td class="px-6 py-3">@(file.CreatedAt?.ToString("MMM dd, yyyy") ?? "Just now")</td>
+                                    <td class="px-6 py-3 uppercase">@(file.FileSize / 1024) KB</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Sidebar -->
+        <div x-show="previewFile" x-transition class="w-72 border-l border-slate-100 bg-slate-50/30 flex flex-col shrink-0" style="display: none;">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <span class="text-sm font-black text-slate-700">File Preview</span>
+                <button @@click="previewFile = null" class="h-6 w-6 flex items-center justify-center rounded hover:bg-slate-100 text-slate-400">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="flex-1 p-6 flex flex-col items-center">
+                <div class="h-20 w-20 rounded-2xl bg-indigo-50 border flex items-center justify-center text-indigo-600 mb-4 shadow-sm">
+                    <i data-lucide="file" class="w-10 h-10"></i>
+                </div>
+                <h4 class="text-sm font-black text-slate-700 text-center break-all" x-text="previewFile?.fileName"></h4>
+                <div class="w-full mt-6 space-y-4 text-xs font-bold text-slate-500">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400 uppercase tracking-wider">Type</span>
+                        <span class="text-slate-700 uppercase" x-text="previewFile?.fileType"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400 uppercase tracking-wider">Size</span>
+                        <span class="text-slate-700" x-text="Math.round(previewFile?.fileSize / 1024) + ' KB'"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400 uppercase tracking-wider">Uploaded</span>
+                        <span class="text-slate-700" x-text="previewFile?.createdAt ? new Date(previewFile.createdAt).toLocaleDateString() : 'Just now'"></span>
+                    </div>
+                </div>
+                <a :href="'/' + previewFile?.fileUrl" class="w-full py-3 mt-8 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center gap-2 transition-all" download>
+                    <i data-lucide="download" class="w-4 h-4"></i> Download File
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── TASK DETAIL MODAL DIALOG ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="detailOpen" 
+         class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
+         style="display: none;"
+         x-transition>
+        
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-8 relative flex flex-col gap-6"
+             @@click.away="detailOpen = false">
+            
+            <button @@click="detailOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <!-- Dialog Header -->
+            <div class="space-y-3">
+                <div class="flex items-center gap-2">
+                    <span class="px-2.5 py-0.5 rounded text-[10px] font-black uppercase"
+                          :class="selectedTask?.priority === 1 ? 'bg-blue-50 text-blue-600' : selectedTask?.priority === 2 ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'"
+                          x-text="selectedTask?.priority === 1 ? 'Low' : selectedTask?.priority === 2 ? 'Medium' : 'High'"></span>
+                    <span class="px-2.5 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-50 text-indigo-600"
+                          x-text="selectedTask?.status === 0 ? 'To Do' : selectedTask?.status === 1 ? 'In Progress' : selectedTask?.status === 2 ? 'Review' : 'Done'"></span>
+                </div>
+                <h3 class="text-xl font-black text-slate-800" x-text="selectedTask?.title"></h3>
+            </div>
+
+            <!-- Description -->
+            <div class="space-y-1.5">
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Description</h4>
+                <p class="text-sm text-slate-500 leading-relaxed bg-slate-50/50 p-4 rounded-2xl border border-slate-100" x-text="selectedTask?.description || 'No description provided.'"></p>
+            </div>
+
+            <!-- Task Metadata -->
+            <div class="grid grid-cols-2 gap-6 py-4 border-y border-slate-100">
+                <div>
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Assignee</h4>
+                    <p class="text-sm font-bold text-slate-700 mt-1" x-text="selectedTask?.assignee?.fullName || 'Unassigned'"></p>
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date</h4>
+                    <p class="text-sm font-bold text-slate-700 mt-1" x-text="selectedTask?.dueDate ? new Date(selectedTask.dueDate).toLocaleDateString(undefined, {month: 'long', day: 'numeric', year: 'numeric'}) : 'No date set'"></p>
+                </div>
+            </div>
+
+            <!-- Review Actions (Available only for tasks in status = 2) -->
+            <div x-show="selectedTask?.status === 2" class="p-4 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-3">
+                <p class="text-xs font-black text-purple-700 flex items-center gap-1.5">
+                    <i data-lucide="eye" class="w-4 h-4"></i> Task Review Controls
+                </p>
+                <div class="flex gap-2">
+                    <form method="post" asp-page-handler="UpdateTaskStatus" class="inline-block">
+                        <input type="hidden" name="taskId" :value="selectedTask?.id">
+                        <input type="hidden" name="status" value="3">
+                        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-green-700 shadow shadow-green-100 transition-all flex items-center gap-1.5">
+                            <i data-lucide="check" class="w-4 h-4"></i> Approve & Close
+                        </button>
+                    </form>
+                    <form method="post" asp-page-handler="UpdateTaskStatus" class="inline-block">
+                        <input type="hidden" name="taskId" :value="selectedTask?.id">
+                        <input type="hidden" name="status" value="1">
+                        <button type="submit" class="border border-purple-300 text-purple-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-purple-100 transition-all flex items-center gap-1.5">
+                            <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Request Rework
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Task Comments Feed -->
+            <div class="space-y-3">
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Comments Timeline</h4>
+                
+                <div class="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+                    <template x-if="!selectedTask?.taskComments || selectedTask.taskComments.length === 0">
+                        <p class="text-xs font-bold text-slate-400 italic">No comments yet. Start the conversation!</p>
+                    </template>
+                    <template x-for="comment in selectedTask?.taskComments" :key="comment.id">
+                        <div class="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex gap-3 text-xs leading-relaxed">
+                            <div class="h-6 w-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[9px] uppercase text-slate-500 shrink-0" 
+                                 x-text="comment.user?.fullName ? comment.user.fullName.split(' ').map(n => n[0]).join('') : 'U'"></div>
+                            <div>
+                                <p class="font-bold text-slate-700" x-text="comment.user?.fullName"></p>
+                                <p class="text-slate-500 mt-0.5" x-text="comment.content"></p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Add Comment Form -->
+                <form method="post" asp-page-handler="AddTaskComment" class="flex gap-2 pt-2">
+                    <input type="hidden" name="commentTaskId" :value="selectedTask?.id">
+                    <input type="text" asp-for="CommentContent" placeholder="Post a comment..." required
+                           class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
+                        <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── CREATE TASK DIALOG MODAL ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="createOpen" 
+         class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
+         style="display: none;"
+         x-transition>
+        
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-md p-8 relative flex flex-col gap-6"
+             @@click.away="createOpen = false">
+            
+            <button @@click="createOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <h3 class="text-xl font-black text-slate-800">Create New Task</h3>
+
+            <form method="post" asp-page-handler="CreateTask" class="space-y-4">
+                <input type="hidden" asp-for="NewTaskStatus" :value="createTaskStatus">
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Task Title</label>
+                    <input type="text" asp-for="NewTaskTitle" placeholder="e.g. Design DB entities" required
+                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Description</label>
+                    <textarea asp-for="NewTaskDescription" placeholder="Provide task context..." rows="3"
+                              class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Priority</label>
+                        <select asp-for="NewTaskPriority" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            <option value="1">Low</option>
+                            <option value="2">Medium</option>
+                            <option value="3">High</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date</label>
+                        <input type="date" asp-for="NewTaskDueDate"
+                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Assignee</label>
+                    <select asp-for="NewTaskAssigneeId" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        <option value="">Unassigned</option>
+                        @foreach (var m in Model.Members)
+                        {
+                            <option value="@m.UserId">@m.User.FullName</option>
+                        }
+                    </select>
+                </div>
+
+                <button type="submit" class="w-full py-4 mt-2 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2">
+                    Create Workspace Task
+                    <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── INVITE MEMBER DIALOG MODAL ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="inviteOpen" 
+         class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
+         style="display: none;"
+         x-transition>
+        
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-sm p-8 relative flex flex-col gap-6"
+             @@click.away="inviteOpen = false">
+            
+            <button @@click="inviteOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <h3 class="text-xl font-black text-slate-800">Invite Workspace Member</h3>
+
+            <form method="post" asp-page-handler="InviteMember" class="space-y-4">
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Invitee Email</label>
+                    <input type="email" asp-for="InviteEmail" placeholder="e.g. member@student.edu" required
+                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Workspace Role</label>
+                    <select asp-for="InviteRole" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        <option value="Member">Member (default)</option>
+                        <option value="Manager">Manager</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="w-full py-4 mt-2 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2">
+                    Send Member Invite
+                    <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+</div>

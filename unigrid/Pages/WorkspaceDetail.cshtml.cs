@@ -1,0 +1,339 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
+using unigrid.Data;
+using unigrid.Models;
+using System.Security.Claims;
+using Microsoft.Extensions.Logging;
+
+namespace unigrid.Pages;
+
+[Microsoft.AspNetCore.Authorization.Authorize(Roles = "2")]
+public class WorkspaceDetailModel : PageModel
+{
+    private readonly UniGridDbContext _context;
+    private readonly ILogger<WorkspaceDetailModel> _logger;
+
+    public WorkspaceDetailModel(UniGridDbContext context, ILogger<WorkspaceDetailModel> logger)
+    {
+        _context = context;
+        _logger = logger;
+    }
+
+    public Workspace Workspace { get; set; } = null!;
+    public List<WorkspaceMember> Members { get; set; } = new();
+    public List<unigrid.Models.Task> WorkspaceTasks { get; set; } = new();
+    public List<WorkspaceFile> Files { get; set; } = new();
+    public ChatRoom? ChatRoom { get; set; }
+    public List<ChatMessage> ChatMessages { get; set; } = new();
+
+    public User CurrentUser { get; set; } = null!;
+    public string UserInitials { get; set; } = string.Empty;
+
+    // Direct binding for task creation
+    [BindProperty]
+    public string NewTaskTitle { get; set; } = string.Empty;
+    [BindProperty]
+    public string NewTaskDescription { get; set; } = string.Empty;
+    [BindProperty]
+    public int NewTaskPriority { get; set; } = 2; // Medium default
+    [BindProperty]
+    public Guid? NewTaskAssigneeId { get; set; }
+    [BindProperty]
+    public DateTime? NewTaskDueDate { get; set; }
+    [BindProperty]
+    public int NewTaskStatus { get; set; } = 0; // Todo default
+
+    // Direct binding for comments
+    [BindProperty]
+    public Guid CommentTaskId { get; set; }
+    [BindProperty]
+    public string CommentContent { get; set; } = string.Empty;
+
+    // Direct binding for chat
+    [BindProperty]
+    public string ChatContent { get; set; } = string.Empty;
+
+    // Direct binding for files
+    [BindProperty]
+    public string NewFileName { get; set; } = string.Empty;
+    [BindProperty]
+    public string NewFileType { get; set; } = "pdf";
+    [BindProperty]
+    public long NewFileSize { get; set; } = 1024;
+
+    // Direct binding for invites
+    [BindProperty]
+    public string InviteEmail { get; set; } = string.Empty;
+    [BindProperty]
+    public string InviteRole { get; set; } = "Member";
+
+    public async System.Threading.Tasks.Task<IActionResult> OnGetAsync(Guid id)
+    {
+        var result = await LoadWorkspaceDataAsync(id);
+        if (!result)
+        {
+            return RedirectToPage("/Dashboard");
+        }
+
+        // Set sidebar workspaces list
+        var userWorkspaces = await _context.Workspaces
+            .Where(w => w.OwnerId == CurrentUser.Id || w.WorkspaceMembers.Any(m => m.UserId == CurrentUser.Id))
+            .ToListAsync();
+        ViewData["Workspaces"] = userWorkspaces;
+
+        return Page();
+    }
+
+    private async System.Threading.Tasks.Task<bool> LoadWorkspaceDataAsync(Guid workspaceId)
+    {
+        var accountIdClaim = User.FindFirst("AccountId")?.Value;
+        if (string.IsNullOrEmpty(accountIdClaim)) return false;
+
+        var accountId = Guid.Parse(accountIdClaim);
+        var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        if (userProfile == null) return false;
+
+        CurrentUser = userProfile;
+        ViewData["UserName"] = CurrentUser.FullName;
+        UserInitials = string.Concat(CurrentUser.FullName.Split(' ').Select(n => n[0]));
+        ViewData["UserInitials"] = UserInitials;
+
+        // Fetch Workspace
+        Workspace = await _context.Workspaces
+            .Include(w => w.Owner)
+            .FirstOrDefaultAsync(w => w.Id == workspaceId);
+
+        if (Workspace == null) return false;
+
+        // Check if user is a member or owner
+        var isMember = await _context.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == CurrentUser.Id);
+        if (Workspace.OwnerId != CurrentUser.Id && !isMember)
+        {
+            return false;
+        }
+
+        // Load Members
+        Members = await _context.WorkspaceMembers
+            .Include(wm => wm.User)
+            .Where(wm => wm.WorkspaceId == workspaceId)
+            .ToListAsync();
+
+        // Load Tasks
+        WorkspaceTasks = await _context.Tasks
+            .Include(t => t.Assignee)
+            .Include(t => t.Subtasks)
+            .Include(t => t.TaskComments)
+                .ThenInclude(tc => tc.User)
+            .Where(t => t.WorkspaceId == workspaceId)
+            .ToListAsync();
+
+        // Load Files
+        Files = await _context.WorkspaceFiles
+            .Include(wf => wf.User)
+            .Where(wf => wf.WorkspaceId == workspaceId)
+            .OrderByDescending(wf => wf.CreatedAt)
+            .ToListAsync();
+
+        // Load Chat Room & Messages
+        ChatRoom = await _context.ChatRooms.FirstOrDefaultAsync(cr => cr.WorkspaceId == workspaceId);
+        if (ChatRoom != null)
+        {
+            ChatMessages = await _context.ChatMessages
+                .Include(cm => cm.Sender)
+                .Where(cm => cm.RoomId == ChatRoom.Id)
+                .OrderBy(cm => cm.SentAt)
+                .ToListAsync();
+        }
+
+        return true;
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostCreateTaskAsync(Guid id)
+    {
+        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+
+        if (!string.IsNullOrEmpty(NewTaskTitle))
+        {
+            var task = new unigrid.Models.Task
+            {
+                Id = Guid.NewGuid(),
+                WorkspaceId = id,
+                AssigneeId = NewTaskAssigneeId,
+                Title = NewTaskTitle,
+                Description = NewTaskDescription,
+                Status = NewTaskStatus,
+                Priority = NewTaskPriority,
+                DueDate = NewTaskDueDate ?? DateTime.UtcNow.AddDays(7),
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _context.Tasks.AddAsync(task);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Task created: {Title} in Workspace {WorkspaceId}", NewTaskTitle, id);
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateTaskStatusAsync(Guid id, Guid taskId, int status)
+    {
+        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+
+        var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId && t.WorkspaceId == id);
+        if (task != null)
+        {
+            task.Status = status;
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Task status updated. TaskId: {TaskId}, NewStatus: {Status}", taskId, status);
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostAddTaskCommentAsync(Guid id)
+    {
+        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+
+        if (!string.IsNullOrEmpty(CommentContent) && CommentTaskId != Guid.Empty)
+        {
+            var comment = new TaskComment
+            {
+                Id = Guid.NewGuid(),
+                TaskId = CommentTaskId,
+                UserId = CurrentUser.Id,
+                Content = CommentContent,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _context.TaskComments.AddAsync(comment);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Comment added to task {TaskId} by {UserId}", CommentTaskId, CurrentUser.Id);
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostSendChatMessageAsync(Guid id)
+    {
+        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+
+        if (!string.IsNullOrEmpty(ChatContent) && ChatRoom != null)
+        {
+            var message = new ChatMessage
+            {
+                Id = Guid.NewGuid(),
+                RoomId = ChatRoom.Id,
+                SenderId = CurrentUser.Id,
+                Content = ChatContent,
+                SentAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+
+            await _context.ChatMessages.AddAsync(message);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Chat message sent in room {RoomId} by {UserId}", ChatRoom.Id, CurrentUser.Id);
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostUploadFileAsync(Guid id)
+    {
+        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+
+        if (!string.IsNullOrEmpty(NewFileName))
+        {
+            var file = new WorkspaceFile
+            {
+                Id = Guid.NewGuid(),
+                WorkspaceId = id,
+                UserId = CurrentUser.Id,
+                FileName = NewFileName,
+                FileUrl = "files/" + NewFileName.ToLower().Replace(" ", "_"),
+                FileType = NewFileType,
+                FileSize = NewFileSize > 0 ? NewFileSize : 1024 * 1024 * 2, // 2MB default mock
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _context.WorkspaceFiles.AddAsync(file);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("File uploaded in workspace {WorkspaceId} by {UserId}", id, CurrentUser.Id);
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostInviteMemberAsync(Guid id)
+    {
+        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+
+        if (!string.IsNullOrEmpty(InviteEmail))
+        {
+            // Find user profile by email through Account relationship
+            var inviteeUser = await _context.Users
+                .Include(u => u.Account)
+                .FirstOrDefaultAsync(u => u.Account.Email == InviteEmail);
+
+            if (inviteeUser != null)
+            {
+                // Check if already member
+                var alreadyMember = await _context.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == id && wm.UserId == inviteeUser.Id);
+                if (!alreadyMember)
+                {
+                    var newMember = new WorkspaceMember
+                    {
+                        WorkspaceId = id,
+                        UserId = inviteeUser.Id,
+                        Role = InviteRole,
+                        JoinedAt = DateTime.UtcNow
+                    };
+
+                    await _context.WorkspaceMembers.AddAsync(newMember);
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("User {Invitee} added as {Role} in Workspace {WorkspaceId}", inviteeUser.FullName, InviteRole, id);
+                }
+            }
+        }
+
+        return RedirectToPage(new { id });
+    }
+
+    public string SerializeTask(unigrid.Models.Task task)
+    {
+        var cleanTask = new {
+            id = task.Id,
+            title = task.Title,
+            description = task.Description,
+            status = task.Status,
+            priority = task.Priority,
+            dueDate = task.DueDate,
+            assignee = task.Assignee != null ? new { id = task.Assignee.Id, fullName = task.Assignee.FullName } : null,
+            taskComments = task.TaskComments.Select(tc => new {
+                id = tc.Id,
+                content = tc.Content,
+                createdAt = tc.CreatedAt,
+                user = new { fullName = tc.User.FullName }
+            }).ToList()
+        };
+        return System.Text.Json.JsonSerializer.Serialize(cleanTask, new System.Text.Json.JsonSerializerOptions {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        });
+    }
+
+    public string SerializeFile(WorkspaceFile file)
+    {
+        var cleanFile = new {
+            id = file.Id,
+            fileName = file.FileName,
+            fileUrl = file.FileUrl,
+            fileType = file.FileType,
+            fileSize = file.FileSize,
+            createdAt = file.CreatedAt,
+            user = new { fullName = file.User.FullName }
+        };
+        return System.Text.Json.JsonSerializer.Serialize(cleanFile, new System.Text.Json.JsonSerializerOptions {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        });
+    }
+}
