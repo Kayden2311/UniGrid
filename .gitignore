@@ -1,0 +1,64 @@
+# ==========================================
+# UniGrid Project .gitignore
+# Matches .NET Core and React/Vite systems
+# ==========================================
+
+# --- .NET Build & Output ---
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Log]s/
+[Tt]emp/
+placeholder/
+*.DotSettings.user
+_ReSharper*/
+
+# --- Visual Studio & IDE Secrets ---
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.suo.user
+*.vsidx
+.keys/
+
+# --- Database Files (Local DB & SQL Server Attachments) ---
+*.mdf
+*.ldf
+*.db
+*.sqlite
+*.sqlite3
+App_Data/
+
+# --- Sensitive Environment / Secrets Configuration ---
+# Do not commit real passwords or local environment database files
+appsettings.local.json
+secrets.json
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.pfx
+
+# --- Node / Frontend Template Dependencies & Compiles ---
+node_modules/
+dist/
+build/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.eslintcache
+.parcel-cache
+.cache/
+.vite/
+.next/
+
+# --- OS-specific files ---
+.DS_Store
+Thumbs.db
+desktop.ini
