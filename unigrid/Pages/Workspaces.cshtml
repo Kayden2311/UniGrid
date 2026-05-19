@@ -1,0 +1,73 @@
+@page
+@model unigrid.Pages.WorkspacesModel
+@{
+    ViewData["Title"] = "Workspaces";
+}
+
+<div class="space-y-8" x-data="{ searchQuery: '' }">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+            <h2 class="text-3xl font-bold text-slate-800 tracking-tight">Workspaces</h2>
+            <p class="text-slate-500 mt-1">Manage your team projects and study groups.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="relative">
+                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                <input type="text" x-model="searchQuery" placeholder="Search workspaces..." 
+                       class="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-64 transition-all">
+            </div>
+            <button class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2">
+                <i data-lucide="plus" class="w-4 h-4"></i> Create New
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        @if (!Model.UserWorkspaces.Any())
+        {
+            <div class="col-span-full text-center py-20 glass rounded-[3rem]">
+                <p class="text-slate-400 font-bold">You haven't joined any workspaces yet.</p>
+            </div>
+        }
+        @foreach (var ws in Model.UserWorkspaces)
+        {
+            <div onclick="window.location.href='/WorkspaceDetail/@ws.Id'"
+                 class="glass p-8 rounded-[2.5rem] shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 transition-all cursor-pointer group relative overflow-hidden"
+                 x-show="searchQuery == '' || '@ws.Name.ToLower()'.includes(searchQuery.toLowerCase())">
+                <div class="absolute -right-10 -top-10 h-32 w-32 bg-indigo-500/5 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+                
+                <div class="flex items-start justify-between mb-6 relative">
+                    <div class="h-14 w-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                        <i data-lucide="layers" class="w-7 h-7"></i>
+                    </div>
+                    <div class="flex flex-col items-end gap-2">
+                        <span class="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded-full uppercase tracking-widest">@ws.PackageTier</span>
+                        <span class="text-[10px] font-bold text-slate-400 font-mono">#@ws.JoinCode</span>
+                    </div>
+                </div>
+
+                <h3 class="text-xl font-black text-slate-800 mb-2 group-hover:text-indigo-600 transition-colors">@ws.Name</h3>
+                <p class="text-sm text-slate-500 leading-relaxed mb-6">Active project workspace for @ws.Name.</p>
+                
+                <div class="flex items-center justify-between pt-6 border-t border-slate-100">
+                    <div class="flex -space-x-3">
+                        @foreach(var member in ws.WorkspaceMembers.Take(3))
+                        {
+                            <div class="h-9 w-9 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold">
+                                @string.Concat(member.User.FullName.Split(' ').Select(n => n[0]))
+                            </div>
+                        }
+                        @if(ws.WorkspaceMembers.Count > 3)
+                        {
+                            <div class="h-9 w-9 rounded-full border-2 border-white bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold">+@(ws.WorkspaceMembers.Count - 3)</div>
+                        }
+                    </div>
+                    <div class="flex items-center gap-1.5 text-slate-400 group-hover:text-indigo-600 transition-colors">
+                        <span class="text-xs font-bold">Open</span>
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>

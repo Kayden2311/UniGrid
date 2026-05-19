@@ -1,0 +1,17 @@
+/* Site-wide styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.sidebar-gradient {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+[x-cloak] { display: none !important; }

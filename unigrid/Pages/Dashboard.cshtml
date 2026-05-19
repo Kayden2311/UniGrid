@@ -1,0 +1,204 @@
+@page
+@model unigrid.Pages.DashboardModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="space-y-6" x-data="{ showCompleted: false, searchQuery: '' }">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">Dashboard</h1>
+        <p class="text-sm text-slate-500">Your personal task overview</p>
+    </div>
+
+    <!-- ─── Monthly Progress Summary ─── -->
+    <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold text-slate-800">@DateTime.Now.ToString("MMMM yyyy") Overview</h2>
+        <div class="flex gap-1">
+            <button class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+            <button class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+        </div>
+    </div>
+
+    <!-- Stats Row (Full Width) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass p-5 rounded-2xl flex items-center gap-4 border-l-4 border-indigo-500 shadow-sm">
+            <div class="h-12 w-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                <i data-lucide="target" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-slate-800">@Model.TotalTasksCount</p>
+                <p class="text-xs text-slate-500 font-medium">Total Tasks</p>
+            </div>
+        </div>
+        <div class="glass p-5 rounded-2xl flex items-center gap-4 border-l-4 border-emerald-500 shadow-sm">
+            <div class="h-12 w-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
+                <i data-lucide="check-circle" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-slate-800">@Model.CompletedTasksCount</p>
+                <p class="text-xs text-slate-500 font-medium">Completed</p>
+            </div>
+        </div>
+        <div class="glass p-5 rounded-2xl flex items-center gap-4 border-l-4 border-amber-500 shadow-sm">
+            <div class="h-12 w-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600">
+                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-slate-800">@Model.DueSoonCount</p>
+                <p class="text-xs text-slate-500 font-medium">Due Soon</p>
+            </div>
+        </div>
+        <div class="glass p-5 rounded-2xl flex items-center gap-4 border-l-4 border-rose-500 shadow-sm">
+            <div class="h-12 w-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600">
+                <i data-lucide="flame" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <p class="text-2xl font-bold text-slate-800">@Model.OverdueCount</p>
+                <p class="text-xs text-slate-500 font-medium">Overdue</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Completion Bar (Full Width) -->
+    <div class="glass p-5 rounded-2xl shadow-sm flex items-center gap-4">
+        <div class="flex-1">
+            <div class="flex items-center justify-between mb-2">
+                <p class="text-sm font-bold text-slate-700">Monthly Completion</p>
+                <span class="text-sm font-black text-indigo-600">@Model.CompletionRate.ToString("0")%</span>
+            </div>
+            <div class="h-3 bg-slate-100 rounded-full overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full transition-all duration-1000" style="width: @Model.CompletionRate.ToString("0")%"></div>
+            </div>
+        </div>
+        <i data-lucide="trending-up" class="w-5 h-5 text-slate-300"></i>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Assigned Tasks (Left 2/3) -->
+        <div class="lg:col-span-2 glass rounded-3xl shadow-sm overflow-hidden flex flex-col border border-slate-100">
+            <div class="p-6 border-b border-slate-50 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-slate-800">Assigned Tasks</h3>
+                    <div class="flex items-center gap-4">
+                        <button class="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all">
+                            <i data-lucide="filter" class="w-3.5 h-3.5"></i> Filter
+                        </button>
+                        <div class="flex items-center gap-2">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Completed</label>
+                            <button @@click="showCompleted = !showCompleted" 
+                                    :class="showCompleted ? 'bg-indigo-600' : 'bg-slate-200'"
+                                    class="w-8 h-4 rounded-full relative transition-colors">
+                                <div :class="showCompleted ? 'translate-x-4' : 'translate-x-0'" class="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform"></div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="relative">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                    <input type="text" x-model="searchQuery" placeholder="Search tasks or workspaces..." class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all">
+                </div>
+            </div>
+
+            <div class="p-2 space-y-1 max-h-[500px] overflow-y-auto">
+                @foreach (var task in Model.RecentTasks)
+                {
+                    var isOverdue = task.Status != 2 && task.DueDate.HasValue && task.DueDate.Value < DateTime.UtcNow;
+                    var priorityColor = task.Priority == 3 ? "bg-rose-500" : task.Priority == 2 ? "bg-amber-500" : "bg-slate-300";
+                    var priorityBadge = task.Priority == 3 ? "text-rose-600 bg-rose-50 border-rose-100" : task.Priority == 2 ? "text-amber-600 bg-amber-50 border-amber-100" : "text-slate-600 bg-slate-50 border-slate-100";
+
+                    <div class="flex items-center gap-3 p-3 rounded-xl border border-transparent hover:border-slate-100 hover:bg-slate-50/50 transition-all group"
+                         x-show="(showCompleted || @task.Status != 2) && (searchQuery == '' || '@task.Title.ToLower()'.includes(searchQuery.toLowerCase()))">
+                        <button class="h-6 w-6 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all @(task.Status == 2 ? "bg-emerald-500 border-emerald-500" : "hover:border-indigo-500")">
+                            @if(task.Status == 2) { <i data-lucide="check" class="w-3 h-3 text-white"></i> }
+                        </button>
+                        <div class="w-1 self-stretch rounded-full @priorityColor opacity-60"></div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-bold text-slate-800 @(task.Status == 2 ? "line-through text-slate-400" : "") truncate">@task.Title</p>
+                            <div class="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                                <span>@task.Workspace.Name</span>
+                                <span>·</span>
+                                <span class="@(isOverdue ? "text-rose-500" : "")">
+                                    @(isOverdue ? $"{(DateTime.UtcNow - task.DueDate.Value).Days}d overdue" : task.DueDate?.ToString("MMM dd") ?? "No date")
+                                </span>
+                            </div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-lg border text-[9px] font-black uppercase tracking-tighter @priorityBadge flex items-center gap-1">
+                            <i data-lucide="flag" class="w-2.5 h-2.5"></i> @(task.Priority == 3 ? "high" : task.Priority == 2 ? "medium" : "low")
+                        </span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Monthly Overview (Right 1/3) -->
+        <div class="glass rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+            <div class="p-6 border-b border-slate-50 flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 text-sm">@DateTime.Now.ToString("MMMM yyyy")</h3>
+                <div class="flex gap-1">
+                    <button class="p-1 hover:bg-slate-100 rounded-lg text-slate-400"><i data-lucide="chevron-left" class="w-3.5 h-3.5"></i></button>
+                    <button class="p-1 hover:bg-slate-100 rounded-lg text-slate-400"><i data-lucide="chevron-right" class="w-3.5 h-3.5"></i></button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="flex gap-4 text-[10px] font-bold text-slate-400 mb-4">
+                    <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-indigo-500"></span> Today</span>
+                    <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-rose-500"></span> Deadline</span>
+                </div>
+                <div class="grid grid-cols-7 gap-1 text-center">
+                    @foreach(var day in new[] {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"}) {
+                        <div class="py-1 text-[10px] font-bold text-slate-400 uppercase">@day</div>
+                    }
+                    @for(int i = 1; i <= 31; i++) {
+                        var isToday = i == DateTime.Now.Day;
+                        var hasDeadline = i == 16 || i == 20;
+                        <div class="relative py-2 aspect-square flex items-center justify-center text-[11px] font-bold rounded-lg cursor-default transition-all @(isToday ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100" : "text-slate-600 hover:bg-slate-50") @(hasDeadline && !isToday ? "bg-rose-50 text-rose-600" : "")">
+                            @i
+                            @if(hasDeadline && isToday) {
+                                <div class="absolute bottom-1 h-1 w-1 bg-white rounded-full"></div>
+                            } else if(hasDeadline) {
+                                <div class="absolute bottom-1 h-1 w-1 bg-rose-500 rounded-full"></div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Workspace Progress Section (Full Width Bottom) -->
+    <div class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-bold text-slate-800">Workspace Progress</h2>
+            <div class="relative w-64">
+                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                <input type="text" placeholder="Search workspaces..." class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all">
+            </div>
+        </div>
+        <div class="grid gap-4">
+            @foreach(var ws in Model.UserWorkspaces) {
+                <div class="glass p-5 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer flex items-center gap-6">
+                    <!-- Mini Donut Mockup -->
+                    <div class="h-16 w-16 rounded-full border-8 border-slate-100 relative flex items-center justify-center">
+                        <div class="absolute inset-0 border-8 border-emerald-500 rounded-full" style="clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 50%)"></div>
+                        <span class="text-[10px] font-black text-slate-800">75%</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-bold text-slate-800 truncate">@ws.Name</p>
+                        <div class="mt-2 flex gap-4 text-[10px] font-bold text-slate-400">
+                            <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-slate-200"></span> 2 Todo</span>
+                            <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-amber-400"></span> 3 Doing</span>
+                            <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span> 5 Done</span>
+                        </div>
+                        <div class="mt-2.5 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-emerald-500 rounded-full" style="width: 75%"></div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-lg font-black text-slate-800">5<span class="text-xs font-bold text-slate-300">/10</span></p>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">tasks done</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>

@@ -1,0 +1,259 @@
+@page
+@model unigrid.Pages.PricingModel
+@{
+    ViewData["Title"] = "Pricing";
+}
+
+<div class="space-y-16 py-8 px-6 md:px-12 max-w-7xl mx-auto" x-data="{ billing: 'monthly' }">
+    <!-- Header -->
+    <div class="text-center space-y-4 max-w-2xl mx-auto">
+        <h2 class="text-4xl md:text-5xl font-black text-slate-800 tracking-tight">Simple, transparent <span class="text-indigo-600">pricing</span></h2>
+        <p class="text-slate-500 text-lg">Choose the plan that fits your team. Upgrade anytime as you grow.</p>
+        
+        <!-- Billing Toggle -->
+        <div class="flex items-center justify-center gap-3 mt-8">
+            <button @@click="billing = 'monthly'" 
+                    :class="billing == 'monthly' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-500 hover:bg-slate-50'"
+                    class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all">Monthly</button>
+            <button @@click="billing = 'yearly'" 
+                    :class="billing == 'yearly' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-500 hover:bg-slate-50'"
+                    class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+                Yearly <span class="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 text-[10px] rounded-full">-17%</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Plan Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <!-- Free Plan -->
+        <div class="glass p-8 rounded-[3rem] flex flex-col h-full border-t-8 border-slate-200 transition-all hover:scale-[1.02] @(Model.CurrentPlan == "Free" ? "ring-4 ring-indigo-500/20" : "")">
+            <div class="mb-8">
+                <h3 class="text-xl font-black text-slate-800 mb-2">Free</h3>
+                <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">For individuals</p>
+            </div>
+            <div class="mb-8">
+                <div class="flex items-baseline">
+                    <span class="text-4xl font-black text-slate-800">Free</span>
+                </div>
+                <p class="text-sm text-slate-400 mt-2">For small teams getting started</p>
+            </div>
+            <ul class="space-y-4 mb-10 flex-1">
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> 1 Workspace
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> 5 Members
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> Basic Analytics
+                </li>
+            </ul>
+            @if(Model.CurrentPlan == "Free") {
+                <button disabled class="w-full py-4 bg-slate-100 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+            } else {
+                <button onclick="upgradeTo('Free')" class="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50 transition-all">Get Started</button>
+            }
+        </div>
+
+        <!-- Pro Plan -->
+        <div class="glass p-8 rounded-[3rem] flex flex-col h-full border-t-8 border-indigo-400 transition-all hover:scale-[1.02] @(Model.CurrentPlan == "Pro" ? "ring-4 ring-indigo-500/20" : "")">
+            <div class="mb-8">
+                <h3 class="text-xl font-black text-slate-800 mb-2">Pro</h3>
+                <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">For professionals</p>
+            </div>
+            <div class="mb-8">
+                <div class="flex items-baseline gap-1">
+                    <span class="text-4xl font-black text-slate-800" x-text="billing == 'monthly' ? '299K' : '2.9M'">299K</span>
+                    <span class="text-slate-400 font-bold text-sm">VND</span>
+                </div>
+                <p class="text-sm text-slate-400 mt-2">More power for growing teams</p>
+            </div>
+            <ul class="space-y-4 mb-10 flex-1">
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> 10 Members
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> 20 GB Storage
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> 3 Chat Channels
+                </li>
+            </ul>
+            @if(Model.CurrentPlan == "Pro") {
+                <button disabled class="w-full py-4 bg-indigo-50 text-indigo-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+            } else {
+                <button onclick="upgradeTo('Pro')" class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">Upgrade Now</button>
+            }
+        </div>
+
+        <!-- Pro+ Plan (Popular) -->
+        <div class="glass p-8 rounded-[3rem] flex flex-col h-full border-t-8 border-violet-500 relative transition-all hover:scale-[1.02] shadow-2xl shadow-violet-500/10 @(Model.CurrentPlan == "ProPlus" ? "ring-4 ring-violet-500/20" : "")">
+            <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-violet-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">Most Popular</div>
+            <div class="mb-8">
+                <h3 class="text-xl font-black text-slate-800 mb-2">Pro+</h3>
+                <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">For power users</p>
+            </div>
+            <div class="mb-8">
+                <div class="flex items-baseline gap-1">
+                    <span class="text-4xl font-black text-slate-800" x-text="billing == 'monthly' ? '449K' : '4.4M'">449K</span>
+                    <span class="text-slate-400 font-bold text-sm">VND</span>
+                </div>
+                <p class="text-sm text-slate-400 mt-2">Advanced features for power users</p>
+            </div>
+            <ul class="space-y-4 mb-10 flex-1">
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> 15 Members
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> 40 GB Storage
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> Advanced Analytics
+                </li>
+            </ul>
+            @if(Model.CurrentPlan == "ProPlus") {
+                <button disabled class="w-full py-4 bg-violet-50 text-violet-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+            } else {
+                <button onclick="upgradeTo('ProPlus')" class="w-full py-4 bg-violet-600 text-white rounded-2xl font-bold shadow-lg shadow-violet-100 hover:bg-violet-700 transition-all">Upgrade Now</button>
+            }
+        </div>
+
+        <!-- Business Plan -->
+        <div class="glass p-8 rounded-[3rem] flex flex-col h-full border-t-8 border-slate-800 transition-all hover:scale-[1.02] @(Model.CurrentPlan == "Business" ? "ring-4 ring-slate-800/20" : "")">
+            <div class="mb-8">
+                <h3 class="text-xl font-black text-slate-800 mb-2">Business</h3>
+                <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">For organizations</p>
+            </div>
+            <div class="mb-8">
+                <div class="flex items-baseline gap-1">
+                    <span class="text-4xl font-black text-slate-800" x-text="billing == 'monthly' ? '899K' : '8.9M'">899K</span>
+                    <span class="text-slate-400 font-bold text-sm">VND</span>
+                </div>
+                <p class="text-sm text-slate-400 mt-2">Unlimited power for organizations</p>
+            </div>
+            <ul class="space-y-4 mb-10 flex-1">
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> 30 Members
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> 80 GB Storage
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-5 h-5 text-emerald-500"></i> Data Export
+                </li>
+            </ul>
+            @if(Model.CurrentPlan == "Business") {
+                <button disabled class="w-full py-4 bg-slate-800/10 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+            } else {
+                <button onclick="upgradeTo('Business')" class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-900 transition-all">Contact Us</button>
+            }
+        </div>
+    </div>
+
+    <!-- Comparison Table -->
+    <div class="glass p-10 rounded-[3rem] shadow-sm overflow-hidden">
+        <h3 class="text-3xl font-black text-slate-800 mb-10 text-center">Compare all features</h3>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="border-b border-slate-100 bg-slate-50/50">
+                        <th class="py-6 px-4 text-sm font-black text-slate-400 uppercase tracking-widest">Feature</th>
+                        <th class="py-6 px-4 text-sm font-black text-slate-800">Free</th>
+                        <th class="py-6 px-4 text-sm font-black text-slate-800">Pro</th>
+                        <th class="py-6 px-4 text-sm font-black text-indigo-600">Pro+</th>
+                        <th class="py-6 px-4 text-sm font-black text-slate-800">Business</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                    <tr>
+                        <td class="py-5 px-4 text-sm font-bold text-slate-700">Workspace</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">1</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">1</td>
+                        <td class="py-5 px-4 text-sm text-indigo-600 font-bold">1</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">1</td>
+                    </tr>
+                    <tr>
+                        <td class="py-5 px-4 text-sm font-bold text-slate-700">Members</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">5</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">10</td>
+                        <td class="py-5 px-4 text-sm text-indigo-600 font-bold">15</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">30</td>
+                    </tr>
+                    <tr>
+                        <td class="py-5 px-4 text-sm font-bold text-slate-700">Task Assignment</td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                    </tr>
+                    <tr>
+                        <td class="py-5 px-4 text-sm font-bold text-slate-700">Deadline Notifications</td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                    </tr>
+                    <tr>
+                        <td class="py-5 px-4 text-sm font-bold text-slate-700">Chat Channels</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">1</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">3</td>
+                        <td class="py-5 px-4 text-sm text-indigo-600 font-bold">5</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">Unlimited</td>
+                    </tr>
+                    <tr>
+                        <td class="py-5 px-4 text-sm font-bold text-slate-700">Task Branches</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">1</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">2</td>
+                        <td class="py-5 px-4 text-sm text-indigo-600 font-bold">4</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">Unlimited</td>
+                    </tr>
+                    <tr>
+                        <td class="py-5 px-4 text-sm font-bold text-slate-700">File Storage</td>
+                        <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">20 GB</td>
+                        <td class="py-5 px-4 text-sm text-indigo-600 font-bold">40 GB</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">80 GB</td>
+                    </tr>
+                    <tr>
+                        <td class="py-5 px-4 text-sm font-bold text-slate-700">Analytics</td>
+                        <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">Basic</td>
+                        <td class="py-5 px-4 text-sm text-indigo-600 font-bold">Advanced</td>
+                        <td class="py-5 px-4 text-sm text-slate-500 font-medium">Advanced</td>
+                    </tr>
+                    <tr>
+                        <td class="py-5 px-4 text-sm font-bold text-slate-700">Role Permissions</td>
+                        <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
+                        <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                    </tr>
+                    <tr>
+                        <td class="py-5 px-4 text-sm font-bold text-slate-700">Data Export</td>
+                        <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
+                        <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<form method="post" asp-page-handler="Upgrade" id="upgradeForm" style="display:none;">
+    <input type="hidden" name="tier" id="upgradeTier" />
+    @Html.AntiForgeryToken()
+</form>
+
+<script>
+    function upgradeTo(tier) {
+        var isAuth = @(User.Identity?.IsAuthenticated == true ? "true" : "false");
+        if (isAuth) {
+            document.getElementById('upgradeTier').value = tier;
+            document.getElementById('upgradeForm').submit();
+        } else {
+            window.location.href = '/Signup?tier=' + tier;
+        }
+    }
+</script>
