@@ -24,298 +24,295 @@
     }), serializerSettings);
 }
 
-<div class="space-y-6" x-data="scheduleComponent()">>
+<div class="space-y-4" x-data="scheduleComponent()">
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div class="flex items-center justify-between">
         <div>
-            <h2 class="text-3xl font-black text-slate-800 tracking-tight">Schedule</h2>
-            <p class="text-slate-500 mt-1 text-sm font-medium">Coordinate your calendar, database events, and homework deadlines.</p>
+            <h1 class="font-display text-2xl font-bold text-slate-800">Schedule</h1>
+            <p class="text-sm text-slate-500">Plan your week — drag to create, hold & move tasks, resize from edges</p>
         </div>
-        <div class="flex items-center gap-3">
-            <div class="flex items-center gap-1 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-                <button @@click="weekOffset--" class="p-2 hover:bg-white hover:shadow-sm rounded-xl text-slate-600 transition-all">
-                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
-                </button>
-                <span class="px-3 text-xs font-bold text-slate-700 min-w-[180px] text-center" x-text="weekLabel"></span>
-                <button @@click="weekOffset++" class="p-2 hover:bg-white hover:shadow-sm rounded-xl text-slate-600 transition-all">
-                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
-                </button>
-            </div>
-            <button @@click="weekOffset = 0" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-2xl hover:bg-slate-50 transition-all shadow-sm">
-                Today
+        <div class="flex items-center gap-2">
+            <button @@click="weekOffset--" class="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors">
+                <i data-lucide="chevron-left" class="w-3.5 h-3.5 mr-0.5"></i> Prev
             </button>
-            <button @@click="openAdd(0, 4)" class="bg-indigo-600 text-white px-5 py-2.5 rounded-2xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center gap-2">
-                <i data-lucide="plus" class="w-4 h-4"></i> Add Event
+            <span class="text-sm font-semibold min-w-[140px] text-center text-slate-700" x-text="weekLabel"></span>
+            <button @@click="weekOffset++" class="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors">
+                Next <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-0.5"></i>
+            </button>
+            <button @@click="weekOffset = 0" class="px-3 py-1.5 text-slate-400 hover:text-slate-600 rounded-lg text-xs font-semibold transition-colors">
+                Today
             </button>
         </div>
     </div>
 
-    <!-- Main Board Grid (Responsive columns stacked on mobile) -->
-    <div class="flex flex-col xl:flex-row gap-6 items-start">
+    <!-- How to use Guidelines Card -->
+    <div class="border border-indigo-100 bg-indigo-50/15 rounded-xl p-4 flex items-start gap-3 shadow-sm">
+        <i data-lucide="info" class="w-5 h-5 text-indigo-500 shrink-0 mt-0.5"></i>
+        <div class="text-xs text-slate-500 space-y-1">
+            <p><strong class="text-slate-700">Create:</strong> Click & drag on empty grid slots (drag up or down).</p>
+            <p><strong class="text-slate-700">Move:</strong> Hold the grip icon and drag to a new day/time.</p>
+            <p><strong class="text-slate-700">Resize:</strong> Drag the top or bottom edge of a task block to change duration.</p>
+            <p><strong class="text-slate-700">Edit/Delete/Copy:</strong> Click on a task to open the edit dialog.</p>
+        </div>
+    </div>
+
+    <!-- Antiforgery Input Token for AJAX Posts -->
+    @Html.AntiForgeryToken()
+
+    <!-- Main Grid and Widget Panel -->
+    <div class="flex gap-4">
         
         <!-- Left Side: Interactive Calendar Sheet -->
-        <div class="flex-1 w-full glass rounded-[3.5rem] shadow-sm border border-slate-200 overflow-hidden bg-white/50 backdrop-blur-md">
-            
-            <div class="min-w-[760px] overflow-x-auto">
+        <div class="flex-1 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div class="min-w-[800px]">
                 <!-- Day Headers -->
-                <div class="grid grid-cols-[80px_repeat(7,1fr)] border-b border-slate-100 bg-slate-50/50 sticky top-0 z-10">
-                    <div class="border-r border-slate-100 py-4 flex items-center justify-center">
-                        <i data-lucide="clock" class="w-4 h-4 text-slate-400"></i>
-                    </div>
+                <div class="sticky top-0 z-10 grid grid-cols-[64px_repeat(7,1fr)] border-b border-slate-200 bg-white">
+                    <div class="border-r border-slate-200" />
                     <template x-for="(day, idx) in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']">
-                        <div class="py-4 text-center border-r border-slate-100 last:border-r-0">
-                            <span class="text-xs font-black text-slate-400 uppercase tracking-widest block" x-text="day"></span>
-                            <span class="text-lg font-black text-slate-700 mt-0.5 block" x-text="weekDates[idx].getDate()"></span>
+                        <div class="px-2 py-3 text-center border-r border-slate-200 last:border-r-0"
+                             :class="isToday(idx) ? 'bg-indigo-50/20' : ''">
+                            <span class="text-xs font-medium text-slate-400 block" x-text="day"></span>
+                            <span class="text-lg font-bold block" 
+                                  :class="isToday(idx) ? 'text-indigo-600' : 'text-slate-700'"
+                                  x-text="weekDates[idx].getDate()"></span>
                         </div>
                     </template>
-                </div>
-
-                <!-- Calendar Content Sheet -->
-                <div class="grid grid-cols-[80px_repeat(7,1fr)] relative" style="height: 1632px;">
+                </div>                <!-- Calendar Content Sheet -->
+                <div @@mouseup="handleMouseUp()" 
+                     @@mouseleave="handleMouseLeave()" 
+                     class="relative grid grid-cols-[64px_repeat(7,1fr)] select-none" 
+                     :class="mode === 'moving' ? 'cursor-grabbing' : ''"
+                     style="height: 1632px;"
+                     id="grid-container">
+                    
                     <!-- Vertical Time Grid Rails -->
-                    <div class="border-r border-slate-100 relative bg-slate-50/20">
-                        <template x-for="i in 17">
-                            <div class="absolute left-0 right-0 text-[10px] font-bold text-slate-400/80 pr-2 text-right" 
-                                 :style="'top: ' + ((i - 1) * 96) + 'px; height: 96px; line-height: 24px;'">
-                                <span x-text="slotToTime((i - 1) * 2)"></span>
+                    <div class="border-r border-slate-200">
+                        <template x-for="i in 34">
+                            <div class="flex items-start justify-end pr-2 text-[11px] text-slate-400 font-medium" 
+                                 :style="'height: 48px;'">
+                                <span class="-mt-1.5" x-text="(i - 1) % 2 === 0 ? slotToTime(i - 1) : ''"></span>
                             </div>
                         </template>
                     </div>
 
                     <!-- Seven columns for Mon to Sun -->
                     <template x-for="dayIdx in 7">
-                        <div class="border-r border-slate-100 last:border-r-0 relative group h-full bg-white/40">
-                            <!-- Half-hour lines and cell triggers -->
-                            <template x-for="slotIdx in 34">
-                                <div @@click="openAdd(dayIdx - 1, slotIdx - 1)" 
-                                     @@dragover.prevent
-                                     @@drop="dropEvent($event, dayIdx - 1, slotIdx - 1)"
-                                     class="absolute left-0 right-0 border-b transition-colors cursor-crosshair hover:bg-slate-50/60"
-                                     :class="(slotIdx - 1) % 2 === 0 ? 'border-slate-100' : 'border-slate-50/40'"
-                                     :style="'top: ' + ((slotIdx - 1) * 48) + 'px; height: 48px;'"></div>
-                            </template>
+                        <div class="border-r border-slate-200 last:border-r-0 relative h-full bg-white"
+                             :class="isToday(dayIdx - 1) ? 'bg-indigo-50/[0.01]' : ''">
+                             
+                             <!-- Half-hour grid lines and triggers -->
+                             <template x-for="slotIdx in 34">
+                                 <div @@mousedown="handleCellMouseDown(dayIdx - 1, slotIdx - 1)" 
+                                      @@mouseenter="handleCellMouseEnter(dayIdx - 1, slotIdx - 1)" 
+                                      class="absolute left-0 right-0 border-b transition-colors"
+                                      :class="[
+                                          (slotIdx - 1) % 2 === 0 ? 'border-slate-100' : 'border-slate-100/40',
+                                          isCurrentHour(slotIdx - 1) ? 'bg-indigo-500/5' : '',
+                                          mode === 'idle' ? 'cursor-crosshair hover:bg-slate-50' : 'cursor-grabbing'
+                                      ]"
+                                      :style="'top: ' + ((slotIdx - 1) * 48) + 'px; height: 48px;'"></div>
+                             </template>
 
-                            <!-- Rendered Event Cards (Enables responsive drag, move and resize rescheduling) -->
-                            <template x-for="ev in getEventsForDay(dayIdx - 1)">
-                                <div @@click.stop="openEdit(ev)" 
-                                     @@mousedown.stop="startPointerMove($event, ev, dayIdx - 1, 'move')"
-                                     @@touchstart.stop="startPointerMove($event, ev, dayIdx - 1, 'move')"
-                                     class="absolute rounded-2xl border px-3 py-2 text-xs leading-snug cursor-grab active:cursor-grabbing select-none z-20 shadow-sm transition-all hover:shadow-md flex flex-col justify-between"
-                                     :class="{
-                                         'bg-indigo-50/90 border-indigo-200/80 text-indigo-700': ev.color === 'indigo',
-                                         'bg-violet-50/90 border-violet-200/80 text-violet-700': ev.color === 'violet',
-                                         'bg-emerald-50/90 border-emerald-200/80 text-emerald-700': ev.color === 'emerald',
-                                         'bg-rose-50/90 border-rose-200/80 text-rose-700': ev.color === 'rose'
-                                     }"
-                                     :style="'top: ' + (ev.startSlot * 48 + 2) + 'px; height: ' + (ev.duration * 48 - 4) + 'px; left: 4px; right: 4px;'">
-                                     
-                                     <div>
-                                         <p class="font-black truncate" x-text="ev.title"></p>
-                                         <p class="text-[10px] opacity-75 mt-0.5 line-clamp-2" x-text="ev.description" x-show="ev.duration >= 2"></p>
-                                     </div>
-                                     <div class="flex items-center gap-1 opacity-60 text-[9px] font-bold mt-1">
-                                         <i data-lucide="clock" class="w-3 h-3 shrink-0"></i>
-                                         <span x-text="slotToTime(ev.startSlot) + ' - ' + slotToTime(ev.startSlot + ev.duration)"></span>
-                                     </div>
+                             <!-- Dashed New Event Selection Preview -->
+                             <div x-show="createPreview && createPreview.dayIdx === (dayIdx - 1)"
+                                  class="absolute left-1 right-1 rounded-lg bg-indigo-500/10 border-2 border-dashed border-indigo-500/50 z-10 pointer-events-none"
+                                  :style="'top: ' + (createPreview ? createPreview.startSlot * 48 : 0) + 'px; height: ' + (createPreview ? createPreview.duration * 48 : 0) + 'px;'">
+                                 <span class="text-[10px] text-indigo-600 font-semibold px-2 pt-1 block" 
+                                       x-text="createPreview ? (slotToTime(createPreview.startSlot) + ' – ' + slotToTime(createPreview.startSlot + createPreview.duration)) : ''"></span>
+                             </div>
 
-                                     <!-- Resizing handle at the bottom edge -->
-                                     <div @@mousedown.stop.prevent="startPointerMove($event, ev, dayIdx - 1, 'resize')"
-                                          @@touchstart.stop.prevent="startPointerMove($event, ev, dayIdx - 1, 'resize')"
-                                          class="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize z-30 flex items-center justify-center group">
-                                         <span class="w-8 h-1 bg-slate-400/20 group-hover:bg-slate-400/60 rounded-full transition-colors"></span>
-                                     </div>
+                             <!-- Move Ghost Preview -->
+                             <div x-show="movePreview && movePreview.dayIdx === (dayIdx - 1)"
+                                  class="absolute left-1 right-1 rounded-lg bg-indigo-500/10 border-2 border-dashed border-indigo-500/40 z-30 pointer-events-none opacity-70"
+                                  :style="'top: ' + (movePreview ? movePreview.startSlot * 48 : 0) + 'px; height: ' + (movePreview ? movePreview.duration * 48 : 0) + 'px;'">
+                                 <span class="text-[10px] text-indigo-600 font-semibold px-2 pt-1 block" x-text="movePreview ? movePreview.title : ''"></span>
+                             </div>
+
+                             <!-- Rendered Event Cards -->
+                             <template x-for="ev in getEventsForDay(dayIdx - 1)">
+                                 <div @@click.stop="openEdit(ev)" 
+                                      class="absolute rounded-lg border-l-[3px] px-2 py-1.5 text-xs leading-tight cursor-pointer overflow-hidden z-20 shadow-sm hover:shadow-md transition-all select-none flex flex-col justify-between"
+                                      :class="[
+                                          ['bg-indigo-50 border-indigo-200 text-indigo-700',
+                                           'bg-teal-50 border-teal-200 text-teal-700',
+                                           'bg-amber-50 border-amber-200 text-amber-700',
+                                           'bg-rose-50 border-rose-200 text-rose-700',
+                                           'bg-slate-50 border-slate-200 text-slate-700'][ev.colorIdx] || 'bg-indigo-50 border-indigo-200 text-indigo-700',
+                                          ev.priority === 'high' ? 'ring-1 ring-rose-500/20' : '',
+                                          mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'opacity-30' : ''
+                                      ]"
+                                      :style="'top: ' + (ev.startSlot * 48 + 1) + 'px; height: ' + (ev.duration * 48 - 2) + 'px; left: ' + (ev.left + 2) + '%; width: ' + (ev.width - 4) + '%;'">
+                                      
+                                      <!-- Resize Handle Top -->
+                                      <div @@mousedown.stop.prevent="startResize($event, ev, 'top')"
+                                           class="absolute top-0 left-0 right-0 h-2 cursor-n-resize rounded-t hover:bg-slate-800/10 flex items-center justify-center">
+                                           <div class="h-0.5 w-6 rounded-full bg-slate-800/20"></div>
+                                      </div>
+
+                                      <!-- Content -->
+                                      <div class="flex items-center gap-1 mt-1">
+                                          <!-- Move Grip -->
+                                          <div @@mousedown.stop.prevent="startMoveTask($event, ev, dayIdx - 1)"
+                                               class="cursor-grab active:cursor-grabbing p-0.5 rounded opacity-40 hover:opacity-100 hover:bg-black/5 text-slate-600 transition-colors shrink-0">
+                                               <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                                   <path d="M8.5 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-10 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-10 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
+                                               </svg>
+                                          </div>
+                                          <span class="h-1.5 w-1.5 rounded-full shrink-0" 
+                                                :class="{
+                                                    'bg-slate-400': ev.priority === 'low',
+                                                    'bg-amber-500': ev.priority === 'medium',
+                                                    'bg-rose-500': ev.priority === 'high'
+                                                }"></span>
+                                          <span class="font-semibold truncate" x-text="ev.title"></span>
+                                      </div>
+
+                                      <!-- Scheduled Time Indicator -->
+                                      <template x-if="ev.duration >= 2">
+                                          <span class="text-[10px] opacity-70 block ml-5" 
+                                                x-text="slotToTime(ev.startSlot) + ' – ' + slotToTime(ev.startSlot + ev.duration)"></span>
+                                      </template>
+
+                                      <!-- Description Details -->
+                                      <template x-if="ev.duration >= 4 && ev.description">
+                                          <span class="text-[10px] opacity-60 block ml-5 line-clamp-2" x-text="ev.description"></span>
+                                      </template>
+
+                                      <!-- Resize Handle Bottom -->
+                                      <div @@mousedown.stop.prevent="startResize($event, ev, 'bottom')"
+                                           class="absolute bottom-0 left-0 right-0 h-2 cursor-s-resize rounded-b hover:bg-slate-800/10 flex items-center justify-center">
+                                           <div class="h-0.5 w-6 rounded-full bg-slate-800/20"></div>
+                                      </div>
                                  </div>
-                            </template>
+                             </template>
                         </div>
                     </template>
-                </div>
+                </div></div>
             </div>
         </div>
 
         <!-- Right Side: Deadlines Widget Panel -->
-        <div class="w-full xl:w-80 shrink-0 glass bg-white/60 p-6 rounded-[3rem] shadow-sm border border-slate-200/60 sticky top-6">
-            <div class="flex items-center gap-2 mb-6">
-                <div class="p-2 bg-rose-50 text-rose-500 rounded-xl">
-                    <i data-lucide="bell-ring" class="w-4 h-4"></i>
-                </div>
-                <div>
-                    <h3 class="text-sm font-black text-slate-800">Deadlines This Week</h3>
-                    <p class="text-[10px] text-slate-400 font-bold tracking-wide uppercase">From workspaces</p>
-                </div>
+        <div class="w-72 shrink-0 self-start border border-slate-200 bg-white rounded-xl shadow-sm overflow-hidden">
+            <div class="p-4 border-b border-slate-100 flex items-center gap-2">
+                <i data-lucide="clock" class="w-4 h-4 text-rose-500"></i>
+                <h3 class="text-sm font-semibold text-slate-800">Deadlines This Week</h3>
             </div>
+            
+            <div class="p-4 space-y-3">
+                <template x-show="weeklyDeadlines.length === 0">
+                    <div class="text-center py-6 text-xs font-medium text-slate-400">No deadlines due this week.</div>
+                </template>
 
-            <div class="space-y-3.5">
-                <!-- Fallback empty state -->
-                <div x-show="weeklyDeadlines.length === 0" class="text-center py-10 bg-slate-50/50 rounded-[2rem] border border-dashed border-slate-200 p-4">
-                    <p class="text-xs font-bold text-slate-400">No deadlines due this week.</p>
-                </div>
-
-                <!-- Deadline List Items -->
                 <template x-for="dl in weeklyDeadlines" :key="dl.id">
-                    <div class="p-4 rounded-3xl border transition-all hover:scale-[1.01]"
+                    <div class="rounded-lg border p-3 space-y-1 transition-all"
                          :class="{
-                             'border-rose-100 bg-rose-50/30 text-rose-900': dl.priority === 'high',
-                             'border-amber-100 bg-amber-50/20 text-amber-900': dl.priority === 'medium',
-                             'border-slate-100 bg-slate-50/60 text-slate-600': dl.priority === 'low'
+                             'border-rose-100 bg-rose-50/20': dl.priority === 'high',
+                             'border-amber-100 bg-amber-50/15': dl.priority === 'medium',
+                             'border-slate-100 bg-slate-50/50': dl.priority === 'low'
                          }">
-                        <div class="flex items-start justify-between gap-2">
-                            <span class="font-black text-xs block truncate" x-text="dl.title"></span>
-                            <span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest shrink-0"
-                                  :class="{
-                                      'bg-rose-500/10 text-rose-600': dl.priority === 'high',
-                                      'bg-amber-500/10 text-amber-600': dl.priority === 'medium',
-                                      'bg-slate-200/50 text-slate-500': dl.priority === 'low'
-                                  }" x-text="dl.priority"></span>
+                        <div class="flex items-center gap-2">
+                            <template x-if="dl.priority === 'high'">
+                                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-500"></i>
+                            </template>
+                            <p class="text-sm font-semibold text-slate-800" x-text="dl.title"></p>
                         </div>
-                        <p class="text-[10px] font-bold opacity-60 mt-1" x-text="dl.workspaceName"></p>
-                        <div class="flex items-center gap-1.5 mt-3 text-[10px] font-black opacity-80">
-                            <i data-lucide="calendar" class="w-3.5 h-3.5 shrink-0"></i>
-                            <span x-text="dl.formattedDate"></span>
-                        </div>
+                        <p class="text-xs text-slate-400 font-medium" x-text="dl.workspaceName"></p>
+                        <div class="inline-flex items-center px-2 py-0.5 border rounded-full text-[9px] font-bold mt-1"
+                             :class="{
+                                 'border-rose-200 text-rose-600 bg-white': dl.priority === 'high',
+                                 'border-amber-200 text-amber-600 bg-white': dl.priority === 'medium',
+                                 'border-slate-200 text-slate-500 bg-white': dl.priority === 'low'
+                             }" x-text="dl.formattedDate"></div>
                     </div>
                 </template>
-            </div>
-
-            <!-- Help Legend -->
-            <div class="mt-6 pt-5 border-t border-slate-100 space-y-2 text-[10px] font-bold text-slate-400 leading-relaxed">
-                <p class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-indigo-500 shrink-0"></span> Personal Events</p>
-                <p class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-violet-500 shrink-0"></span> Academic Sprint / Study Syncs</p>
-                <p class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0"></span> Personal Breaks & Meals</p>
             </div>
         </div>
     </div>
 
-    <!-- Hidden standard forms linked to C# page model CRUD endpoints -->
-    <form id="createEventForm" method="post" asp-page-handler="CreateEvent" style="display:none;">
-        <input type="text" name="title" x-model="formTitle" />
-        <input type="text" name="description" x-model="formDesc" />
-        <input type="datetime-local" name="startTime" x-model="formStartTime" />
-        <input type="datetime-local" name="endTime" x-model="formEndTime" />
-        @Html.AntiForgeryToken()
-    </form>
-
-    <form id="editEventForm" method="post" asp-page-handler="EditEvent" style="display:none;">
-        <input type="hidden" name="eventId" x-model="formId" />
-        <input type="text" name="title" x-model="formTitle" />
-        <input type="text" name="description" x-model="formDesc" />
-        <input type="datetime-local" name="startTime" x-model="formStartTime" />
-        <input type="datetime-local" name="endTime" x-model="formEndTime" />
-        @Html.AntiForgeryToken()
-    </form>
-
-    <form id="deleteEventForm" method="post" asp-page-handler="DeleteEvent" style="display:none;">
-        <input type="hidden" name="eventId" x-model="formId" />
-        @Html.AntiForgeryToken()
-    </form>
-
-    <!-- Create/Edit Event Dialog Modal (Glassmorphism layout matching React) -->
+    <!-- Create/Edit Task Dialog Modal -->
     <div x-show="dialogOpen" 
          class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
          x-transition x-cloak>
         
         <div @@click.away="dialogOpen = false" 
-             class="w-full max-w-md glass bg-white p-8 rounded-[3.5rem] shadow-2xl border border-white/80 space-y-6 relative animate-in fade-in zoom-in-95 duration-200">
+             class="w-full max-w-md bg-white p-6 rounded-xl border border-slate-200 shadow-2xl space-y-4 relative animate-in fade-in zoom-in-95 duration-200">
             
-            <div class="flex items-center justify-between">
-                <h3 class="text-2xl font-black text-slate-800" x-text="isEdit ? 'Modify Schedule Node' : 'Compose Event'"></h3>
-                <button @@click="dialogOpen = false" class="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-50 transition-colors">
-                    <i data-lucide="x" class="w-5 h-5"></i>
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                <h3 class="text-lg font-bold text-slate-800" x-text="isEdit ? 'Edit Task' : 'Create Task'"></h3>
+                <button @@click="dialogOpen = false" class="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
+                    <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
 
             <div class="space-y-4">
                 <!-- Title -->
                 <div class="space-y-1.5">
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Event Name</label>
-                    <input type="text" x-model="formTitle" placeholder="e.g. Calculus midterm prep"
-                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-semibold text-slate-700">
+                    <label class="text-xs font-semibold text-slate-700">Title</label>
+                    <input type="text" x-model="formTitle" placeholder="Task title"
+                           class="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-sm text-slate-700">
                 </div>
 
                 <!-- Description -->
                 <div class="space-y-1.5">
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Description / Notes</label>
-                    <textarea x-model="formDesc" placeholder="Describe tasks or location info..." rows="2"
-                              class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-semibold text-slate-700"></textarea>
+                    <label class="text-xs font-semibold text-slate-700">Description</label>
+                    <textarea x-model="formDesc" placeholder="Optional description" rows="2"
+                              class="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm text-slate-700"></textarea>
                 </div>
 
-                <!-- Premium Custom AM/PM Date & Time Picker Grid -->
-                <div class="space-y-4">
-                    <!-- Date Selector -->
+                <!-- Priority & Color selector Row -->
+                <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-1.5">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Event Date</label>
-                        <input type="date" x-model="pickerDate"
-                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-semibold text-slate-700 text-sm">
+                        <label class="text-xs font-semibold text-slate-700">Priority</label>
+                        <select x-model="formPriority" 
+                                class="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white font-medium text-sm text-slate-700">
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
                     </div>
-
-                    <!-- Start Time Row -->
                     <div class="space-y-1.5">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starts At</label>
-                        <div class="grid grid-cols-3 gap-2">
-                            <!-- Hour Selector -->
-                            <select x-model="pickerStartHour" class="px-3 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold text-xs text-slate-700">
-                                <template x-for="h in [1,2,3,4,5,6,7,8,9,10,11,12]">
-                                    <option :value="h" x-text="h"></option>
-                                </template>
-                            </select>
-                            <!-- Minute Selector -->
-                            <select x-model="pickerStartMin" class="px-3 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold text-xs text-slate-700">
-                                <option value="00">:00</option>
-                                <option value="30">:30</option>
-                            </select>
-                            <!-- AM/PM Buttons -->
-                            <div class="flex bg-slate-50 p-1 border border-slate-200 rounded-2xl gap-1">
-                                <button type="button" @@click="pickerStartAmpm = 'AM'"
-                                        :class="pickerStartAmpm === 'AM' ? 'bg-indigo-600 text-white shadow-sm font-black' : 'text-slate-400 font-bold'"
-                                        class="flex-1 text-[9px] uppercase rounded-xl transition-all">AM</button>
-                                <button type="button" @@click="pickerStartAmpm = 'PM'"
-                                        :class="pickerStartAmpm === 'PM' ? 'bg-indigo-600 text-white shadow-sm font-black' : 'text-slate-400 font-bold'"
-                                        class="flex-1 text-[9px] uppercase rounded-xl transition-all">PM</button>
-                            </div>
+                        <label class="text-xs font-semibold text-slate-700">Color</label>
+                        <div class="flex gap-1.5 pt-1">
+                            <template x-for="(dotClass, idx) in ['bg-indigo-600', 'bg-teal-600', 'bg-amber-500', 'bg-rose-600', 'bg-slate-500']">
+                                <button type="button" 
+                                        class="h-7 w-7 rounded-full border-2 transition-all cursor-pointer"
+                                        :class="[dotClass, formColor === idx ? 'scale-110 border-slate-800 ring-2 ring-slate-800/10' : 'border-transparent']"
+                                        @@click="formColor = idx"
+                                        :title="['Indigo', 'Teal', 'Yellow', 'Red', 'Gray'][idx]"></button>
+                            </template>
                         </div>
                     </div>
+                </div>
 
-                    <!-- End Time Row -->
-                    <div class="space-y-1.5">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ends At</label>
-                        <div class="grid grid-cols-3 gap-2">
-                            <!-- Hour Selector -->
-                            <select x-model="pickerEndHour" class="px-3 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold text-xs text-slate-700">
-                                <template x-for="h in [1,2,3,4,5,6,7,8,9,10,11,12]">
-                                    <option :value="h" x-text="h"></option>
-                                </template>
-                            </select>
-                            <!-- Minute Selector -->
-                            <select x-model="pickerEndMin" class="px-3 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold text-xs text-slate-700">
-                                <option value="00">:00</option>
-                                <option value="30">:30</option>
-                            </select>
-                            <!-- AM/PM Buttons -->
-                            <div class="flex bg-slate-50 p-1 border border-slate-200 rounded-2xl gap-1">
-                                <button type="button" @@click="pickerEndAmpm = 'AM'"
-                                        :class="pickerEndAmpm === 'AM' ? 'bg-indigo-600 text-white shadow-sm font-black' : 'text-slate-400 font-bold'"
-                                        class="flex-1 text-[9px] uppercase rounded-xl transition-all">AM</button>
-                                <button type="button" @@click="pickerEndAmpm = 'PM'"
-                                        :class="pickerEndAmpm === 'PM' ? 'bg-indigo-600 text-white shadow-sm font-black' : 'text-slate-400 font-bold'"
-                                        class="flex-1 text-[9px] uppercase rounded-xl transition-all">PM</button>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Time Details indicator -->
+                <div class="text-xs font-medium text-slate-400 bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center gap-1.5">
+                    <i data-lucide="clock" class="w-3.5 h-3.5 text-indigo-500 shrink-0"></i>
+                    <span x-text="['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][formDayIdx] + ' · ' + slotToTime(formStartSlot) + ' – ' + slotToTime(formStartSlot + formDuration)"></span>
                 </div>
             </div>
 
-            <!-- Action buttons -->
-            <div class="flex items-center justify-between pt-2">
+            <!-- Footer Action buttons -->
+            <div class="flex items-center justify-between border-t border-slate-100 pt-3 mt-4">
                 <div>
-                    <button x-show="isEdit" @@click="deleteEvent()" 
-                            class="px-4 py-3 bg-rose-50 text-rose-600 rounded-2xl text-xs font-black shadow-sm shadow-rose-100 hover:bg-rose-100 hover:scale-[1.01] transition-all flex items-center gap-1.5">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
-                    </button>
+                    <template x-if="isEdit">
+                        <div class="flex gap-2">
+                            <button @@click="deleteEvent()" 
+                                    class="px-3 py-1.5 bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete
+                            </button>
+                            <button @@click="duplicateEvent()" 
+                                    class="px-3 py-1.5 bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors">
+                                <i data-lucide="copy" class="w-3.5 h-3.5"></i> Duplicate
+                            </button>
+                        </div>
+                    </template>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button @@click="dialogOpen = false" class="px-5 py-3 border border-slate-200 text-slate-500 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all">Cancel</button>
+                    <button @@click="dialogOpen = false" 
+                            class="px-4 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors">Cancel</button>
                     <button @@click="saveEvent()" :disabled="!formTitle.trim()" 
-                            class="px-5 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                        <span x-text="isEdit ? 'Save Changes' : 'Create Event'"></span>
+                            class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                        <span x-text="isEdit ? 'Save' : 'Create'"></span>
                     </button>
                 </div>
             </div>
@@ -328,10 +325,48 @@
         function scheduleComponent() {
             return {
                 weekOffset: 0,
-                events: @Html.Raw(jsonEvents),
+                events: [],
+                init() {
+                    let rawEvents = @Html.Raw(jsonEvents);
+                    this.events = rawEvents.map(e => {
+                        let startDate = new Date(e.startTime);
+                        let endDate = new Date(e.endTime);
+                        let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+                        let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
+                        let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
+                        let duration = Math.max(1, endSlot - startSlot);
+
+                        let descText = e.description || '';
+                        let priority = 'medium';
+                        let colorIdx = 0;
+                        try {
+                            if (descText.startsWith('{')) {
+                                let descObj = JSON.parse(descText);
+                                descText = descObj.desc || '';
+                                priority = descObj.priority || 'medium';
+                                colorIdx = descObj.color !== undefined ? descObj.color : 0;
+                            }
+                        } catch (err) {}
+
+                        return {
+                            id: e.id,
+                            title: e.title,
+                            description: descText,
+                            dayIdx: dayIdx,
+                            startSlot: startSlot,
+                            duration: duration,
+                            priority: priority,
+                            colorIdx: colorIdx
+                        };
+                    });
+                },
                 tasks: @Html.Raw(jsonTasks),
                 dialogOpen: false,
                 isEdit: false,
+                mode: 'idle', // 'idle', 'creating', 'moving', 'resizing-top', 'resizing-bottom'
+                dragCreate: null, // { dayIdx, startSlot, endSlot }
+                movingTask: null, // { taskId, offsetSlot, currentDayIdx, currentStartSlot }
+                resizingTask: null, // { taskId, edge, origStartSlot, origDuration, startY }
                 
                 // Form fields
                 formId: '',
@@ -339,36 +374,11 @@
                 formDesc: '',
                 formStartTime: '',
                 formEndTime: '',
-                formColor: 'indigo',
-
-                // Custom AM/PM picker helper fields
-                pickerDate: '',
-                pickerStartHour: '12',
-                pickerStartMin: '00',
-                pickerStartAmpm: 'AM',
-                pickerEndHour: '12',
-                pickerEndMin: '00',
-                pickerEndAmpm: 'AM',
-
-                // Pointer interaction states for drag & drop and resize
-                dragState: {
-                    active: false,
-                    mode: '', // 'move' or 'resize'
-                    eventId: '',
-                    startX: 0,
-                    startY: 0,
-                    origStartTime: null,
-                    origEndTime: null,
-                    origDayIdx: 0,
-                    lastSlotDelta: 0,
-                    lastDayDelta: 0
-                },
-
-                // GMT/timezone date-time utility
-                toLocalISOString(date) {
-                    let tzOffset = date.getTimezoneOffset() * 60000;
-                    return (new Date(date.getTime() - tzOffset)).toISOString().slice(0, 16);
-                },
+                formColor: 0,
+                formPriority: 'medium',
+                formDayIdx: 0,
+                formStartSlot: 0,
+                formDuration: 2,
 
                 get weekDates() {
                     return this.getWeekDates(this.weekOffset);
@@ -376,9 +386,20 @@
 
                 get weekLabel() {
                     let dates = this.weekDates;
-                    let startOpt = { month: 'short', day: 'numeric' };
-                    let endOpt = { month: 'short', day: 'numeric', year: 'numeric' };
-                    return dates[0].toLocaleDateString('en-US', startOpt) + ' – ' + dates[6].toLocaleDateString('en-US', endOpt);
+                    let opt = { month: 'short', day: 'numeric' };
+                    return 'Week of ' + dates[0].toLocaleDateString('en-US', opt);
+                },
+
+                isToday(dayIdx) {
+                    let d = this.weekDates[dayIdx];
+                    return new Date().toDateString() === d.toDateString();
+                },
+
+                isCurrentHour(slot) {
+                    let now = new Date();
+                    let hour = now.getHours();
+                    let halfHour = now.getMinutes() >= 30 ? 1 : 0;
+                    return (7 + Math.floor(slot / 2)) === hour && (slot % 2 === halfHour);
                 },
 
                 getWeekDates(offset) {
@@ -396,37 +417,56 @@
                 },
 
                 getEventsForDay(dayIdx) {
-                    let dateStr = this.weekDates[dayIdx].toDateString();
-                    return this.events.filter(e => {
-                        let eDate = new Date(e.startTime);
-                        return eDate.toDateString() === dateStr;
-                    }).map(e => {
-                        let startDate = new Date(e.startTime);
-                        let endDate = new Date(e.endTime);
-                        
-                        // Map 7:00 AM to Midnight (17 hours)
-                        let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
-                        let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
-                        let duration = Math.max(1, endSlot - startSlot);
-                        
-                        // Auto-assign nice color scheme based on title
-                        let lowerTitle = e.title.toLowerCase();
-                        let color = 'indigo';
-                        if (lowerTitle.includes('calculus') || lowerTitle.includes('math') || lowerTitle.includes('sprint') || lowerTitle.includes('sync')) color = 'violet';
-                        else if (lowerTitle.includes('gym') || lowerTitle.includes('sport') || lowerTitle.includes('break') || lowerTitle.includes('dinner')) color = 'emerald';
-                        else if (lowerTitle.includes('deadline') || lowerTitle.includes('exam') || lowerTitle.includes('test')) color = 'rose';
+                    let dayEvents = this.events.filter(e => e.dayIdx === dayIdx);
 
-                        return {
-                            id: e.id,
-                            title: e.title,
-                            description: e.description,
-                            startSlot: startSlot,
-                            duration: duration,
-                            color: color,
-                            startTime: e.startTime,
-                            endTime: e.endTime
-                        };
-                    });
+                    // Sort dayEvents chronologically by startSlot, then by longer durations
+                    dayEvents.sort((a, b) => a.startSlot - b.startSlot || b.duration - a.duration);
+
+                    // Group overlapping events in the day
+                    let groups = [];
+                    for (let ev of dayEvents) {
+                        let matchedGroup = null;
+                        for (let g of groups) {
+                            if (ev.startSlot < g.endSlot) {
+                                matchedGroup = g;
+                                break;
+                            }
+                        }
+                        if (!matchedGroup) {
+                            matchedGroup = { endSlot: ev.startSlot + ev.duration, events: [] };
+                            groups.push(matchedGroup);
+                        } else {
+                            matchedGroup.endSlot = Math.max(matchedGroup.endSlot, ev.startSlot + ev.duration);
+                        }
+                        matchedGroup.events.push(ev);
+                    }
+
+                    // Assign virtual columns and properties within each group
+                    for (let g of groups) {
+                        let groupCols = [];
+                        for (let ev of g.events) {
+                            let colIdx = 0;
+                            while (colIdx < groupCols.length) {
+                                let lastEvInCol = groupCols[colIdx][groupCols[colIdx].length - 1];
+                                if (ev.startSlot >= lastEvInCol.startSlot + lastEvInCol.duration) {
+                                    break;
+                                }
+                                colIdx++;
+                            }
+                            if (colIdx === groupCols.length) {
+                                groupCols.push([]);
+                            }
+                            groupCols[colIdx].push(ev);
+                            ev.colIdx = colIdx;
+                        }
+                        let numCols = groupCols.length;
+                        for (let ev of g.events) {
+                            ev.left = (ev.colIdx / numCols) * 100;
+                            ev.width = 100 / numCols;
+                        }
+                    }
+
+                    return dayEvents;
                 },
 
                 get weeklyDeadlines() {
@@ -453,75 +493,45 @@
                     });
                 },
 
-                // Force standard English AM/PM representation rather than local SA/CH formatting
                 slotToTime(slot) {
                     let h = 7 + Math.floor(slot / 2);
                     let m = slot % 2 === 0 ? '00' : '30';
                     let suffix = h >= 12 ? 'PM' : 'AM';
                     let displayHour = h % 12;
                     if (displayHour === 0) displayHour = 12;
-                    return displayHour + ':' + m + ' ' + suffix;
+                    return displayHour.toString().padStart(2, '0') + ':' + m + ' ' + suffix;
                 },
 
-                parseDateTimes() {
-                    let start = new Date(this.formStartTime);
-                    let end = new Date(this.formEndTime);
+                slotsToISOTimes(dayIdx, startSlot, duration) {
+                    let date = this.weekDates[dayIdx];
+                    let sh = 7 + Math.floor(startSlot / 2);
+                    let sm = startSlot % 2 === 0 ? 0 : 30;
                     
-                    this.pickerDate = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
+                    let startDate = new Date(date);
+                    startDate.setHours(sh, sm, 0, 0);
                     
-                    let sh = start.getHours();
-                    this.pickerStartAmpm = sh >= 12 ? 'PM' : 'AM';
-                    let sh12 = sh % 12;
-                    this.pickerStartHour = sh12 === 0 ? 12 : sh12;
-                    this.pickerStartMin = start.getMinutes() >= 30 ? '30' : '00';
+                    let endDate = new Date(startDate.getTime() + duration * 30 * 60000);
                     
-                    let eh = end.getHours();
-                    this.pickerEndAmpm = eh >= 12 ? 'PM' : 'AM';
-                    let eh12 = eh % 12;
-                    this.pickerEndHour = eh12 === 0 ? 12 : eh12;
-                    this.pickerEndMin = end.getMinutes() >= 30 ? '30' : '00';
+                    return {
+                        startTime: startDate.toISOString(),
+                        endTime: endDate.toISOString()
+                    };
                 },
 
-                compileDateTimes() {
-                    let sh = parseInt(this.pickerStartHour);
-                    if (this.pickerStartAmpm === 'PM' && sh < 12) sh += 12;
-                    if (this.pickerStartAmpm === 'AM' && sh === 12) sh = 0;
-                    let sm = parseInt(this.pickerStartMin);
-                    
-                    let start = new Date(this.pickerDate + 'T00:00:00');
-                    start.setHours(sh, sm, 0, 0);
-                    this.formStartTime = this.toLocalISOString(start);
-                    
-                    let eh = parseInt(this.pickerEndHour);
-                    if (this.pickerEndAmpm === 'PM' && eh < 12) eh += 12;
-                    if (this.pickerEndAmpm === 'AM' && eh === 12) eh = 0;
-                    let em = parseInt(this.pickerEndMin);
-                    
-                    let end = new Date(this.pickerDate + 'T00:00:00');
-                    end.setHours(eh, em, 0, 0);
-                    this.formEndTime = this.toLocalISOString(end);
-                },
-
-                openAdd(dayIdx, slotIdx) {
+                openAdd(dayIdx, slotIdx, durationSlotCount = 2) {
                     this.isEdit = false;
                     this.formId = '';
                     this.formTitle = '';
                     this.formDesc = '';
+                    this.formPriority = 'medium';
+                    this.formColor = 0;
+                    this.formDayIdx = dayIdx;
+                    this.formStartSlot = slotIdx;
+                    this.formDuration = durationSlotCount;
                     
-                    let date = this.weekDates[dayIdx];
-                    let h = 7 + Math.floor(slotIdx / 2);
-                    let m = slotIdx % 2 === 0 ? 0 : 30;
-                    
-                    let startDate = new Date(date);
-                    startDate.setHours(h, m, 0, 0);
-                    
-                    let endDate = new Date(startDate);
-                    endDate.setHours(startDate.getHours() + 1);
-                    
-                    this.formStartTime = this.toLocalISOString(startDate);
-                    this.formEndTime = this.toLocalISOString(endDate);
-                    
-                    this.parseDateTimes();
+                    let { startTime, endTime } = this.slotsToISOTimes(dayIdx, slotIdx, durationSlotCount);
+                    this.formStartTime = startTime;
+                    this.formEndTime = endTime;
                     this.dialogOpen = true;
                 },
 
@@ -530,164 +540,435 @@
                     this.formId = event.id;
                     this.formTitle = event.title;
                     this.formDesc = event.description;
+                    this.formPriority = event.priority;
+                    this.formColor = event.colorIdx;
+                    this.formDayIdx = event.dayIdx;
+                    this.formStartSlot = event.startSlot;
+                    this.formDuration = event.duration;
                     
-                    let startDate = new Date(event.startTime);
-                    let endDate = new Date(event.endTime);
-                    
-                    this.formStartTime = this.toLocalISOString(startDate);
-                    this.formEndTime = this.toLocalISOString(endDate);
-                    
-                    this.parseDateTimes();
+                    let { startTime, endTime } = this.slotsToISOTimes(event.dayIdx, event.startSlot, event.duration);
+                    this.formStartTime = startTime;
+                    this.formEndTime = endTime;
                     this.dialogOpen = true;
                 },
 
-                // Pointer interaction states for drag/drop and edge-resizing (Unified mouse & touch)
-                startPointerMove(e, ev, dayIdx, mode) {
-                    // Prevent normal text highlights or browser scrolls during action
-                    let clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                    let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                    
-                    this.dragState = {
-                        active: true,
-                        mode: mode,
-                        eventId: ev.id,
-                        startX: clientX,
-                        startY: clientY,
-                        origStartTime: new Date(ev.startTime),
-                        origEndTime: new Date(ev.endTime),
-                        origDayIdx: dayIdx,
-                        lastSlotDelta: 0,
-                        lastDayDelta: 0
+                handleCellMouseDown(dayIdx, slotIdx) {
+                    if (this.mode !== 'idle') return;
+                    this.mode = 'creating';
+                    this.dragCreate = { dayIdx: dayIdx, startSlot: slotIdx, endSlot: slotIdx };
+
+                    let gridContainer = document.getElementById('grid-container');
+                    if (!gridContainer) return;
+
+                    let onMove = (evMouse) => {
+                        if (this.mode !== 'creating' || !this.dragCreate) return;
+                        
+                        let rectContainer = gridContainer.getBoundingClientRect();
+                        let scrollContainer = gridContainer.closest('.overflow-auto');
+                        let scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+                        let scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
+                        
+                        let relX = evMouse.clientX - rectContainer.left + scrollLeft;
+                        let relY = evMouse.clientY - rectContainer.top + scrollTop;
+                        
+                        let dayWidth = (rectContainer.width - 64) / 7;
+                        let day = 0;
+                        if (relX >= 64) {
+                            day = Math.floor((relX - 64) / dayWidth);
+                        }
+                        day = Math.max(0, Math.min(day, 6));
+                        
+                        let slotIdx = Math.floor(relY / 48);
+                        slotIdx = Math.max(0, Math.min(slotIdx, 33));
+                        
+                        this.dragCreate.endSlot = slotIdx;
                     };
 
-                    this._moveHandler = (event) => this.handlePointerMove(event);
-                    this._upHandler = () => this.handlePointerUp();
+                    let onUp = () => {
+                        if (this.mode === 'creating' && this.dragCreate) {
+                            let startSlot = Math.min(this.dragCreate.startSlot, this.dragCreate.endSlot);
+                            let endSlot = Math.max(this.dragCreate.startSlot, this.dragCreate.endSlot);
+                            let duration = endSlot - startSlot + 1;
+                            if (duration >= 1) {
+                                this.openAdd(this.dragCreate.dayIdx, startSlot, duration);
+                            }
+                        }
+                        this.mode = 'idle';
+                        this.dragCreate = null;
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    };
 
-                    window.addEventListener('mousemove', this._moveHandler);
-                    window.addEventListener('touchmove', this._moveHandler, { passive: false });
-                    window.addEventListener('mouseup', this._upHandler);
-                    window.addEventListener('touchend', this._upHandler);
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
                 },
 
-                handlePointerMove(e) {
-                    if (!this.dragState.active) return;
-                    if (e.cancelable) e.preventDefault();
-
-                    let clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                    let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-                    let dx = clientX - this.dragState.startX;
-                    let dy = clientY - this.dragState.startY;
-
-                    let gridEl = document.querySelector('.grid-cols-7');
-                    let colWidth = gridEl ? (gridEl.getBoundingClientRect().width / 7) : 120;
-
-                    let slotDelta = Math.round(dy / 48);
-                    let dayDelta = this.dragState.mode === 'move' ? Math.round(dx / colWidth) : 0;
-
-                    if (slotDelta === this.dragState.lastSlotDelta && dayDelta === this.dragState.lastDayDelta) {
-                        return;
-                    }
-
-                    this.dragState.lastSlotDelta = slotDelta;
-                    this.dragState.lastDayDelta = dayDelta;
-
-                    let ev = this.events.find(x => x.id === this.dragState.eventId);
-                    if (!ev) return;
-
-                    let start = new Date(this.dragState.origStartTime.getTime());
-                    let end = new Date(this.dragState.origEndTime.getTime());
-
-                    if (this.dragState.mode === 'move') {
-                        start.setMinutes(start.getMinutes() + slotDelta * 30);
-                        end.setMinutes(end.getMinutes() + slotDelta * 30);
-
-                        let targetDayIdx = Math.max(0, Math.min(6, this.dragState.origDayIdx + dayDelta));
-                        let targetDate = this.weekDates[targetDayIdx];
-                        start.setFullYear(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-                        end.setFullYear(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-                    } else if (this.dragState.mode === 'resize') {
-                        end.setMinutes(end.getMinutes() + slotDelta * 30);
-                        let minEnd = new Date(start.getTime() + 30 * 60000);
-                        if (end < minEnd) end = minEnd;
-                    }
-
-                    ev.startTime = this.toLocalISOString(start) + 'Z';
-                    ev.endTime = this.toLocalISOString(end) + 'Z';
+                handleCellMouseEnter(dayIdx, slotIdx) {
+                    // Global handlers manage pointer drag states seamlessly
                 },
 
-                handlePointerUp() {
-                    if (!this.dragState.active) return;
+                async handleMouseUp() {
+                    // Handled globally by dynamic listener bindings
+                },
+
+                handleMouseLeave() {
+                    // Handled globally by dynamic listener bindings
+                },
+
+                startMoveTask(e, ev, dayIdx) {
+                    let gridContainer = document.getElementById('grid-container');
+                    if (!gridContainer) return;
+                    let rect = gridContainer.getBoundingClientRect();
+                    let scrollContainer = gridContainer.closest('.overflow-auto');
+                    let scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+                    let scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
                     
-                    window.removeEventListener('mousemove', this._moveHandler);
-                    window.removeEventListener('touchmove', this._moveHandler);
-                    window.removeEventListener('mouseup', this._upHandler);
-                    window.removeEventListener('touchend', this._upHandler);
+                    let relY = e.clientY - rect.top + scrollTop;
+                    let currentSlot = Math.floor(relY / 48);
+                    let offsetSlot = currentSlot - ev.startSlot;
+                    
+                    this.mode = 'moving';
+                    this.movingTask = {
+                        taskId: ev.id,
+                        offsetSlot: offsetSlot,
+                        currentDayIdx: dayIdx,
+                        currentStartSlot: ev.startSlot
+                    };
 
-                    let ev = this.events.find(x => x.id === this.dragState.eventId);
-                    this.dragState.active = false;
+                    let onMove = (evMouse) => {
+                        if (this.mode !== 'moving' || !this.movingTask) return;
+                        
+                        let rectContainer = gridContainer.getBoundingClientRect();
+                        let sContainer = gridContainer.closest('.overflow-auto');
+                        let sTop = sContainer ? sContainer.scrollTop : 0;
+                        let sLeft = sContainer ? sContainer.scrollLeft : 0;
+                        
+                        let relX = evMouse.clientX - rectContainer.left + sLeft;
+                        let relY = evMouse.clientY - rectContainer.top + sTop;
+                        
+                        let dayWidth = (rectContainer.width - 64) / 7;
+                        let day = 0;
+                        if (relX >= 64) {
+                            day = Math.floor((relX - 64) / dayWidth);
+                        }
+                        day = Math.max(0, Math.min(day, 6));
+                        
+                        let slotIdx = Math.floor(relY / 48);
+                        slotIdx = Math.max(0, Math.min(slotIdx, 33));
+                        
+                        let targetEv = this.events.find(x => x.id === this.movingTask.taskId);
+                        if (targetEv) {
+                            let newStart = Math.max(0, Math.min(slotIdx - this.movingTask.offsetSlot, 34 - targetEv.duration));
+                            this.movingTask.currentDayIdx = day;
+                            this.movingTask.currentStartSlot = newStart;
+                        }
+                    };
 
-                    if (ev) {
-                        this.formId = ev.id;
-                        this.formTitle = ev.title;
-                        this.formDesc = ev.description;
-                        this.formStartTime = ev.startTime.substring(0, 16);
-                        this.formEndTime = ev.endTime.substring(0, 16);
+                    let onUp = async () => {
+                        if (this.mode === 'moving' && this.movingTask) {
+                            let targetEv = this.events.find(x => x.id === this.movingTask.taskId);
+                            if (targetEv) {
+                                targetEv.dayIdx = this.movingTask.currentDayIdx;
+                                targetEv.startSlot = this.movingTask.currentStartSlot;
+                                
+                                let { startTime, endTime } = this.slotsToISOTimes(targetEv.dayIdx, targetEv.startSlot, targetEv.duration);
+                                await this.updateEventTimeInDb(targetEv.id, startTime, endTime);
+                            }
+                        }
+                        this.mode = 'idle';
+                        this.movingTask = null;
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    };
 
-                        this.$nextTick(() => {
-                            document.getElementById('editEventForm').submit();
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                },
+
+                startResize(e, ev, edge) {
+                    this.mode = edge === 'top' ? 'resizing-top' : 'resizing-bottom';
+                    this.resizingTask = {
+                        taskId: ev.id,
+                        edge: edge,
+                        origStartSlot: ev.startSlot,
+                        origDuration: ev.duration,
+                        startY: e.clientY
+                    };
+
+                    let onMove = (evMouse) => {
+                        let dy = evMouse.clientY - e.clientY;
+                        let slotDelta = Math.round(dy / 48);
+                        let targetEv = this.events.find(x => x.id === ev.id);
+                        if (!targetEv) return;
+
+                        if (edge === 'bottom') {
+                            let newDuration = Math.max(1, this.resizingTask.origDuration + slotDelta);
+                            targetEv.duration = Math.min(newDuration, 34 - targetEv.startSlot);
+                        } else {
+                            let newStart = Math.max(0, this.resizingTask.origStartSlot + slotDelta);
+                            let endSlot = this.resizingTask.origStartSlot + this.resizingTask.origDuration;
+                            if (newStart >= endSlot) newStart = endSlot - 1;
+                            targetEv.startSlot = newStart;
+                            targetEv.duration = Math.max(1, endSlot - newStart);
+                        }
+                    };
+
+                    let onUp = async () => {
+                        this.mode = 'idle';
+                        let targetEv = this.events.find(x => x.id === ev.id);
+                        if (targetEv) {
+                            let { startTime, endTime } = this.slotsToISOTimes(targetEv.dayIdx, targetEv.startSlot, targetEv.duration);
+                            await this.updateEventTimeInDb(targetEv.id, startTime, endTime);
+                        }
+                        this.resizingTask = null;
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    };
+
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                },
+
+                async updateEventTimeInDb(eventId, startTime, endTime) {
+                    let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                    let payload = new URLSearchParams();
+                    payload.append('eventId', eventId);
+                    payload.append('startTime', startTime);
+                    payload.append('endTime', endTime);
+                    payload.append('__RequestVerificationToken', token);
+
+                    try {
+                        let response = await fetch('?handler=UpdateEventTime', {
+                            method: 'POST',
+                            body: payload
                         });
+                        if (!response.ok) {
+                            console.error("Failed to update event times in database");
+                        }
+                    } catch (err) {
+                        console.error("Network error updating event times:", err);
                     }
                 },
 
-                // Keep dragStart/dropEvent for alternative HTML5 drag & drop supports
-                dragStart(e, ev) {
-                    e.dataTransfer.setData('text/plain', ev.id);
+                get createPreview() {
+                    if (this.mode !== 'creating' || !this.dragCreate) return null;
+                    let startSlot = Math.min(this.dragCreate.startSlot, this.dragCreate.endSlot);
+                    let endSlot = Math.max(this.dragCreate.startSlot, this.dragCreate.endSlot);
+                    return {
+                        dayIdx: this.dragCreate.dayIdx,
+                        startSlot: startSlot,
+                        duration: endSlot - startSlot + 1
+                    };
                 },
 
-                dropEvent(e, targetDayIdx, targetSlotIdx) {
-                    let eventId = e.dataTransfer.getData('text/plain');
-                    let ev = this.events.find(x => x.id === eventId);
-                    if (!ev) return;
-                    
-                    let targetDate = this.weekDates[targetDayIdx];
-                    let h = 7 + Math.floor(targetSlotIdx / 2);
-                    let m = targetSlotIdx % 2 === 0 ? 0 : 30;
-                    
-                    let newStartDate = new Date(targetDate);
-                    newStartDate.setHours(h, m, 0, 0);
-                    
-                    let origStartDate = new Date(ev.startTime);
-                    let origEndDate = new Date(ev.endTime);
-                    let durationMs = origEndDate.getTime() - origStartDate.getTime();
-                    
-                    let newEndDate = new Date(newStartDate.getTime() + durationMs);
-                    
-                    this.formId = ev.id;
-                    this.formTitle = ev.title;
-                    this.formDesc = ev.description;
-                    this.formStartTime = this.toLocalISOString(newStartDate);
-                    this.formEndTime = this.toLocalISOString(newEndDate);
-                    
-                    this.$nextTick(() => {
-                        document.getElementById('editEventForm').submit();
-                    });
+                get movePreview() {
+                    if (this.mode !== 'moving' || !this.movingTask) return null;
+                    let ev = this.events.find(x => x.id === this.movingTask.taskId);
+                    if (!ev) return null;
+                    return {
+                        title: ev.title,
+                        dayIdx: this.movingTask.currentDayIdx,
+                        startSlot: this.movingTask.currentStartSlot,
+                        duration: ev.duration
+                    };
                 },
 
                 saveEvent() {
                     if (!this.formTitle.trim()) return;
-                    this.compileDateTimes();
+                    
+                    let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                    let payload = new URLSearchParams();
+                    
+                    let descJson = JSON.stringify({
+                        desc: this.formDesc,
+                        priority: this.formPriority,
+                        color: this.formColor
+                    });
+                    
+                    let { startTime, endTime } = this.slotsToISOTimes(this.formDayIdx, this.formStartSlot, this.formDuration);
+                    this.formStartTime = startTime;
+                    this.formEndTime = endTime;
+                    
+                    payload.append('title', this.formTitle);
+                    payload.append('description', descJson);
+                    payload.append('startTime', this.formStartTime);
+                    payload.append('endTime', this.formEndTime);
+                    payload.append('__RequestVerificationToken', token);
+                    
                     if (this.isEdit) {
-                        document.getElementById('editEventForm').submit();
+                        payload.append('eventId', this.formId);
+                        fetch('?handler=EditEvent', {
+                            method: 'POST',
+                            body: payload
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                let idx = this.events.findIndex(e => e.id === this.formId);
+                                if (idx !== -1) {
+                                    let e = data.eventItem;
+                                    let startDate = new Date(e.startTime);
+                                    let endDate = new Date(e.endTime);
+                                    let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+                                    let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
+                                    let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
+                                    let duration = Math.max(1, endSlot - startSlot);
+
+                                    let descText = e.description || '';
+                                    let priority = 'medium';
+                                    let colorIdx = 0;
+                                    try {
+                                        if (descText.startsWith('{')) {
+                                            let descObj = JSON.parse(descText);
+                                            descText = descObj.desc || '';
+                                            priority = descObj.priority || 'medium';
+                                            colorIdx = descObj.color !== undefined ? descObj.color : 0;
+                                        }
+                                    } catch (err) {}
+
+                                    this.events[idx] = {
+                                        id: e.id,
+                                        title: e.title,
+                                        description: descText,
+                                        dayIdx: dayIdx,
+                                        startSlot: startSlot,
+                                        duration: duration,
+                                        priority: priority,
+                                        colorIdx: colorIdx
+                                    };
+                                }
+                                this.dialogOpen = false;
+                            }
+                        })
+                        .catch(err => console.error("Error saving event:", err));
                     } else {
-                        document.getElementById('createEventForm').submit();
+                        fetch('?handler=CreateEvent', {
+                            method: 'POST',
+                            body: payload
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                let e = data.eventItem;
+                                let startDate = new Date(e.startTime);
+                                let endDate = new Date(e.endTime);
+                                let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+                                let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
+                                let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
+                                let duration = Math.max(1, endSlot - startSlot);
+
+                                let descText = e.description || '';
+                                let priority = 'medium';
+                                let colorIdx = 0;
+                                try {
+                                    if (descText.startsWith('{')) {
+                                        let descObj = JSON.parse(descText);
+                                        descText = descObj.desc || '';
+                                        priority = descObj.priority || 'medium';
+                                        colorIdx = descObj.color !== undefined ? descObj.color : 0;
+                                    }
+                                } catch (err) {}
+
+                                this.events.push({
+                                    id: e.id,
+                                    title: e.title,
+                                    description: descText,
+                                    dayIdx: dayIdx,
+                                    startSlot: startSlot,
+                                    duration: duration,
+                                    priority: priority,
+                                    colorIdx: colorIdx
+                                });
+                                this.dialogOpen = false;
+                            }
+                        })
+                        .catch(err => console.error("Error creating event:", err));
                     }
                 },
 
                 deleteEvent() {
-                    if (confirm('Are you sure you want to delete this event?')) {
-                        document.getElementById('deleteEventForm').submit();
+                    if (confirm('Are you sure you want to delete this task?')) {
+                        let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                        let payload = new URLSearchParams();
+                        payload.append('eventId', this.formId);
+                        payload.append('__RequestVerificationToken', token);
+                        
+                        fetch('?handler=DeleteEvent', {
+                            method: 'POST',
+                            body: payload
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                this.events = this.events.filter(e => e.id !== this.formId);
+                                this.dialogOpen = false;
+                            }
+                        })
+                        .catch(err => console.error("Error deleting event:", err));
                     }
+                },
+
+                duplicateEvent() {
+                    if (!this.formId) return;
+                    let targetDayIdx = (this.formDayIdx + 1) % 7;
+                    let { startTime, endTime } = this.slotsToISOTimes(targetDayIdx, this.formStartSlot, this.formDuration);
+                    
+                    let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                    let payload = new URLSearchParams();
+                    
+                    let descJson = JSON.stringify({
+                        desc: this.formDesc,
+                        priority: this.formPriority,
+                        color: this.formColor
+                    });
+                    
+                    payload.append('title', this.formTitle);
+                    payload.append('description', descJson);
+                    payload.append('startTime', startTime);
+                    payload.append('endTime', endTime);
+                    payload.append('__RequestVerificationToken', token);
+
+                    fetch('?handler=CreateEvent', {
+                        method: 'POST',
+                        body: payload
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            let e = data.eventItem;
+                            let startDate = new Date(e.startTime);
+                            let endDate = new Date(e.endTime);
+                            let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+                            let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
+                            let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
+                            let duration = Math.max(1, endSlot - startSlot);
+
+                            let descText = e.description || '';
+                            let priority = 'medium';
+                            let colorIdx = 0;
+                            try {
+                                if (descText.startsWith('{')) {
+                                    let descObj = JSON.parse(descText);
+                                    descText = descObj.desc || '';
+                                    priority = descObj.priority || 'medium';
+                                    colorIdx = descObj.color !== undefined ? descObj.color : 0;
+                                }
+                            } catch (err) {}
+
+                            this.events.push({
+                                id: e.id,
+                                title: e.title,
+                                description: descText,
+                                dayIdx: dayIdx,
+                                startSlot: startSlot,
+                                duration: duration,
+                                priority: priority,
+                                colorIdx: colorIdx
+                            });
+                            this.dialogOpen = false;
+                        }
+                    })
+                    .catch(err => console.error("Error duplicating event:", err));
                 }
             };
         }
