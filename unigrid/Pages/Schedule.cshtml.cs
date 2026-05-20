@@ -58,11 +58,11 @@ public class ScheduleModel : PageModel
     public async System.Threading.Tasks.Task<IActionResult> OnPostCreateEventAsync(string title, string description, DateTime startTime, DateTime endTime)
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
-        if (string.IsNullOrEmpty(accountIdClaim)) return RedirectToPage("/Login");
+        if (string.IsNullOrEmpty(accountIdClaim)) return new JsonResult(new { success = false, message = "Not authenticated" });
 
         var accountId = Guid.Parse(accountIdClaim);
         var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
-        if (userProfile == null) return RedirectToPage("/Login");
+        if (userProfile == null) return new JsonResult(new { success = false, message = "User not found" });
 
         var newEvent = new PersonalSchedule
         {
@@ -70,48 +70,102 @@ public class ScheduleModel : PageModel
             UserId = userProfile.Id,
             Title = title,
             Description = description,
-            StartTime = startTime,
-            EndTime = endTime,
+            StartTime = startTime.ToUniversalTime(),
+            EndTime = endTime.ToUniversalTime(),
             CreatedAt = DateTime.UtcNow
         };
 
         _context.PersonalSchedules.Add(newEvent);
         await _context.SaveChangesAsync();
 
-        return RedirectToPage();
+        return new JsonResult(new
+        {
+            success = true,
+            eventItem = new
+            {
+                id = newEvent.Id,
+                title = newEvent.Title,
+                description = newEvent.Description ?? "",
+                startTime = newEvent.StartTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                endTime = newEvent.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
+            }
+        });
     }
 
     public async System.Threading.Tasks.Task<IActionResult> OnPostEditEventAsync(Guid eventId, string title, string description, DateTime startTime, DateTime endTime)
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
-        if (string.IsNullOrEmpty(accountIdClaim)) return RedirectToPage("/Login");
+        if (string.IsNullOrEmpty(accountIdClaim)) return new JsonResult(new { success = false, message = "Not authenticated" });
 
         var eventItem = await _context.PersonalSchedules.FirstOrDefaultAsync(p => p.Id == eventId);
         if (eventItem != null)
         {
             eventItem.Title = title;
             eventItem.Description = description;
-            eventItem.StartTime = startTime;
-            eventItem.EndTime = endTime;
+            eventItem.StartTime = startTime.ToUniversalTime();
+            eventItem.EndTime = endTime.ToUniversalTime();
 
             await _context.SaveChangesAsync();
+
+            return new JsonResult(new
+            {
+                success = true,
+                eventItem = new
+                {
+                    id = eventItem.Id,
+                    title = eventItem.Title,
+                    description = eventItem.Description ?? "",
+                    startTime = eventItem.StartTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    endTime = eventItem.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                }
+            });
         }
 
-        return RedirectToPage();
+        return new JsonResult(new { success = false, message = "Event not found" });
     }
 
     public async System.Threading.Tasks.Task<IActionResult> OnPostDeleteEventAsync(Guid eventId)
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
-        if (string.IsNullOrEmpty(accountIdClaim)) return RedirectToPage("/Login");
+        if (string.IsNullOrEmpty(accountIdClaim)) return new JsonResult(new { success = false, message = "Not authenticated" });
 
         var eventItem = await _context.PersonalSchedules.FirstOrDefaultAsync(p => p.Id == eventId);
         if (eventItem != null)
         {
             _context.PersonalSchedules.Remove(eventItem);
             await _context.SaveChangesAsync();
+            return new JsonResult(new { success = true });
         }
 
-        return RedirectToPage();
+        return new JsonResult(new { success = false, message = "Event not found" });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateEventTimeAsync(Guid eventId, DateTime startTime, DateTime endTime)
+    {
+        var accountIdClaim = User.FindFirst("AccountId")?.Value;
+        if (string.IsNullOrEmpty(accountIdClaim)) return new JsonResult(new { success = false, message = "Not authenticated" });
+
+        var eventItem = await _context.PersonalSchedules.FirstOrDefaultAsync(p => p.Id == eventId);
+        if (eventItem != null)
+        {
+            eventItem.StartTime = startTime.ToUniversalTime();
+            eventItem.EndTime = endTime.ToUniversalTime();
+            await _context.SaveChangesAsync();
+
+            return new JsonResult(new
+            {
+                success = true,
+                eventItem = new
+                {
+                    id = eventItem.Id,
+                    title = eventItem.Title,
+                    description = eventItem.Description ?? "",
+                    startTime = eventItem.StartTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    endTime = eventItem.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                }
+            });
+        }
+
+        return new JsonResult(new { success = false, message = "Event not found" });
     }
 }

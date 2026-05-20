@@ -1,11 +1,19 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using System.IO;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    });
+builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
@@ -34,7 +42,7 @@ builder.Services.AddDbContext<unigrid.Data.UniGridDbContext>(options =>
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
-var key = System.Text.Encoding.ASCII.GetBytes(jwtSettings["Key"] ?? "secret");
+var key = System.Text.Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? "super_secret_unigrid_key_2024_placeholder_must_be_long");
 
 builder.Services.AddAuthentication(options =>
 {
@@ -69,15 +77,48 @@ builder.Services.AddAuthentication(options =>
 
 var app = builder.Build();
 
+// Auto-create and seed database at startup with a robust retry loop for SQL Server cold-starts
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    var context = services.GetRequiredService<unigrid.Data.UniGridDbContext>();
+    
+    int retryCount = 0;
+    int maxRetries = 6;
+    bool seedSuccess = false;
+    while (retryCount < maxRetries && !seedSuccess)
+    {
+        try
+        {
+            // Execute centralized initializer
+            await unigrid.Data.DbInitializer.InitializeAndSeedAsync(context, logger);
+            seedSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            retryCount++;
+            logger.LogWarning(ex, "Database initialization/seeding failed on attempt {Attempt}/{MaxRetries}. Retrying in 5 seconds...", retryCount, maxRetries);
+            if (retryCount >= maxRetries)
+            {
+                logger.LogError(ex, "Database seeding failed after maximum retries. The application will proceed but may encounter missing tables.");
+            }
+            else
+            {
+                System.Threading.Thread.Sleep(5000);
+            }
+        }
+    }
+}
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
-
-app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
@@ -88,5 +129,6 @@ app.UseAuthorization();
 app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();
+app.MapControllers();
 
 app.Run();
