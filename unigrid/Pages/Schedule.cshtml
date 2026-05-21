@@ -29,7 +29,7 @@
     <div class="flex items-center justify-between">
         <div>
             <h1 class="font-display text-2xl font-bold text-slate-800">Schedule</h1>
-            <p class="text-sm text-slate-500">Plan your week — drag to create, hold & move tasks, resize from edges</p>
+            <p class="text-sm text-slate-500">Plan your week — drag to create, hold & move personal events, resize from edges</p>
         </div>
         <div class="flex items-center gap-2">
             <button @@click="weekOffset--" class="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors">
@@ -51,8 +51,8 @@
         <div class="text-xs text-slate-500 space-y-1">
             <p><strong class="text-slate-700">Create:</strong> Click & drag on empty grid slots (drag up or down).</p>
             <p><strong class="text-slate-700">Move:</strong> Hold the grip icon and drag to a new day/time.</p>
-            <p><strong class="text-slate-700">Resize:</strong> Drag the top or bottom edge of a task block to change duration.</p>
-            <p><strong class="text-slate-700">Edit/Delete/Copy:</strong> Click on a task to open the edit dialog.</p>
+            <p><strong class="text-slate-700">Resize:</strong> Drag the top or bottom edge of an event block to change duration.</p>
+            <p><strong class="text-slate-700">Edit/Delete/Copy:</strong> Click on an event to open the edit dialog.</p>
         </div>
     </div>
 
@@ -64,73 +64,94 @@
         
         <!-- Left Side: Interactive Calendar Sheet -->
         <div class="flex-1 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div class="min-w-[800px]">
+            <div style="min-width: 800px;">
                 <!-- Day Headers -->
-                <div class="sticky top-0 z-10 grid grid-cols-[64px_repeat(7,1fr)] border-b border-slate-200 bg-white">
-                    <div class="border-r border-slate-200" />
-                    <template x-for="(day, idx) in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']">
+                <div class="sticky top-0 z-10 border-b border-slate-200 bg-white"
+                     style="display: grid; grid-template-columns: 64px repeat(7, 1fr);">
+                    <div class="border-r border-slate-200"></div>
+                    @for (int idx = 0; idx < 7; idx++)
+                    {
+                        var dayName = new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" }[idx];
                         <div class="px-2 py-3 text-center border-r border-slate-200 last:border-r-0"
-                             :class="isToday(idx) ? 'bg-indigo-50/20' : ''">
-                            <span class="text-xs font-medium text-slate-400 block" x-text="day"></span>
+                             :class="isToday(@idx) ? 'bg-indigo-50/20' : ''">
+                            <span class="text-xs font-medium text-slate-400 block">@dayName</span>
                             <span class="text-lg font-bold block" 
-                                  :class="isToday(idx) ? 'text-indigo-600' : 'text-slate-700'"
-                                  x-text="weekDates[idx].getDate()"></span>
+                                  :class="isToday(@idx) ? 'text-indigo-600' : 'text-slate-700'"
+                                  x-text="weekDates[@idx].getDate()"></span>
                         </div>
-                    </template>
-                </div>                <!-- Calendar Content Sheet -->
+                    }
+                </div>
+
+                <!-- Calendar Content Sheet -->
                 <div @@mouseup="handleMouseUp()" 
                      @@mouseleave="handleMouseLeave()" 
-                     class="relative grid grid-cols-[64px_repeat(7,1fr)] select-none" 
+                     class="relative select-none" 
                      :class="mode === 'moving' ? 'cursor-grabbing' : ''"
-                     style="height: 1632px;"
+                     style="display: grid; grid-template-columns: 64px repeat(7, 1fr); height: 1632px;"
                      id="grid-container">
                     
                     <!-- Vertical Time Grid Rails -->
                     <div class="border-r border-slate-200">
-                        <template x-for="i in 34">
+                        @for (int i = 0; i < 34; i++)
+                        {
+                            var slotLabelIdx = i;
                             <div class="flex items-start justify-end pr-2 text-[11px] text-slate-400 font-medium" 
-                                 :style="'height: 48px;'">
-                                <span class="-mt-1.5" x-text="(i - 1) % 2 === 0 ? slotToTime(i - 1) : ''"></span>
+                                 style="height: 48px;">
+                                <span class="-mt-1.5" x-text="@slotLabelIdx % 2 === 0 ? slotToTime(@slotLabelIdx) : ''"></span>
                             </div>
-                        </template>
+                        }
                     </div>
 
                     <!-- Seven columns for Mon to Sun -->
-                    <template x-for="dayIdx in 7">
+                    @for (int dayIdx = 0; dayIdx < 7; dayIdx++)
+                    {
+                        var dIdx = dayIdx;
                         <div class="border-r border-slate-200 last:border-r-0 relative h-full bg-white"
-                             :class="isToday(dayIdx - 1) ? 'bg-indigo-50/[0.01]' : ''">
+                             :class="isToday(@dIdx) ? 'bg-indigo-50/[0.01]' : ''">
                              
                              <!-- Half-hour grid lines and triggers -->
-                             <template x-for="slotIdx in 34">
-                                 <div @@mousedown="handleCellMouseDown(dayIdx - 1, slotIdx - 1)" 
-                                      @@mouseenter="handleCellMouseEnter(dayIdx - 1, slotIdx - 1)" 
-                                      class="absolute left-0 right-0 border-b transition-colors"
+                             @for (int slotIdx = 0; slotIdx < 34; slotIdx++)
+                             {
+                                 var sIdx = slotIdx;
+                                 <div @@mousedown="handleCellMouseDown(@dIdx, @sIdx)" 
+                                      @@mouseenter="handleCellMouseEnter(@dIdx, @sIdx)" 
+                                      class="border-b transition-colors"
                                       :class="[
-                                          (slotIdx - 1) % 2 === 0 ? 'border-slate-100' : 'border-slate-100/40',
-                                          isCurrentHour(slotIdx - 1) ? 'bg-indigo-500/5' : '',
+                                          @sIdx % 2 === 0 ? 'border-slate-100' : 'border-slate-100/40',
+                                          isCurrentHour(@sIdx) ? 'bg-indigo-500/5' : '',
                                           mode === 'idle' ? 'cursor-crosshair hover:bg-slate-50' : 'cursor-grabbing'
                                       ]"
-                                      :style="'top: ' + ((slotIdx - 1) * 48) + 'px; height: 48px;'"></div>
-                             </template>
+                                      style="height: 48px;"></div>
+                             }
 
                              <!-- Dashed New Event Selection Preview -->
-                             <div x-show="createPreview && createPreview.dayIdx === (dayIdx - 1)"
+                             <div x-show="createPreview && createPreview.dayIdx === @dIdx" x-cloak
                                   class="absolute left-1 right-1 rounded-lg bg-indigo-500/10 border-2 border-dashed border-indigo-500/50 z-10 pointer-events-none"
                                   :style="'top: ' + (createPreview ? createPreview.startSlot * 48 : 0) + 'px; height: ' + (createPreview ? createPreview.duration * 48 : 0) + 'px;'">
                                  <span class="text-[10px] text-indigo-600 font-semibold px-2 pt-1 block" 
                                        x-text="createPreview ? (slotToTime(createPreview.startSlot) + ' – ' + slotToTime(createPreview.startSlot + createPreview.duration)) : ''"></span>
                              </div>
 
-                             <!-- Move Ghost Preview -->
-                             <div x-show="movePreview && movePreview.dayIdx === (dayIdx - 1)"
-                                  class="absolute left-1 right-1 rounded-lg bg-indigo-500/10 border-2 border-dashed border-indigo-500/40 z-30 pointer-events-none opacity-70"
-                                  :style="'top: ' + (movePreview ? movePreview.startSlot * 48 : 0) + 'px; height: ' + (movePreview ? movePreview.duration * 48 : 0) + 'px;'">
-                                 <span class="text-[10px] text-indigo-600 font-semibold px-2 pt-1 block" x-text="movePreview ? movePreview.title : ''"></span>
+                             <!-- Dashed Move Event Target Preview -->
+                             <div x-show="movePreview && movePreview.dayIdx === @dIdx" x-cloak
+                                  class="absolute left-1 right-1 rounded-lg bg-indigo-500/5 border-2 border-dashed border-indigo-500/30 z-10 pointer-events-none flex flex-col justify-between p-2"
+                                  :style="'top: ' + (movePreview ? movePreview.startSlot * 48 + 1 : 0) + 'px; height: ' + (movePreview ? movePreview.duration * 48 - 2 : 0) + 'px;'">
+                                 <div class="flex items-center gap-1.5 opacity-50 font-semibold text-xs text-slate-700">
+                                     <span class="h-1.5 w-1.5 rounded-full shrink-0"
+                                           :class="{
+                                               'bg-slate-400': floatingDrag && floatingDrag.priority === 'low',
+                                               'bg-amber-500': floatingDrag && floatingDrag.priority === 'medium',
+                                               'bg-rose-500': floatingDrag && floatingDrag.priority === 'high'
+                                           }"></span>
+                                     <span class="font-bold truncate text-indigo-700" x-text="movePreview ? movePreview.title : ''"></span>
+                                 </div>
+                                 <span class="text-[10px] text-indigo-500/70 font-semibold" 
+                                       x-text="movePreview ? (slotToTime(movePreview.startSlot) + ' – ' + slotToTime(movePreview.startSlot + movePreview.duration)) : ''"></span>
                              </div>
 
                              <!-- Rendered Event Cards -->
-                             <template x-for="ev in getEventsForDay(dayIdx - 1)">
-                                 <div @@click.stop="openEdit(ev)" 
+                             <template x-for="ev in getEventsForDay(@dIdx)" :key="ev.id">
+                                 <div :id="'ev-' + ev.id" @@click.stop="openEdit(ev)" 
                                       class="absolute rounded-lg border-l-[3px] px-2 py-1.5 text-xs leading-tight cursor-pointer overflow-hidden z-20 shadow-sm hover:shadow-md transition-all select-none flex flex-col justify-between"
                                       :class="[
                                           ['bg-indigo-50 border-indigo-200 text-indigo-700',
@@ -139,7 +160,7 @@
                                            'bg-rose-50 border-rose-200 text-rose-700',
                                            'bg-slate-50 border-slate-200 text-slate-700'][ev.colorIdx] || 'bg-indigo-50 border-indigo-200 text-indigo-700',
                                           ev.priority === 'high' ? 'ring-1 ring-rose-500/20' : '',
-                                          mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'opacity-30' : ''
+                                          mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'opacity-30 pointer-events-none' : ''
                                       ]"
                                       :style="'top: ' + (ev.startSlot * 48 + 1) + 'px; height: ' + (ev.duration * 48 - 2) + 'px; left: ' + (ev.left + 2) + '%; width: ' + (ev.width - 4) + '%;'">
                                       
@@ -152,7 +173,7 @@
                                       <!-- Content -->
                                       <div class="flex items-center gap-1 mt-1">
                                           <!-- Move Grip -->
-                                          <div @@mousedown.stop.prevent="startMoveTask($event, ev, dayIdx - 1)"
+                                          <div @@mousedown.stop.prevent="startMoveTask($event, ev, @dIdx)"
                                                class="cursor-grab active:cursor-grabbing p-0.5 rounded opacity-40 hover:opacity-100 hover:bg-black/5 text-slate-600 transition-colors shrink-0">
                                                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                                                    <path d="M8.5 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-10 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-10 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
@@ -186,7 +207,7 @@
                                  </div>
                              </template>
                         </div>
-                    </template>
+                    }
                 </div></div>
             </div>
         </div>
@@ -238,7 +259,7 @@
              class="w-full max-w-md bg-white p-6 rounded-xl border border-slate-200 shadow-2xl space-y-4 relative animate-in fade-in zoom-in-95 duration-200">
             
             <div class="flex items-center justify-between pb-2 border-b border-slate-100">
-                <h3 class="text-lg font-bold text-slate-800" x-text="isEdit ? 'Edit Task' : 'Create Task'"></h3>
+                <h3 class="text-lg font-bold text-slate-800" x-text="isEdit ? 'Edit Personal Event' : 'Create Personal Event'"></h3>
                 <button @@click="dialogOpen = false" class="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
@@ -248,7 +269,7 @@
                 <!-- Title -->
                 <div class="space-y-1.5">
                     <label class="text-xs font-semibold text-slate-700">Title</label>
-                    <input type="text" x-model="formTitle" placeholder="Task title"
+                    <input type="text" x-model="formTitle" placeholder="Event title"
                            class="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-sm text-slate-700">
                 </div>
 
@@ -318,6 +339,32 @@
             </div>
         </div>
     </div>
+
+    <!-- Smooth Pixel-Following Floating Drag Layer -->
+    <div x-show="floatingDrag" x-cloak
+         class="fixed rounded-lg border-l-[3px] px-3 py-2 text-xs leading-tight pointer-events-none z-50 shadow-2xl transition-none flex flex-col justify-between"
+         :class="[
+             ['bg-indigo-50 border-indigo-300 text-indigo-700',
+              'bg-teal-50 border-teal-300 text-teal-700',
+              'bg-amber-50 border-amber-300 text-amber-700',
+              'bg-rose-50 border-rose-300 text-rose-700',
+              'bg-slate-50 border-slate-300 text-slate-700'][floatingDrag ? floatingDrag.colorIdx : 0]
+         ]"
+         :style="'left: ' + (floatingDrag ? floatingDrag.x : 0) + 'px; top: ' + (floatingDrag ? floatingDrag.y : 0) + 'px; width: ' + (floatingDrag ? floatingDrag.widthPx : 0) + 'px; height: ' + (floatingDrag ? floatingDrag.heightPx : 0) + 'px;'">
+         
+         <div class="flex items-center gap-1.5 font-semibold">
+             <span class="h-1.5 w-1.5 rounded-full shrink-0"
+                   :class="{
+                       'bg-slate-400': floatingDrag && floatingDrag.priority === 'low',
+                       'bg-amber-500': floatingDrag && floatingDrag.priority === 'medium',
+                       'bg-rose-500': floatingDrag && floatingDrag.priority === 'high'
+                   }"></span>
+             <span class="font-bold truncate" x-text="floatingDrag ? floatingDrag.title : ''"></span>
+         </div>
+         <template x-if="floatingDrag && floatingDrag.duration >= 2">
+             <span class="text-[10px] opacity-70 block mt-1" x-text="slotToTime(movingTask.currentStartSlot) + ' – ' + slotToTime(movingTask.currentStartSlot + floatingDrag.duration)"></span>
+         </template>
+    </div>
 </div>
 
 @section Scripts {
@@ -356,7 +403,9 @@
                             startSlot: startSlot,
                             duration: duration,
                             priority: priority,
-                            colorIdx: colorIdx
+                            colorIdx: colorIdx,
+                            startDate: startDate,
+                            endDate: endDate
                         };
                     });
                 },
@@ -367,6 +416,7 @@
                 dragCreate: null, // { dayIdx, startSlot, endSlot }
                 movingTask: null, // { taskId, offsetSlot, currentDayIdx, currentStartSlot }
                 resizingTask: null, // { taskId, edge, origStartSlot, origDuration, startY }
+                floatingDrag: null, // { title, description, priority, colorIdx, duration, widthPx, heightPx, offsetX, offsetY, x, y }
                 
                 // Form fields
                 formId: '',
@@ -417,7 +467,13 @@
                 },
 
                 getEventsForDay(dayIdx) {
-                    let dayEvents = this.events.filter(e => e.dayIdx === dayIdx);
+                    let targetDate = this.weekDates[dayIdx];
+                    let dayEvents = this.events.filter(e => {
+                        let d = new Date(e.startDate);
+                        return d.getFullYear() === targetDate.getFullYear() &&
+                               d.getMonth() === targetDate.getMonth() &&
+                               d.getDate() === targetDate.getDate();
+                    });
 
                     // Sort dayEvents chronologically by startSlot, then by longer durations
                     dayEvents.sort((a, b) => a.startSlot - b.startSlot || b.duration - a.duration);
@@ -623,9 +679,14 @@
                     let scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
                     let scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
                     
-                    let relY = e.clientY - rect.top + scrollTop;
-                    let currentSlot = Math.floor(relY / 48);
-                    let offsetSlot = currentSlot - ev.startSlot;
+                    let cardEl = document.getElementById('ev-' + ev.id);
+                    let rectCard = cardEl.getBoundingClientRect();
+                    let widthPx = rectCard.width;
+                    let heightPx = rectCard.height;
+                    let offsetX = e.clientX - rectCard.left;
+                    let offsetY = e.clientY - rectCard.top;
+                    
+                    let offsetSlot = Math.floor(offsetY / 48);
                     
                     this.mode = 'moving';
                     this.movingTask = {
@@ -634,9 +695,30 @@
                         currentDayIdx: dayIdx,
                         currentStartSlot: ev.startSlot
                     };
+                    
+                    this.floatingDrag = {
+                        title: ev.title,
+                        description: ev.description,
+                        priority: ev.priority,
+                        colorIdx: ev.colorIdx,
+                        duration: ev.duration,
+                        widthPx: widthPx,
+                        heightPx: heightPx,
+                        offsetX: offsetX,
+                        offsetY: offsetY,
+                        x: e.clientX - offsetX,
+                        y: e.clientY - offsetY
+                    };
 
                     let onMove = (evMouse) => {
-                        if (this.mode !== 'moving' || !this.movingTask) return;
+                        if (this.mode !== 'moving' || !this.movingTask || !this.floatingDrag) return;
+                        
+                        // Update floating coordinates in real-time smoothly with pixel accuracy
+                        this.floatingDrag = {
+                            ...this.floatingDrag,
+                            x: evMouse.clientX - this.floatingDrag.offsetX,
+                            y: evMouse.clientY - this.floatingDrag.offsetY
+                        };
                         
                         let rectContainer = gridContainer.getBoundingClientRect();
                         let sContainer = gridContainer.closest('.overflow-auto');
@@ -672,11 +754,14 @@
                                 targetEv.startSlot = this.movingTask.currentStartSlot;
                                 
                                 let { startTime, endTime } = this.slotsToISOTimes(targetEv.dayIdx, targetEv.startSlot, targetEv.duration);
+                                targetEv.startDate = new Date(startTime);
+                                targetEv.endDate = new Date(endTime);
                                 await this.updateEventTimeInDb(targetEv.id, startTime, endTime);
                             }
                         }
                         this.mode = 'idle';
                         this.movingTask = null;
+                        this.floatingDrag = null;
                         document.removeEventListener('mousemove', onMove);
                         document.removeEventListener('mouseup', onUp);
                     };
@@ -718,6 +803,8 @@
                         let targetEv = this.events.find(x => x.id === ev.id);
                         if (targetEv) {
                             let { startTime, endTime } = this.slotsToISOTimes(targetEv.dayIdx, targetEv.startSlot, targetEv.duration);
+                            targetEv.startDate = new Date(startTime);
+                            targetEv.endDate = new Date(endTime);
                             await this.updateEventTimeInDb(targetEv.id, startTime, endTime);
                         }
                         this.resizingTask = null;
@@ -834,7 +921,9 @@
                                         startSlot: startSlot,
                                         duration: duration,
                                         priority: priority,
-                                        colorIdx: colorIdx
+                                        colorIdx: colorIdx,
+                                        startDate: startDate,
+                                        endDate: endDate
                                     };
                                 }
                                 this.dialogOpen = false;
@@ -877,7 +966,9 @@
                                     startSlot: startSlot,
                                     duration: duration,
                                     priority: priority,
-                                    colorIdx: colorIdx
+                                    colorIdx: colorIdx,
+                                    startDate: startDate,
+                                    endDate: endDate
                                 });
                                 this.dialogOpen = false;
                             }
@@ -887,7 +978,7 @@
                 },
 
                 deleteEvent() {
-                    if (confirm('Are you sure you want to delete this task?')) {
+                    if (confirm('Are you sure you want to delete this personal event?')) {
                         let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
                         let payload = new URLSearchParams();
                         payload.append('eventId', this.formId);
@@ -963,7 +1054,9 @@
                                 startSlot: startSlot,
                                 duration: duration,
                                 priority: priority,
-                                colorIdx: colorIdx
+                                colorIdx: colorIdx,
+                                startDate: startDate,
+                                endDate: endDate
                             });
                             this.dialogOpen = false;
                         }

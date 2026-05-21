@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace unigrid.Pages;
 
+[IgnoreAntiforgeryToken]
 public class SignupModel : PageModel
 {
     private readonly UniGridDbContext _context;
