@@ -4,22 +4,16 @@
     ViewData["Title"] = "Dashboard";
 }
 
-<div class="space-y-6" x-data="{ showCompleted: false, searchQuery: '' }">
+<div class="space-y-6" x-data="dashboardComponent()">
+     
+    @Html.AntiForgeryToken()
+
     <div>
-        <h1 class="text-2xl font-bold text-slate-900">Dashboard</h1>
+        <h1 class="text-2xl font-bold text-slate-900 font-display">Dashboard</h1>
         <p class="text-sm text-slate-500">Your personal task overview</p>
     </div>
 
-    <!-- ─── Monthly Progress Summary ─── -->
-    <div class="flex items-center justify-between">
-        <h2 class="text-lg font-bold text-slate-800">@DateTime.Now.ToString("MMMM yyyy") Overview</h2>
-        <div class="flex gap-1">
-            <button class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
-            <button class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
-        </div>
-    </div>
-
-    <!-- Stats Row (Full Width) -->
+    <!-- Stats Row -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="glass p-5 rounded-2xl flex items-center gap-4 border-l-4 border-indigo-500 shadow-sm">
             <div class="h-12 w-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
@@ -59,7 +53,7 @@
         </div>
     </div>
 
-    <!-- Completion Bar (Full Width) -->
+    <!-- Completion Bar -->
     <div class="glass p-5 rounded-2xl shadow-sm flex items-center gap-4">
         <div class="flex-1">
             <div class="flex items-center justify-between mb-2">
@@ -74,17 +68,64 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Assigned Tasks (Left 2/3) -->
+        <!-- Assigned Tasks -->
         <div class="lg:col-span-2 glass rounded-3xl shadow-sm overflow-hidden flex flex-col border border-slate-100">
             <div class="p-6 border-b border-slate-50 space-y-4">
-                <div class="flex items-center justify-between">
+                <div class="flex items-center justify-between relative">
                     <h3 class="font-bold text-slate-800">Assigned Tasks</h3>
                     <div class="flex items-center gap-4">
-                        <button class="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all">
-                            <i data-lucide="filter" class="w-3.5 h-3.5"></i> Filter
-                        </button>
+                        <!-- Dropdown Filter Menu -->
+                        <div class="relative">
+                            <button @@click="showFilters = !showFilters" 
+                                    :class="showFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-650' : 'border-slate-200 text-slate-600 hover:bg-slate-50'"
+                                    class="flex items-center gap-2 px-3 py-1.5 border rounded-xl text-xs font-bold transition-all">
+                                <i data-lucide="filter" class="w-3.5 h-3.5"></i> Filter
+                                <span x-show="selectedWorkspaces.length + selectedPriorities.length > 0" class="h-2 w-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                            </button>
+                            
+                            <!-- Dropdown List -->
+                            <div x-show="showFilters" @@click.away="showFilters = false" x-transition x-cloak
+                                 class="absolute right-0 mt-2 w-64 bg-white rounded-3xl border border-slate-100 p-4 shadow-2xl z-20 space-y-4">
+                                
+                                <div class="space-y-2">
+                                    <label class="text-[10px] font-black text-slate-405 uppercase tracking-widest">Workspace</label>
+                                    <div class="space-y-1 max-h-28 overflow-y-auto pr-1">
+                                        <template x-for="ws in workspaces">
+                                            <label class="flex items-center gap-2 text-xs text-slate-600 font-medium cursor-pointer">
+                                                <input type="checkbox" :value="ws.id" x-model="selectedWorkspaces" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/10">
+                                                <span x-text="ws.name" class="truncate"></span>
+                                            </label>
+                                        </template>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-2">
+                                    <label class="text-[10px] font-black text-slate-405 uppercase tracking-widest">Priority</label>
+                                    <div class="space-y-1">
+                                        <label class="flex items-center gap-2 text-xs text-slate-600 font-medium cursor-pointer">
+                                            <input type="checkbox" value="3" x-model="selectedPriorities" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/10">
+                                            <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-rose-500"></span> High</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-xs text-slate-600 font-medium cursor-pointer">
+                                            <input type="checkbox" value="2" x-model="selectedPriorities" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/10">
+                                            <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-amber-400"></span> Medium</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-xs text-slate-600 font-medium cursor-pointer">
+                                            <input type="checkbox" value="1" x-model="selectedPriorities" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/10">
+                                            <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-slate-300"></span> Low</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <button @@click="selectedWorkspaces = []; selectedPriorities = []; showFilters = false;" 
+                                        class="w-full py-2 bg-slate-50 hover:bg-slate-100 text-[10px] font-bold text-slate-500 rounded-xl transition-all uppercase tracking-wider">
+                                    Clear Filters
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="flex items-center gap-2">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Completed</label>
+                            <label class="text-[10px] font-bold text-slate-450 uppercase tracking-widest">Completed</label>
                             <button @@click="showCompleted = !showCompleted" 
                                     :class="showCompleted ? 'bg-indigo-600' : 'bg-slate-200'"
                                     class="w-8 h-4 rounded-full relative transition-colors">
@@ -99,44 +140,53 @@
                 </div>
             </div>
 
+            <!-- Scrollable Tasks list -->
             <div class="p-2 space-y-1 max-h-[500px] overflow-y-auto">
-                @foreach (var task in Model.RecentTasks)
-                {
-                    var isOverdue = task.Status != 2 && task.DueDate.HasValue && task.DueDate.Value < DateTime.UtcNow;
-                    var priorityColor = task.Priority == 3 ? "bg-rose-500" : task.Priority == 2 ? "bg-amber-500" : "bg-slate-300";
-                    var priorityBadge = task.Priority == 3 ? "text-rose-600 bg-rose-50 border-rose-100" : task.Priority == 2 ? "text-amber-600 bg-amber-50 border-amber-100" : "text-slate-600 bg-slate-50 border-slate-100";
-
-                    <div class="flex items-center gap-3 p-3 rounded-xl border border-transparent hover:border-slate-100 hover:bg-slate-50/50 transition-all group"
-                         x-show="(showCompleted || @task.Status != 2) && (searchQuery == '' || '@task.Title.ToLower()'.includes(searchQuery.toLowerCase()))">
-                        <button class="h-6 w-6 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all @(task.Status == 2 ? "bg-emerald-500 border-emerald-500" : "hover:border-indigo-500")">
-                            @if(task.Status == 2) { <i data-lucide="check" class="w-3 h-3 text-white"></i> }
+                <template x-for="task in filteredTasks" :key="task.id">
+                    <div class="flex items-center gap-3 p-3 rounded-xl border border-transparent hover:border-slate-100 hover:bg-slate-50/50 transition-all group">
+                        <button @@click="toggleTask(task)"
+                                :class="task.status === 2 ? 'bg-emerald-500 border-emerald-500' : 'hover:border-indigo-500'"
+                                class="h-6 w-6 rounded-full border-2 border-slate-205 flex items-center justify-center transition-all">
+                            <template x-if="task.status === 2">
+                                <svg class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                            </template>
                         </button>
-                        <div class="w-1 self-stretch rounded-full @priorityColor opacity-60"></div>
+                        <div class="w-1 self-stretch rounded-full opacity-60"
+                             :class="task.priority === 3 ? 'bg-rose-500' : task.priority === 2 ? 'bg-amber-500' : 'bg-slate-300'"></div>
                         <div class="flex-1 min-w-0">
-                            <p class="text-sm font-bold text-slate-800 @(task.Status == 2 ? "line-through text-slate-400" : "") truncate">@task.Title</p>
+                            <p class="text-sm font-bold text-slate-800 truncate"
+                               :class="task.status === 2 ? 'line-through text-slate-400' : ''"
+                               x-text="task.title"></p>
                             <div class="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                                <span>@task.Workspace.Name</span>
+                                <span x-text="task.workspaceName"></span>
                                 <span>·</span>
-                                <span class="@(isOverdue ? "text-rose-500" : "")">
-                                    @(isOverdue ? $"{(DateTime.UtcNow - task.DueDate.Value).Days}d overdue" : task.DueDate?.ToString("MMM dd") ?? "No date")
-                                </span>
+                                <span x-text="task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) : 'No date'"></span>
                             </div>
                         </div>
-                        <span class="px-2 py-0.5 rounded-lg border text-[9px] font-black uppercase tracking-tighter @priorityBadge flex items-center gap-1">
-                            <i data-lucide="flag" class="w-2.5 h-2.5"></i> @(task.Priority == 3 ? "high" : task.Priority == 2 ? "medium" : "low")
+                        <span class="px-2 py-0.5 rounded-lg border text-[9px] font-black uppercase tracking-tighter flex items-center gap-1"
+                              :class="task.priority === 3 ? 'text-rose-600 bg-rose-50 border-rose-100' : task.priority === 2 ? 'text-amber-600 bg-amber-50 border-amber-100' : 'text-slate-600 bg-slate-50 border-slate-100'">
+                            <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+                            </svg>
+                            <span x-text="task.priority === 3 ? 'high' : task.priority === 2 ? 'medium' : 'low'"></span>
                         </span>
                     </div>
-                }
+                </template>
+                <div x-show="filteredTasks.length === 0" class="text-center py-12 text-slate-400 text-sm">
+                    No tasks found matching current filters
+                </div>
             </div>
         </div>
 
-        <!-- Monthly Overview (Right 1/3) -->
+        <!-- Monthly Overview (Calendar) -->
         <div class="glass rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
             <div class="p-6 border-b border-slate-50 flex items-center justify-between">
-                <h3 class="font-bold text-slate-800 text-sm">@DateTime.Now.ToString("MMMM yyyy")</h3>
+                <h3 class="font-bold text-slate-800 text-sm font-display" x-text="monthName"></h3>
                 <div class="flex gap-1">
-                    <button class="p-1 hover:bg-slate-100 rounded-lg text-slate-400"><i data-lucide="chevron-left" class="w-3.5 h-3.5"></i></button>
-                    <button class="p-1 hover:bg-slate-100 rounded-lg text-slate-400"><i data-lucide="chevron-right" class="w-3.5 h-3.5"></i></button>
+                    <button @@click="prevMonth()" class="p-1 hover:bg-slate-100 rounded-lg text-slate-400"><i data-lucide="chevron-left" class="w-3.5 h-3.5"></i></button>
+                    <button @@click="nextMonth()" class="p-1 hover:bg-slate-100 rounded-lg text-slate-400"><i data-lucide="chevron-right" class="w-3.5 h-3.5"></i></button>
                 </div>
             </div>
             <div class="p-6">
@@ -148,57 +198,242 @@
                     @foreach(var day in new[] {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"}) {
                         <div class="py-1 text-[10px] font-bold text-slate-400 uppercase">@day</div>
                     }
-                    @for(int i = 1; i <= 31; i++) {
-                        var isToday = i == DateTime.Now.Day;
-                        var hasDeadline = i == 16 || i == 20;
-                        <div class="relative py-2 aspect-square flex items-center justify-center text-[11px] font-bold rounded-lg cursor-default transition-all @(isToday ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100" : "text-slate-600 hover:bg-slate-50") @(hasDeadline && !isToday ? "bg-rose-50 text-rose-600" : "")">
-                            @i
-                            @if(hasDeadline && isToday) {
-                                <div class="absolute bottom-1 h-1 w-1 bg-white rounded-full"></div>
-                            } else if(hasDeadline) {
-                                <div class="absolute bottom-1 h-1 w-1 bg-rose-500 rounded-full"></div>
-                            }
+                    <template x-for="dayObj in daysInMonth">
+                        <div class="relative py-2 aspect-square flex items-center justify-center text-[11px] font-bold rounded-lg cursor-default transition-all"
+                             :class="dayObj.isPadding ? 'text-transparent pointer-events-none' : 
+                                     (isToday(dayObj) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-650 hover:bg-slate-50')"
+                             @@mouseenter="if (hasDeadline(dayObj)) { activeTooltip = dayObj.day; }"
+                             @@mouseleave="activeTooltip = null">
+                            <span x-text="dayObj.day"></span>
+                            
+                            <!-- Dot for deadline -->
+                            <div x-show="hasDeadline(dayObj)" class="absolute bottom-1 h-1 w-1 rounded-full"
+                                 :class="isToday(dayObj) ? 'bg-white' : 'bg-rose-500'"></div>
+                            
+                            <!-- Tooltip Popover -->
+                            <div x-show="activeTooltip === dayObj.day" x-transition x-cloak
+                                 class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] p-3 rounded-2xl shadow-xl w-48 z-50 text-left space-y-1.5 pointer-events-none">
+                                <p class="font-bold border-b border-slate-800 pb-1 uppercase tracking-wider text-[8px] text-slate-400">Deadlines</p>
+                                <template x-for="task in getDeadlines(dayObj)">
+                                    <p class="truncate font-semibold flex items-center gap-1.5">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0"></span>
+                                        <span x-text="task.title"></span>
+                                    </p>
+                                </template>
+                            </div>
                         </div>
-                    }
+                    </template>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Workspace Progress Section (Full Width Bottom) -->
+    <!-- Workspace Progress Section -->
     <div class="space-y-4">
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 class="text-lg font-bold text-slate-800">Workspace Progress</h2>
-            <div class="relative w-64">
+            <div class="relative w-full sm:w-64">
                 <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-                <input type="text" placeholder="Search workspaces..." class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all">
+                <input type="text" x-model="workspaceSearchQuery" @@input="workspacePage = 1" placeholder="Search workspaces..." class="w-full pl-10 pr-4 py-2 bg-white border border-slate-205 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all">
             </div>
         </div>
         <div class="grid gap-4">
-            @foreach(var ws in Model.UserWorkspaces) {
-                <div class="glass p-5 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer flex items-center gap-6">
-                    <!-- Mini Donut Mockup -->
-                    <div class="h-16 w-16 rounded-full border-8 border-slate-100 relative flex items-center justify-center">
-                        <div class="absolute inset-0 border-8 border-emerald-500 rounded-full" style="clip-path: polygon(50% 50%, 50% 0%, 100% 0%, 100% 50%)"></div>
-                        <span class="text-[10px] font-black text-slate-800">75%</span>
+            <template x-for="ws in paginatedWorkspaces" :key="ws.id">
+                <div class="glass p-5 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center gap-6">
+                    <!-- SVG Donut Chart -->
+                    <div class="h-16 w-16 shrink-0 relative flex items-center justify-center">
+                        <svg class="h-16 w-16 transform -rotate-90" viewBox="0 0 36 36">
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f1f5f9" stroke-width="3"></circle>
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="#10b981" stroke-width="3" 
+                                    stroke-dasharray="100" :stroke-dashoffset="100 - ws.percent" stroke-linecap="round"></circle>
+                        </svg>
+                        <span class="absolute text-[10px] font-black text-slate-800" x-text="ws.percent + '%'"></span>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-bold text-slate-800 truncate">@ws.Name</p>
-                        <div class="mt-2 flex gap-4 text-[10px] font-bold text-slate-400">
-                            <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-slate-200"></span> 2 Todo</span>
-                            <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-amber-400"></span> 3 Doing</span>
-                            <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span> 5 Done</span>
+                        <p class="text-sm font-bold text-slate-800 truncate" x-text="ws.name"></p>
+                        <div class="mt-2 flex flex-wrap gap-4 text-[10px] font-bold text-slate-400">
+                            <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-slate-200"></span> <span x-text="ws.todoTasks"></span> Todo</span>
+                            <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-amber-400"></span> <span x-text="ws.doingTasks"></span> Doing</span>
+                            <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span> <span x-text="ws.completedTasks"></span> Done</span>
                         </div>
                         <div class="mt-2.5 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-emerald-500 rounded-full" style="width: 75%"></div>
+                            <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" :style="'width: ' + ws.percent + '%'"></div>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <p class="text-lg font-black text-slate-800">5<span class="text-xs font-bold text-slate-300">/10</span></p>
+                    <div class="text-left sm:text-right">
+                        <p class="text-lg font-black text-slate-800">
+                            <span x-text="ws.completedTasks"></span><span class="text-xs font-bold text-slate-300">/<span x-text="ws.totalTasks"></span></span>
+                        </p>
                         <p class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">tasks done</p>
                     </div>
                 </div>
-            }
+            </template>
+            <div x-show="filteredWorkspaces.length === 0" class="text-center py-12 text-slate-400 text-sm">
+                No workspaces found
+            </div>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div x-show="filteredWorkspaces.length > workspacePageSize" class="flex items-center justify-between mt-4 bg-white/50 px-6 py-4 rounded-2xl border border-slate-100/50">
+            <p class="text-xs font-bold text-slate-400">
+                Showing <span class="text-slate-700" x-text="Math.min((workspacePage - 1) * workspacePageSize + 1, filteredWorkspaces.length)"></span>
+                to <span class="text-slate-700" x-text="Math.min(workspacePage * workspacePageSize, filteredWorkspaces.length)"></span>
+                of <span class="text-slate-700" x-text="filteredWorkspaces.length"></span> workspaces
+            </p>
+            <div class="flex gap-2">
+                <button @@click="if(workspacePage > 1) workspacePage--" :disabled="workspacePage == 1"
+                        class="px-4 py-2 border border-slate-205 rounded-xl text-xs font-bold text-slate-650 hover:bg-slate-50 disabled:opacity-50 transition-all cursor-pointer">
+                    Previous
+                </button>
+                <button @@click="if(workspacePage < workspaceTotalPages) workspacePage++" :disabled="workspacePage == workspaceTotalPages"
+                        class="px-4 py-2 border border-slate-205 rounded-xl text-xs font-bold text-slate-650 hover:bg-slate-50 disabled:opacity-50 transition-all cursor-pointer">
+                    Next
+                </button>
+            </div>
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        function dashboardComponent() {
+            return {
+                tasks: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RecentTasks.Select(t => new { 
+                    id = t.Id,
+                    title = t.Title, 
+                    status = t.Status, 
+                    workspaceId = t.WorkspaceId,
+                    workspaceName = t.Workspace.Name,
+                    priority = t.Priority,
+                    dueDate = t.DueDate.HasValue ? t.DueDate.Value.ToString("yyyy-MM-dd") : "" 
+                }))),
+                workspaces: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.UserWorkspaces.Select(w => new {
+                    id = w.Id,
+                    name = w.Name,
+                    totalTasks = w.Tasks.Count,
+                    completedTasks = w.Tasks.Count(t => t.Status == 2),
+                    todoTasks = w.Tasks.Count(t => t.Status == 0 || t.Status == null),
+                    doingTasks = w.Tasks.Count(t => t.Status == 1),
+                    percent = w.Tasks.Count > 0 ? (int)((double)w.Tasks.Count(t => t.Status == 2) / w.Tasks.Count * 100) : 0
+                }))),
+                
+                searchQuery: '',
+                showCompleted: false,
+                showFilters: false,
+                selectedWorkspaces: [],
+                selectedPriorities: [],
+                
+                // Calendar state
+                daysInMonth: [],
+                currentMonth: new Date().getMonth(),
+                currentYear: new Date().getFullYear(),
+                monthName: '',
+                activeTooltip: null,
+                
+                // Workspace state
+                workspaceSearchQuery: '',
+                workspacePage: 1,
+                workspacePageSize: 5,
+
+                init() {
+                    this.initCalendar();
+                },
+                
+                initCalendar() {
+                    const date = new Date(this.currentYear, this.currentMonth, 1);
+                    const days = [];
+                    const startDay = date.getDay(); // 0 is Sunday
+                    const totalDays = new Date(this.currentYear, this.currentMonth + 1, 0).getDate();
+                    
+                    // Padding days
+                    for (let i = 0; i < startDay; i++) {
+                        days.push({ day: '', isPadding: true });
+                    }
+                    // Real days
+                    for (let i = 1; i <= totalDays; i++) {
+                        days.push({ day: i, isPadding: false });
+                    }
+                    this.daysInMonth = days;
+                    this.monthName = new Date(this.currentYear, this.currentMonth).toLocaleString('default', { month: 'long' }) + ' ' + this.currentYear;
+                },
+                
+                prevMonth() {
+                    this.currentMonth--;
+                    if (this.currentMonth < 0) {
+                        this.currentMonth = 11;
+                        this.currentYear--;
+                    }
+                    this.initCalendar();
+                },
+                
+                nextMonth() {
+                    this.currentMonth++;
+                    if (this.currentMonth > 11) {
+                        this.currentMonth = 0;
+                        this.currentYear++;
+                    }
+                    this.initCalendar();
+                },
+                
+                isToday(dayObj) {
+                    if (dayObj.isPadding || !dayObj.day) return false;
+                    const today = new Date();
+                    return dayObj.day === today.getDate() && 
+                           this.currentMonth === today.getMonth() && 
+                           this.currentYear === today.getFullYear();
+                },
+                
+                hasDeadline(dayObj) {
+                    if (dayObj.isPadding || !dayObj.day) return false;
+                    const dateStr = this.currentYear + '-' + String(this.currentMonth + 1).padStart(2, '0') + '-' + String(dayObj.day).padStart(2, '0');
+                    return this.tasks.some(t => t.dueDate && t.dueDate.startsWith(dateStr));
+                },
+                
+                getDeadlines(dayObj) {
+                    if (dayObj.isPadding || !dayObj.day) return [];
+                    const dateStr = this.currentYear + '-' + String(this.currentMonth + 1).padStart(2, '0') + '-' + String(dayObj.day).padStart(2, '0');
+                    return this.tasks.filter(t => t.dueDate && t.dueDate.startsWith(dateStr));
+                },
+                
+                toggleTask(task) {
+                    task.status = task.status === 2 ? 0 : 2;
+                    fetch('/Dashboard?handler=ToggleTask', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'RequestVerificationToken': document.querySelector('input[name=__RequestVerificationToken]').value
+                        },
+                        body: new URLSearchParams({ taskId: task.id })
+                    });
+                },
+                
+                get filteredTasks() {
+                    return this.tasks.filter(t => {
+                        const matchesSearch = t.title.toLowerCase().includes(this.searchQuery.toLowerCase()) || 
+                                             t.workspaceName.toLowerCase().includes(this.searchQuery.toLowerCase());
+                        const matchesCompleted = this.showCompleted || t.status !== 2;
+                        const matchesWorkspace = this.selectedWorkspaces.length === 0 || this.selectedWorkspaces.includes(t.workspaceId);
+                        const matchesPriority = this.selectedPriorities.length === 0 || (t.priority !== null && t.priority !== undefined && this.selectedPriorities.includes(t.priority.toString()));
+                        return matchesSearch && matchesCompleted && matchesWorkspace && matchesPriority;
+                    });
+                },
+                
+                get filteredWorkspaces() {
+                    return this.workspaces.filter(w => 
+                        w.name.toLowerCase().includes(this.workspaceSearchQuery.toLowerCase())
+                    );
+                },
+                
+                get paginatedWorkspaces() {
+                    const start = (this.workspacePage - 1) * this.workspacePageSize;
+                    const end = start + this.workspacePageSize;
+                    return this.filteredWorkspaces.slice(start, end);
+                },
+                
+                get workspaceTotalPages() {
+                    return Math.ceil(this.filteredWorkspaces.length / this.workspacePageSize) || 1;
+                }
+            };
+        }
+    </script>
+}

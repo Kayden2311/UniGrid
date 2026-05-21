@@ -4,13 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - UniGrid</title>
+    <meta name="description" content="UniGrid is a highly visual, modern task and team management platform built for students and small teams to organize tasks, deadlines, files, and discussions clearly." />
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { font-family: 'Inter', 'Plus Jakarta Sans', sans-serif; }
         .glass { background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
         .sidebar-gradient { background: #ffffff; }
         [x-cloak] { display: none !important; }
@@ -19,15 +20,20 @@
 @{
     var currentPage = ViewContext.RouteData.Values["page"]?.ToString();
     var isAuthenticated = User.Identity?.IsAuthenticated ?? false;
-    var isFullPage = currentPage == "/Index" || currentPage == "/Login" || (currentPage == "/Pricing" && !isAuthenticated);
+    var isFullPage = currentPage == "/Index" || currentPage == "/Login" || (currentPage == "/Signup" || (currentPage == "/Pricing" && !isAuthenticated));
 }
 <body class="h-full overflow-hidden flex text-slate-900" 
-      x-data="{ sidebarOpen: true, notificationsOpen: false, profileOpen: false, isFullPage: @(isFullPage ? "true" : "false"), wsOpen: true }">
+      x-data="{ sidebarOpen: window.innerWidth > 768, notificationsOpen: false, profileOpen: false, isFullPage: @(isFullPage ? "true" : "false"), wsOpen: true, mobileNavOpen: false }">
     
+    <!-- Mobile Sidebar Overlay -->
+    <div x-show="!isFullPage && sidebarOpen" @@click="sidebarOpen = false" x-cloak
+         class="md:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 transition-opacity">
+    </div>
+
     <!-- Sidebar (Hidden on Auth/Landing) -->
     <aside x-show="!isFullPage" 
-           class="sidebar-gradient border-r border-slate-200 transition-all duration-300 flex flex-col z-20"
-           :class="sidebarOpen ? 'w-64' : 'w-20'">
+           class="sidebar-gradient border-r border-slate-200 transition-all duration-300 flex flex-col fixed md:static inset-y-0 left-0 z-40 h-full"
+           :class="sidebarOpen ? 'w-64 translate-x-0' : '-translate-x-full md:translate-x-0 md:w-20'">
         <!-- Sidebar Header -->
         <div class="h-16 flex items-center px-4 mb-2">
             <div class="flex items-center gap-3">
@@ -77,7 +83,7 @@
             
             <!-- Collapsed Workspaces Icon -->
             <div x-show="!sidebarOpen" class="pt-2">
-                <a href="/Workspaces" class="flex items-center justify-center p-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-all">
+                <a href="/Workspaces" class="flex items-center justify-center p-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-all" title="Workspaces">
                     <i data-lucide="briefcase" class="w-5 h-5"></i>
                 </a>
             </div>
@@ -92,8 +98,9 @@
         </div>
         
         <div class="p-4 flex justify-center">
-            <button @@click="sidebarOpen = !sidebarOpen" class="text-slate-400 hover:text-indigo-600 transition-colors">
-                <i class="w-5 h-5" :class="sidebarOpen ? 'data-lucide=\'chevron-left\'' : 'data-lucide=\'chevron-right\''"></i>
+            <button @@click="sidebarOpen = !sidebarOpen" class="text-slate-400 hover:text-indigo-600 transition-colors hidden md:block">
+                <i data-lucide="chevron-left" class="w-5 h-5" x-show="sidebarOpen"></i>
+                <i data-lucide="chevron-right" class="w-5 h-5" x-show="!sidebarOpen" x-cloak></i>
             </button>
         </div>
     </aside>
@@ -101,26 +108,43 @@
     <!-- Content Area -->
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <!-- Landing/Auth Header -->
-        <header x-show="isFullPage" class="h-20 flex items-center justify-between px-12 bg-white/80 backdrop-blur-md sticky top-0 z-30">
+        <header x-show="isFullPage" class="h-20 flex items-center justify-between px-6 md:px-12 bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-slate-100">
             <a asp-page="/Index" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
                 <div class="h-9 w-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg">
                     <i data-lucide="sparkles" class="h-4 w-4"></i>
                 </div>
-                <span class="text-xl font-bold tracking-tight text-slate-900">UniGrid</span>
+                <span class="text-xl font-bold tracking-tight text-slate-900 font-display">UniGrid</span>
             </a>
             <nav class="hidden md:flex items-center gap-8">
                 <a asp-page="/Pricing" class="text-sm font-bold text-slate-600 hover:text-indigo-600 transition-colors">Pricing</a>
                 <a asp-page="/Login" class="text-sm font-bold text-slate-600 hover:text-indigo-600 transition-colors">Log in</a>
                 <a asp-page="/Signup" class="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">Get Started Free</a>
             </nav>
+            
+            <!-- Mobile Hamburger for Landing -->
+            <button @@click="mobileNavOpen = !mobileNavOpen" class="md:hidden p-2 text-slate-600 hover:text-indigo-600 rounded-xl">
+                <i data-lucide="menu" class="w-6 h-6" x-show="!mobileNavOpen"></i>
+                <i data-lucide="x" class="w-6 h-6" x-show="mobileNavOpen" x-cloak></i>
+            </button>
+
+            <!-- Mobile Navigation Dropdown -->
+            <div x-show="mobileNavOpen" x-transition x-cloak 
+                 class="md:hidden absolute top-20 left-0 right-0 bg-white border-b border-slate-200 px-6 py-6 flex flex-col gap-4 shadow-xl z-50">
+                <a asp-page="/Pricing" class="text-base font-bold text-slate-700 hover:text-indigo-600 py-2 border-b border-slate-50">Pricing</a>
+                <a asp-page="/Login" class="text-base font-bold text-slate-700 hover:text-indigo-600 py-2 border-b border-slate-50">Log in</a>
+                <a asp-page="/Signup" class="w-full py-3 bg-indigo-600 text-white rounded-xl text-base font-bold text-center shadow-lg shadow-indigo-100 hover:bg-indigo-700">Get Started Free</a>
+            </div>
         </header>
 
         <!-- Dashboard Header -->
-        <header x-show="!isFullPage" class="h-16 glass sticky top-0 z-10 flex items-center justify-between px-8">
+        <header x-show="!isFullPage" class="h-16 glass sticky top-0 z-10 flex items-center justify-between px-4 md:px-8">
             <div class="flex items-center gap-4">
+                <button @@click="sidebarOpen = !sidebarOpen" class="md:hidden p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-all">
+                    <i data-lucide="menu" class="w-6 h-6"></i>
+                </button>
                 <div class="flex items-center px-3 py-1.5 bg-slate-100 rounded-full text-slate-500 border border-slate-200">
                     <i data-lucide="search" class="w-4 h-4 mr-2"></i>
-                    <input type="text" placeholder="Search tasks..." class="bg-transparent border-none outline-none text-xs w-48 placeholder:text-slate-400">
+                    <input type="text" placeholder="Search tasks..." class="bg-transparent border-none outline-none text-xs w-28 sm:w-48 placeholder:text-slate-400">
                 </div>
             </div>
 
@@ -157,7 +181,7 @@
             </div>
         </header>
 
-        <main class="flex-1 overflow-y-auto" :class="isFullPage ? '' : 'p-8'">
+        <main class="flex-1 overflow-y-auto" :class="isFullPage ? '' : 'p-4 md:p-8'">
             @RenderBody()
         </main>
     </div>

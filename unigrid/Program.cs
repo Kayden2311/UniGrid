@@ -28,6 +28,14 @@ builder.Services.AddScoped<unigrid.Services.IAuthService, unigrid.Services.AuthS
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, ".keys")));
 
+// Configure Antiforgery Cookie Policy for Lax security in local HTTP environments
+builder.Services.AddAntiforgery(options =>
+{
+    options.Cookie.Name = "UniGrid.Antiforgery";
+    options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
+});
+
 // Register DB Context with automatic retry policies for SQL Server cold-starts
 builder.Services.AddDbContext<unigrid.Data.UniGridDbContext>(options =>
     options.UseSqlServer(
@@ -75,7 +83,45 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+// Configure Forwarded Headers to support port forwarding, HTTPS proxies, and remote IDE webviews
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | 
+                               Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto | 
+                               Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
+
+app.UseForwardedHeaders();
+
+// Custom Request Logging Middleware to diagnose Login/Signup blocks
+app.Use(async (context, next) =>
+{
+    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+    if (context.Request.Path.Value?.Contains("Login", StringComparison.OrdinalIgnoreCase) == true || 
+        context.Request.Path.Value?.Contains("Signup", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        logger.LogInformation(">>> [Login/Signup Request] {Method} {Path}{QueryString}", 
+            context.Request.Method, context.Request.Path, context.Request.QueryString);
+        foreach (var header in context.Request.Headers)
+        {
+            logger.LogInformation(">>> Header: {Key} = {Value}", header.Key, header.Value);
+        }
+    }
+    
+    await next();
+    
+    if (context.Request.Path.Value?.Contains("Login", StringComparison.OrdinalIgnoreCase) == true || 
+        context.Request.Path.Value?.Contains("Signup", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        logger.LogInformation(">>> [Login/Signup Response] {StatusCode} for {Method} {Path}", 
+            context.Response.StatusCode, context.Request.Method, context.Request.Path);
+    }
+});
+
 
 // Auto-create and seed database at startup with a robust retry loop for SQL Server cold-starts
 using (var scope = app.Services.CreateScope())
