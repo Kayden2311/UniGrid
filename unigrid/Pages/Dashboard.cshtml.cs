@@ -46,6 +46,7 @@ public class DashboardModel : PageModel
 
             // Fetch Workspaces
             UserWorkspaces = await _context.Workspaces
+                .Include(w => w.Tasks)
                 .Where(w => w.OwnerId == userProfile.Id || w.WorkspaceMembers.Any(m => m.UserId == userProfile.Id))
                 .ToListAsync();
             

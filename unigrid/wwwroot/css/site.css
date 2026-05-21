@@ -3,6 +3,26 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+    --background: #f1f3f7;
+    --foreground: #12141c;
+    --primary: #4f46e5;
+    --primary-glow: #6366f1;
+    --primary-hover: #4338ca;
+    --accent: #0ea5e9;
+    --accent-glow: #38bdf8;
+    --muted-foreground: #64748b;
+    --border: #e2e8f0;
+}
+
+.font-display {
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+}
+
+body {
+    font-family: 'Inter', 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
 .glass {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(12px);
@@ -10,8 +30,44 @@
     border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
+.dark .glass {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .sidebar-gradient {
     background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
 [x-cloak] { display: none !important; }
+
+/* Scroll-triggered reveal animations */
+.reveal-on-scroll {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform, opacity;
+}
+
+.reveal-on-scroll.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Stagger delays for child items */
+.reveal-delay-100 { transition-delay: 100ms; }
+.reveal-delay-200 { transition-delay: 200ms; }
+.reveal-delay-300 { transition-delay: 300ms; }
+.reveal-delay-400 { transition-delay: 400ms; }
+.reveal-delay-500 { transition-delay: 500ms; }
+
+/* Custom animations */
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+.animate-float {
+    animation: float 4s ease-in-out infinite;
+}
+

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace unigrid.Pages;
 
+[IgnoreAntiforgeryToken]
 public class LoginModel : PageModel
 {
     private readonly IAuthService _authService;

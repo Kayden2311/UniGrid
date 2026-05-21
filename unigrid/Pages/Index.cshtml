@@ -5,22 +5,23 @@
     Layout = "_Layout";
 }
 
-<div class="relative overflow-hidden min-h-[calc(100vh-4rem)] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white">
+<!-- Hero Section -->
+<div class="relative overflow-hidden min-h-[calc(100vh-5rem)] flex flex-col justify-center py-16 px-4 sm:px-6 lg:px-8 bg-white">
     <!-- Background Decor -->
     <div class="absolute top-0 right-0 -mt-20 -mr-20 w-[500px] h-[500px] bg-indigo-50 rounded-full blur-[100px] opacity-50"></div>
     <div class="absolute bottom-0 left-0 -mb-20 -ml-20 w-[400px] h-[400px] bg-violet-50 rounded-full blur-[80px] opacity-50"></div>
 
-    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative">
+    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center relative">
         <!-- Text Content -->
-        <div class="space-y-8 text-center lg:text-left">
-            <div class="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
-                <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <div class="space-y-8 text-center lg:text-left reveal-on-scroll">
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-full border border-indigo-100/50">
+                <span class="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
                 <span class="text-xs font-bold uppercase tracking-wider">Built for students & small teams</span>
             </div>
             
-            <h1 class="text-5xl lg:text-7xl font-black text-slate-900 leading-[1.1] tracking-tight">
+            <h1 class="text-5xl lg:text-7xl font-black text-slate-900 leading-[1.1] tracking-tight font-display">
                 Manage teamwork <br />
-                <span class="bg-gradient-to-r from-indigo-600 to-indigo-500 bg-clip-text text-transparent italic">clearly & efficiently</span>
+                <span class="bg-gradient-to-r from-indigo-600 to-indigo-400 bg-clip-text text-transparent">clearly & efficiently</span>
             </h1>
 
             <p class="text-lg text-slate-500 max-w-lg mx-auto lg:mx-0 leading-relaxed">
@@ -29,25 +30,25 @@
             </p>
 
             <div class="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start pt-4">
-                <a asp-page="/Workspaces" class="group relative px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2 overflow-hidden">
+                <a asp-page="/Workspaces" class="group relative px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2 overflow-hidden hover:scale-105">
                     <span class="relative z-10">Create a free workspace</span>
                     <i data-lucide="arrow-right" class="w-5 h-5 group-hover:translate-x-1 transition-transform relative z-10"></i>
                     <div class="absolute inset-0 bg-gradient-to-r from-indigo-500 to-violet-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 </a>
-                <button class="px-8 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold hover:bg-slate-200 transition-all">
+                <a asp-page="/Login" class="px-8 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold hover:bg-slate-200 transition-all hover:scale-105">
                     I have an account
-                </button>
+                </a>
             </div>
         </div>
 
         <!-- Image Mockup -->
-        <div class="relative group">
+        <div class="relative group reveal-on-scroll reveal-delay-200">
             <div class="absolute inset-0 bg-indigo-500/10 rounded-[3rem] blur-3xl group-hover:blur-[120px] transition-all duration-700"></div>
             <div class="relative glass rounded-[3rem] p-4 shadow-2xl border border-white/40 overflow-hidden transform group-hover:-translate-y-2 transition-transform duration-500">
                 <img src="/assets/hero-dashboard.png" alt="UniGrid Dashboard" class="rounded-[2rem] shadow-lg w-full" onerror="this.src='/placeholder.svg'">
                 
                 <!-- Floating Element -->
-                <div class="absolute bottom-10 left-10 glass p-4 rounded-2xl shadow-xl flex items-center gap-3 animate-bounce">
+                <div class="absolute bottom-10 left-10 glass p-4 rounded-2xl shadow-xl flex items-center gap-3 animate-float">
                     <div class="h-8 w-8 bg-emerald-500 rounded-full flex items-center justify-center text-white">
                         <i data-lucide="check" class="w-4 h-4"></i>
                     </div>
@@ -59,3 +60,175 @@
         </div>
     </div>
 </div>
+
+<!-- Problems → Solutions -->
+<section class="bg-slate-50 py-24 border-y border-slate-100/80 reveal-on-scroll">
+    <div class="max-w-7xl mx-auto px-6">
+        <div class="text-center max-w-2xl mx-auto mb-16">
+            <h2 class="font-display text-4xl font-extrabold text-slate-900 tracking-tight">Sound familiar?</h2>
+            <p class="mt-4 text-lg text-slate-500">UniGrid solves the most common teamwork headaches.</p>
+        </div>
+        <div class="grid gap-6 md:grid-cols-2">
+            <!-- Problem 1 -->
+            <div class="flex items-start gap-4 rounded-3xl border border-slate-200/60 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-500 font-bold text-sm">✕</div>
+                <div class="flex-1">
+                    <p class="font-medium text-slate-400 line-through decoration-slate-400/40">Tasks scattered across Messenger, chat apps, Docs</p>
+                    <div class="mt-2 flex items-center gap-2">
+                        <i data-lucide="check-circle-2" class="h-5 w-5 shrink-0 text-indigo-500"></i>
+                        <p class="font-semibold text-slate-800">All gathered in one workspace</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Problem 2 -->
+            <div class="flex items-start gap-4 rounded-3xl border border-slate-200/60 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-500 font-bold text-sm">✕</div>
+                <div class="flex-1">
+                    <p class="font-medium text-slate-400 line-through decoration-slate-400/40">Nobody knows who's responsible for what</p>
+                    <div class="mt-2 flex items-center gap-2">
+                        <i data-lucide="check-circle-2" class="h-5 w-5 shrink-0 text-indigo-500"></i>
+                        <p class="font-semibold text-slate-800">Tasks assigned to specific people with clear deadlines</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Problem 3 -->
+            <div class="flex items-start gap-4 rounded-3xl border border-slate-200/60 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-500 font-bold text-sm">✕</div>
+                <div class="flex-1">
+                    <p class="font-medium text-slate-400 line-through decoration-slate-400/40">Group deadlines don't show in your personal calendar</p>
+                    <div class="mt-2 flex items-center gap-2">
+                        <i data-lucide="check-circle-2" class="h-5 w-5 shrink-0 text-indigo-500"></i>
+                        <p class="font-semibold text-slate-800">Auto-synced to your calendar</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Problem 4 -->
+            <div class="flex items-start gap-4 rounded-3xl border border-slate-200/60 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-50 text-rose-500 font-bold text-sm">✕</div>
+                <div class="flex-1">
+                    <p class="font-medium text-slate-400 line-through decoration-slate-400/40">Leaders struggle to track progress</p>
+                    <div class="mt-2 flex items-center gap-2">
+                        <i data-lucide="check-circle-2" class="h-5 w-5 shrink-0 text-indigo-500"></i>
+                        <p class="font-semibold text-slate-800">Real-time status tracking for everything</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Features Grid -->
+<section class="py-24 bg-white reveal-on-scroll">
+    <div class="max-w-7xl mx-auto px-6">
+        <div class="text-center max-w-2xl mx-auto mb-20">
+            <h2 class="font-display text-4xl font-extrabold text-slate-900 tracking-tight">Everything you need in one platform</h2>
+            <p class="mt-4 text-lg text-slate-500">Purpose-built for students and small teams to collaborate seamlessly.</p>
+        </div>
+        <div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+            <!-- Feature 1 -->
+            <article class="group rounded-3xl border border-slate-100 bg-slate-50/50 p-8 hover:bg-white hover:border-slate-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-600 group-hover:text-white">
+                    <i data-lucide="kanban-square" class="h-6 w-6"></i>
+                </div>
+                <h3 class="mt-6 font-display text-xl font-bold text-slate-800">Visual Kanban Board</h3>
+                <p class="mt-3 text-sm leading-relaxed text-slate-500">Manage tasks with clear statuses: To Do, In Progress, Done. Drag and drop with ease.</p>
+            </article>
+            <!-- Feature 2 -->
+            <article class="group rounded-3xl border border-slate-100 bg-slate-50/50 p-8 hover:bg-white hover:border-slate-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-600 group-hover:text-white">
+                    <i data-lucide="users" class="h-6 w-6"></i>
+                </div>
+                <h3 class="mt-6 font-display text-xl font-bold text-slate-800">Team Workspaces</h3>
+                <p class="mt-3 text-sm leading-relaxed text-slate-500">Create workspaces for courses or projects. Invite members by code, assign tasks clearly.</p>
+            </article>
+            <!-- Feature 3 -->
+            <article class="group rounded-3xl border border-slate-100 bg-slate-50/50 p-8 hover:bg-white hover:border-slate-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-600 group-hover:text-white">
+                    <i data-lucide="calendar-range" class="h-6 w-6"></i>
+                </div>
+                <h3 class="mt-6 font-display text-xl font-bold text-slate-800">Personal Deadline Calendar</h3>
+                <p class="mt-3 text-sm leading-relaxed text-slate-500">Group tasks automatically appear in your personal calendar. Never miss a deadline again.</p>
+            </article>
+            <!-- Feature 4 -->
+            <article class="group rounded-3xl border border-slate-100 bg-slate-50/50 p-8 hover:bg-white hover:border-slate-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-600 group-hover:text-white">
+                    <i data-lucide="message-square-text" class="h-6 w-6"></i>
+                </div>
+                <h3 class="mt-6 font-display text-xl font-bold text-slate-800">Built-in Group Chat</h3>
+                <p class="mt-3 text-sm leading-relaxed text-slate-500">Each workspace has its own chat room. Discuss right next to your task board.</p>
+            </article>
+            <!-- Feature 5 -->
+            <article class="group rounded-3xl border border-slate-100 bg-slate-50/50 p-8 hover:bg-white hover:border-slate-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-600 group-hover:text-white">
+                    <i data-lucide="clock" class="h-6 w-6"></i>
+                </div>
+                <h3 class="mt-6 font-display text-xl font-bold text-slate-800">Workload Alerts</h3>
+                <p class="mt-3 text-sm leading-relaxed text-slate-500">Get warned when you have too many deadlines stacked on the same day.</p>
+            </article>
+            <!-- Feature 6 -->
+            <article class="group rounded-3xl border border-slate-100 bg-slate-50/50 p-8 hover:bg-white hover:border-slate-200 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-600 group-hover:text-white">
+                    <i data-lucide="shield" class="h-6 w-6"></i>
+                </div>
+                <h3 class="mt-6 font-display text-xl font-bold text-slate-800">Progress Tracking</h3>
+                <p class="mt-3 text-sm leading-relaxed text-slate-500">Leaders can track all task statuses in real time. Full transparency, no more free-riders.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+<!-- Pricing CTA -->
+<section class="py-24 bg-slate-50 border-t border-slate-100/80 reveal-on-scroll">
+    <div class="max-w-7xl mx-auto px-6 text-center">
+        <div class="max-w-2xl mx-auto space-y-6">
+            <h2 class="font-display text-4xl font-extrabold text-slate-900 tracking-tight">Simple, transparent pricing</h2>
+            <p class="text-lg text-slate-500 max-w-md mx-auto leading-relaxed">
+                Start free with your team. Upgrade as you grow — no hidden fees.
+            </p>
+            <div class="pt-4">
+                <a asp-page="/Pricing" class="inline-flex items-center gap-2 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:scale-105 transition-all">
+                    <span>See Pricing</span>
+                    <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- SignUp CTA Banner -->
+<section class="py-20 bg-white reveal-on-scroll">
+    <div class="max-w-7xl mx-auto px-6">
+        <div class="relative overflow-hidden rounded-[3rem] bg-indigo-600 px-8 py-20 text-center text-white sm:px-16 shadow-2xl shadow-indigo-100/50">
+            <div class="absolute inset-0 bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-700 opacity-90"></div>
+            <div class="absolute -top-24 -left-24 w-96 h-96 bg-indigo-400 rounded-full blur-[100px] opacity-30"></div>
+            <div class="absolute -bottom-24 -right-24 w-96 h-96 bg-violet-400 rounded-full blur-[100px] opacity-30"></div>
+            
+            <div class="relative z-10 max-w-2xl mx-auto">
+                <h2 class="font-display text-4xl font-extrabold sm:text-5xl leading-tight">Ready to work smarter together?</h2>
+                <p class="mx-auto mt-6 text-lg text-indigo-100 max-w-md leading-relaxed">
+                    Create a free account and start managing your team's work today.
+                </p>
+                <div class="mt-10">
+                    <a asp-page="/Signup" class="inline-flex items-center gap-2 px-8 py-4 bg-white text-indigo-600 hover:bg-indigo-50 rounded-2xl font-bold shadow-xl hover:scale-105 transition-all">
+                        <span>Sign up free</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="border-t border-slate-100 bg-slate-50 py-12">
+    <div class="max-w-7xl mx-auto px-6 flex flex-col items-center justify-between gap-6 sm:flex-row">
+        <div class="flex items-center gap-3">
+            <div class="h-9 w-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                <i data-lucide="sparkles" class="h-4 w-4"></i>
+            </div>
+            <span class="font-display text-lg font-bold text-slate-800">UniGrid</span>
+        </div>
+        <p class="text-sm text-slate-400">© 2026 UniGrid. Team productivity platform for students.</p>
+    </div>
+</footer>
+

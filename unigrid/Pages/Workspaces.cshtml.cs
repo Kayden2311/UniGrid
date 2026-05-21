@@ -18,6 +18,12 @@ public class WorkspacesModel : PageModel
 
     public List<Workspace> UserWorkspaces { get; set; } = new();
 
+    [BindProperty]
+    public string NewWorkspaceName { get; set; } = string.Empty;
+
+    [BindProperty]
+    public string NewWorkspaceDesc { get; set; } = string.Empty;
+
     public async System.Threading.Tasks.Task<IActionResult> OnGetAsync()
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
@@ -30,14 +36,16 @@ public class WorkspacesModel : PageModel
             if (profile != null)
             {
                 var user = await _context.Users.FindAsync(profile.Id);
-                ViewData["UserName"] = user.FullName;
-                ViewData["UserInitials"] = string.Concat(user.FullName.Split(' ').Select(n => n[0]));
+                ViewData["UserName"] = user?.FullName ?? string.Empty;
+                ViewData["UserInitials"] = user?.FullName != null ? string.Concat(user.FullName.Split(' ').Select(n => n[0])) : string.Empty;
 
-                // Fetch Workspaces owned by or joined by the user
+                // Fetch Workspaces owned by or joined by the user, including tasks and member user details
                 UserWorkspaces = await _context.Workspaces
                     .Include(w => w.WorkspaceMembers)
-                    .ThenInclude(m => m.User)
+                        .ThenInclude(m => m.User)
+                    .Include(w => w.Tasks)
                     .Where(w => w.OwnerId == profile.Id || w.WorkspaceMembers.Any(m => m.UserId == profile.Id))
+                    .OrderByDescending(w => w.CreatedAt)
                     .ToListAsync();
 
                 return Page();
@@ -45,5 +53,68 @@ public class WorkspacesModel : PageModel
         }
 
         return RedirectToPage("/Login");
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostCreateWorkspaceAsync()
+    {
+        var accountIdClaim = User.FindFirst("AccountId")?.Value;
+        if (string.IsNullOrEmpty(accountIdClaim))
+        {
+            return RedirectToPage("/Login");
+        }
+
+        var accountId = Guid.Parse(accountIdClaim);
+        var profile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        if (profile == null)
+        {
+            return RedirectToPage("/Login");
+        }
+
+        if (!string.IsNullOrEmpty(NewWorkspaceName))
+        {
+            // Generate unique 8-character JoinCode
+            string joinCode;
+            bool isUnique;
+            do
+            {
+                joinCode = Guid.NewGuid().ToString().Substring(0, 8).ToUpper();
+                isUnique = !await _context.Workspaces.AnyAsync(w => w.JoinCode == joinCode);
+            } while (!isUnique);
+
+            var workspace = new Workspace
+            {
+                Id = Guid.NewGuid(),
+                Name = NewWorkspaceName,
+                JoinCode = joinCode,
+                OwnerId = profile.Id,
+                PackageTier = "Free",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _context.Workspaces.AddAsync(workspace);
+
+            // Add owner as a member
+            var member = new WorkspaceMember
+            {
+                WorkspaceId = workspace.Id,
+                UserId = profile.Id,
+                Role = "Owner",
+                JoinedAt = DateTime.UtcNow
+            };
+            await _context.WorkspaceMembers.AddAsync(member);
+
+            // Add a default ChatRoom for the workspace
+            var chatRoom = new ChatRoom
+            {
+                Id = Guid.NewGuid(),
+                WorkspaceId = workspace.Id,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _context.ChatRooms.AddAsync(chatRoom);
+
+            await _context.SaveChangesAsync();
+        }
+
+        return RedirectToPage("/Workspaces");
     }
 }
