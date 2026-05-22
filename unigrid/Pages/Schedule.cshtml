@@ -24,12 +24,13 @@
     }), serializerSettings);
 }
 
+<link rel="stylesheet" href="~/css/schedule.css" asp-append-version="true" />
 <div class="space-y-4" x-data="scheduleComponent()">
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
             <h1 class="font-display text-2xl font-bold text-slate-800">Schedule</h1>
-            <p class="text-sm text-slate-500">Plan your week — drag to create, hold & move personal events, resize from edges</p>
+            <p class="text-sm text-slate-500">Plan your week — drag to create, pick & slide personal events, resize from edges</p>
         </div>
         <div class="flex items-center gap-2">
             <button @@click="weekOffset--" class="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors">
@@ -50,7 +51,7 @@
         <i data-lucide="info" class="w-5 h-5 text-indigo-500 shrink-0 mt-0.5"></i>
         <div class="text-xs text-slate-500 space-y-1">
             <p><strong class="text-slate-700">Create:</strong> Click & drag on empty grid slots (drag up or down).</p>
-            <p><strong class="text-slate-700">Move:</strong> Hold the grip icon and drag to a new day/time.</p>
+            <p><strong class="text-slate-700">Move:</strong> Click and drag the event card to any day or time slot.</p>
             <p><strong class="text-slate-700">Resize:</strong> Drag the top or bottom edge of an event block to change duration.</p>
             <p><strong class="text-slate-700">Edit/Delete/Copy:</strong> Click on an event to open the edit dialog.</p>
         </div>
@@ -72,11 +73,10 @@
                     @for (int idx = 0; idx < 7; idx++)
                     {
                         var dayName = new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" }[idx];
-                        <div class="px-2 py-3 text-center border-r border-slate-200 last:border-r-0"
-                             :class="isToday(@idx) ? 'bg-indigo-50/20' : ''">
+                        <div class="px-2 py-3 text-center border-r border-slate-200 last:border-r-0">
                             <span class="text-xs font-medium text-slate-400 block">@dayName</span>
-                            <span class="text-lg font-bold block" 
-                                  :class="isToday(@idx) ? 'text-indigo-600' : 'text-slate-700'"
+                            <span class="inline-flex items-center justify-center h-8 w-8 rounded-full text-base mt-1" 
+                                  :class="isToday(@idx) ? 'today-badge-active' : 'today-badge-inactive'"
                                   x-text="weekDates[@idx].getDate()"></span>
                         </div>
                     }
@@ -106,8 +106,7 @@
                     @for (int dayIdx = 0; dayIdx < 7; dayIdx++)
                     {
                         var dIdx = dayIdx;
-                        <div class="border-r border-slate-200 last:border-r-0 relative h-full bg-white"
-                             :class="isToday(@dIdx) ? 'bg-indigo-50/[0.01]' : ''">
+                        <div class="border-r border-slate-200 last:border-r-0 relative h-full bg-white">
                              
                              <!-- Half-hour grid lines and triggers -->
                              @for (int slotIdx = 0; slotIdx < 34; slotIdx++)
@@ -118,8 +117,8 @@
                                       class="border-b transition-colors"
                                       :class="[
                                           @sIdx % 2 === 0 ? 'border-slate-100' : 'border-slate-100/40',
-                                          isCurrentHour(@sIdx) ? 'bg-indigo-500/5' : '',
-                                          mode === 'idle' ? 'cursor-crosshair hover:bg-slate-50' : 'cursor-grabbing'
+                                          mode === 'moving' && movingTask && movingTask.currentDayIdx === @dIdx && movingTask.currentStartSlot <= @sIdx && @sIdx < (movingTask.currentStartSlot + (events.find(x => x.id === movingTask.taskId)?.duration || 2)) ? 'grid-cell-active-hover' : (mode === 'moving' ? 'hover:bg-slate-50/30' : 'hover:bg-slate-50'),
+                                          mode === 'idle' ? 'cursor-crosshair' : 'cursor-grabbing'
                                       ]"
                                       style="height: 48px;"></div>
                              }
@@ -132,27 +131,11 @@
                                        x-text="createPreview ? (slotToTime(createPreview.startSlot) + ' – ' + slotToTime(createPreview.startSlot + createPreview.duration)) : ''"></span>
                              </div>
 
-                             <!-- Dashed Move Event Target Preview -->
-                             <div x-show="movePreview && movePreview.dayIdx === @dIdx" x-cloak
-                                  class="absolute left-1 right-1 rounded-lg bg-indigo-500/5 border-2 border-dashed border-indigo-500/30 z-10 pointer-events-none flex flex-col justify-between p-2"
-                                  :style="'top: ' + (movePreview ? movePreview.startSlot * 48 + 1 : 0) + 'px; height: ' + (movePreview ? movePreview.duration * 48 - 2 : 0) + 'px;'">
-                                 <div class="flex items-center gap-1.5 opacity-50 font-semibold text-xs text-slate-700">
-                                     <span class="h-1.5 w-1.5 rounded-full shrink-0"
-                                           :class="{
-                                               'bg-slate-400': floatingDrag && floatingDrag.priority === 'low',
-                                               'bg-amber-500': floatingDrag && floatingDrag.priority === 'medium',
-                                               'bg-rose-500': floatingDrag && floatingDrag.priority === 'high'
-                                           }"></span>
-                                     <span class="font-bold truncate text-indigo-700" x-text="movePreview ? movePreview.title : ''"></span>
-                                 </div>
-                                 <span class="text-[10px] text-indigo-500/70 font-semibold" 
-                                       x-text="movePreview ? (slotToTime(movePreview.startSlot) + ' – ' + slotToTime(movePreview.startSlot + movePreview.duration)) : ''"></span>
-                             </div>
-
                              <!-- Rendered Event Cards -->
                              <template x-for="ev in getEventsForDay(@dIdx)" :key="ev.id">
-                                 <div :id="'ev-' + ev.id" @@click.stop="openEdit(ev)" 
-                                      class="absolute rounded-lg border-l-[3px] px-2 py-1.5 text-xs leading-tight cursor-pointer overflow-hidden z-20 shadow-sm hover:shadow-md transition-all select-none flex flex-col justify-between"
+                                 <div :id="'ev-' + ev.id" 
+                                      @@mousedown.stop="startMoveTask($event, ev, @dIdx)"
+                                      class="event-card absolute rounded-lg border-l-[3px] px-2 py-1.5 text-xs leading-tight cursor-pointer overflow-hidden z-20 shadow-sm hover:shadow-md select-none flex flex-col justify-between"
                                       :class="[
                                           ['bg-indigo-50 border-indigo-200 text-indigo-700',
                                            'bg-teal-50 border-teal-200 text-teal-700',
@@ -160,9 +143,9 @@
                                            'bg-rose-50 border-rose-200 text-rose-700',
                                            'bg-slate-50 border-slate-200 text-slate-700'][ev.colorIdx] || 'bg-indigo-50 border-indigo-200 text-indigo-700',
                                           ev.priority === 'high' ? 'ring-1 ring-rose-500/20' : '',
-                                          mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'opacity-30 pointer-events-none' : ''
+                                          mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'event-card-dragging' : ''
                                       ]"
-                                      :style="'top: ' + (ev.startSlot * 48 + 1) + 'px; height: ' + (ev.duration * 48 - 2) + 'px; left: ' + (ev.left + 2) + '%; width: ' + (ev.width - 4) + '%;'">
+                                      :style="'top: ' + (ev.startSlot * 48 + 1) + 'px; height: ' + (ev.duration * 48 - 2) + 'px; left: ' + (ev.left + 2) + '%; width: ' + (ev.width - 4) + '%;' + (mode === 'moving' && movingTask && movingTask.taskId === ev.id ? ' transform: translate3d(' + dragTranslateX + 'px, ' + dragTranslateY + 'px, 0px) scale(1.025) rotate(1.2deg);' : '')">
                                       
                                       <!-- Resize Handle Top -->
                                       <div @@mousedown.stop.prevent="startResize($event, ev, 'top')"
@@ -171,14 +154,7 @@
                                       </div>
 
                                       <!-- Content -->
-                                      <div class="flex items-center gap-1 mt-1">
-                                          <!-- Move Grip -->
-                                          <div @@mousedown.stop.prevent="startMoveTask($event, ev, @dIdx)"
-                                               class="cursor-grab active:cursor-grabbing p-0.5 rounded opacity-40 hover:opacity-100 hover:bg-black/5 text-slate-600 transition-colors shrink-0">
-                                               <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                                                   <path d="M8.5 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-10 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm-10 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/>
-                                               </svg>
-                                          </div>
+                                      <div class="flex items-center gap-1.5 mt-1">
                                           <span class="h-1.5 w-1.5 rounded-full shrink-0" 
                                                 :class="{
                                                     'bg-slate-400': ev.priority === 'low',
@@ -190,13 +166,13 @@
 
                                       <!-- Scheduled Time Indicator -->
                                       <template x-if="ev.duration >= 2">
-                                          <span class="text-[10px] opacity-70 block ml-5" 
+                                          <span class="text-[10px] opacity-70 block ml-3" 
                                                 x-text="slotToTime(ev.startSlot) + ' – ' + slotToTime(ev.startSlot + ev.duration)"></span>
                                       </template>
 
                                       <!-- Description Details -->
                                       <template x-if="ev.duration >= 4 && ev.description">
-                                          <span class="text-[10px] opacity-60 block ml-5 line-clamp-2" x-text="ev.description"></span>
+                                          <span class="text-[10px] opacity-60 block ml-3 line-clamp-2" x-text="ev.description"></span>
                                       </template>
 
                                       <!-- Resize Handle Bottom -->
@@ -208,7 +184,7 @@
                              </template>
                         </div>
                     }
-                </div></div>
+                </div>
             </div>
         </div>
 
@@ -339,731 +315,12 @@
             </div>
         </div>
     </div>
-
-    <!-- Smooth Pixel-Following Floating Drag Layer -->
-    <div x-show="floatingDrag" x-cloak
-         class="fixed rounded-lg border-l-[3px] px-3 py-2 text-xs leading-tight pointer-events-none z-50 shadow-2xl transition-none flex flex-col justify-between"
-         :class="[
-             ['bg-indigo-50 border-indigo-300 text-indigo-700',
-              'bg-teal-50 border-teal-300 text-teal-700',
-              'bg-amber-50 border-amber-300 text-amber-700',
-              'bg-rose-50 border-rose-300 text-rose-700',
-              'bg-slate-50 border-slate-300 text-slate-700'][floatingDrag ? floatingDrag.colorIdx : 0]
-         ]"
-         :style="'left: ' + (floatingDrag ? floatingDrag.x : 0) + 'px; top: ' + (floatingDrag ? floatingDrag.y : 0) + 'px; width: ' + (floatingDrag ? floatingDrag.widthPx : 0) + 'px; height: ' + (floatingDrag ? floatingDrag.heightPx : 0) + 'px;'">
-         
-         <div class="flex items-center gap-1.5 font-semibold">
-             <span class="h-1.5 w-1.5 rounded-full shrink-0"
-                   :class="{
-                       'bg-slate-400': floatingDrag && floatingDrag.priority === 'low',
-                       'bg-amber-500': floatingDrag && floatingDrag.priority === 'medium',
-                       'bg-rose-500': floatingDrag && floatingDrag.priority === 'high'
-                   }"></span>
-             <span class="font-bold truncate" x-text="floatingDrag ? floatingDrag.title : ''"></span>
-         </div>
-         <template x-if="floatingDrag && floatingDrag.duration >= 2">
-             <span class="text-[10px] opacity-70 block mt-1" x-text="slotToTime(movingTask.currentStartSlot) + ' – ' + slotToTime(movingTask.currentStartSlot + floatingDrag.duration)"></span>
-         </template>
-    </div>
 </div>
 
 @section Scripts {
     <script>
-        function scheduleComponent() {
-            return {
-                weekOffset: 0,
-                events: [],
-                init() {
-                    let rawEvents = @Html.Raw(jsonEvents);
-                    this.events = rawEvents.map(e => {
-                        let startDate = new Date(e.startTime);
-                        let endDate = new Date(e.endTime);
-                        let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                        let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
-                        let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
-                        let duration = Math.max(1, endSlot - startSlot);
-
-                        let descText = e.description || '';
-                        let priority = 'medium';
-                        let colorIdx = 0;
-                        try {
-                            if (descText.startsWith('{')) {
-                                let descObj = JSON.parse(descText);
-                                descText = descObj.desc || '';
-                                priority = descObj.priority || 'medium';
-                                colorIdx = descObj.color !== undefined ? descObj.color : 0;
-                            }
-                        } catch (err) {}
-
-                        return {
-                            id: e.id,
-                            title: e.title,
-                            description: descText,
-                            dayIdx: dayIdx,
-                            startSlot: startSlot,
-                            duration: duration,
-                            priority: priority,
-                            colorIdx: colorIdx,
-                            startDate: startDate,
-                            endDate: endDate
-                        };
-                    });
-                },
-                tasks: @Html.Raw(jsonTasks),
-                dialogOpen: false,
-                isEdit: false,
-                mode: 'idle', // 'idle', 'creating', 'moving', 'resizing-top', 'resizing-bottom'
-                dragCreate: null, // { dayIdx, startSlot, endSlot }
-                movingTask: null, // { taskId, offsetSlot, currentDayIdx, currentStartSlot }
-                resizingTask: null, // { taskId, edge, origStartSlot, origDuration, startY }
-                floatingDrag: null, // { title, description, priority, colorIdx, duration, widthPx, heightPx, offsetX, offsetY, x, y }
-                
-                // Form fields
-                formId: '',
-                formTitle: '',
-                formDesc: '',
-                formStartTime: '',
-                formEndTime: '',
-                formColor: 0,
-                formPriority: 'medium',
-                formDayIdx: 0,
-                formStartSlot: 0,
-                formDuration: 2,
-
-                get weekDates() {
-                    return this.getWeekDates(this.weekOffset);
-                },
-
-                get weekLabel() {
-                    let dates = this.weekDates;
-                    let opt = { month: 'short', day: 'numeric' };
-                    return 'Week of ' + dates[0].toLocaleDateString('en-US', opt);
-                },
-
-                isToday(dayIdx) {
-                    let d = this.weekDates[dayIdx];
-                    return new Date().toDateString() === d.toDateString();
-                },
-
-                isCurrentHour(slot) {
-                    let now = new Date();
-                    let hour = now.getHours();
-                    let halfHour = now.getMinutes() >= 30 ? 1 : 0;
-                    return (7 + Math.floor(slot / 2)) === hour && (slot % 2 === halfHour);
-                },
-
-                getWeekDates(offset) {
-                    let now = new Date();
-                    let monday = new Date(now);
-                    let diff = now.getDay() === 0 ? -6 : 1 - now.getDay();
-                    monday.setDate(now.getDate() + diff + offset * 7);
-                    let dates = [];
-                    for (let i = 0; i < 7; i++) {
-                        let d = new Date(monday);
-                        d.setDate(monday.getDate() + i);
-                        dates.push(d);
-                    }
-                    return dates;
-                },
-
-                getEventsForDay(dayIdx) {
-                    let targetDate = this.weekDates[dayIdx];
-                    let dayEvents = this.events.filter(e => {
-                        let d = new Date(e.startDate);
-                        return d.getFullYear() === targetDate.getFullYear() &&
-                               d.getMonth() === targetDate.getMonth() &&
-                               d.getDate() === targetDate.getDate();
-                    });
-
-                    // Sort dayEvents chronologically by startSlot, then by longer durations
-                    dayEvents.sort((a, b) => a.startSlot - b.startSlot || b.duration - a.duration);
-
-                    // Group overlapping events in the day
-                    let groups = [];
-                    for (let ev of dayEvents) {
-                        let matchedGroup = null;
-                        for (let g of groups) {
-                            if (ev.startSlot < g.endSlot) {
-                                matchedGroup = g;
-                                break;
-                            }
-                        }
-                        if (!matchedGroup) {
-                            matchedGroup = { endSlot: ev.startSlot + ev.duration, events: [] };
-                            groups.push(matchedGroup);
-                        } else {
-                            matchedGroup.endSlot = Math.max(matchedGroup.endSlot, ev.startSlot + ev.duration);
-                        }
-                        matchedGroup.events.push(ev);
-                    }
-
-                    // Assign virtual columns and properties within each group
-                    for (let g of groups) {
-                        let groupCols = [];
-                        for (let ev of g.events) {
-                            let colIdx = 0;
-                            while (colIdx < groupCols.length) {
-                                let lastEvInCol = groupCols[colIdx][groupCols[colIdx].length - 1];
-                                if (ev.startSlot >= lastEvInCol.startSlot + lastEvInCol.duration) {
-                                    break;
-                                }
-                                colIdx++;
-                            }
-                            if (colIdx === groupCols.length) {
-                                groupCols.push([]);
-                            }
-                            groupCols[colIdx].push(ev);
-                            ev.colIdx = colIdx;
-                        }
-                        let numCols = groupCols.length;
-                        for (let ev of g.events) {
-                            ev.left = (ev.colIdx / numCols) * 100;
-                            ev.width = 100 / numCols;
-                        }
-                    }
-
-                    return dayEvents;
-                },
-
-                get weeklyDeadlines() {
-                    let dates = this.weekDates;
-                    let startOfWeek = new Date(dates[0]);
-                    startOfWeek.setHours(0, 0, 0, 0);
-                    let endOfWeek = new Date(dates[6]);
-                    endOfWeek.setHours(23, 59, 59, 999);
-                    
-                    return this.tasks.filter(t => {
-                        if (!t.dueDate) return false;
-                        let dDate = new Date(t.dueDate);
-                        return dDate >= startOfWeek && dDate <= endOfWeek;
-                    }).map(t => {
-                        let dDate = new Date(t.dueDate);
-                        let options = { weekday: 'short', hour: '2-digit', minute: '2-digit' };
-                        return {
-                            id: t.id,
-                            title: t.title,
-                            workspaceName: t.workspaceName,
-                            formattedDate: dDate.toLocaleDateString('en-US', options),
-                            priority: t.priority
-                        };
-                    });
-                },
-
-                slotToTime(slot) {
-                    let h = 7 + Math.floor(slot / 2);
-                    let m = slot % 2 === 0 ? '00' : '30';
-                    let suffix = h >= 12 ? 'PM' : 'AM';
-                    let displayHour = h % 12;
-                    if (displayHour === 0) displayHour = 12;
-                    return displayHour.toString().padStart(2, '0') + ':' + m + ' ' + suffix;
-                },
-
-                slotsToISOTimes(dayIdx, startSlot, duration) {
-                    let date = this.weekDates[dayIdx];
-                    let sh = 7 + Math.floor(startSlot / 2);
-                    let sm = startSlot % 2 === 0 ? 0 : 30;
-                    
-                    let startDate = new Date(date);
-                    startDate.setHours(sh, sm, 0, 0);
-                    
-                    let endDate = new Date(startDate.getTime() + duration * 30 * 60000);
-                    
-                    return {
-                        startTime: startDate.toISOString(),
-                        endTime: endDate.toISOString()
-                    };
-                },
-
-                openAdd(dayIdx, slotIdx, durationSlotCount = 2) {
-                    this.isEdit = false;
-                    this.formId = '';
-                    this.formTitle = '';
-                    this.formDesc = '';
-                    this.formPriority = 'medium';
-                    this.formColor = 0;
-                    this.formDayIdx = dayIdx;
-                    this.formStartSlot = slotIdx;
-                    this.formDuration = durationSlotCount;
-                    
-                    let { startTime, endTime } = this.slotsToISOTimes(dayIdx, slotIdx, durationSlotCount);
-                    this.formStartTime = startTime;
-                    this.formEndTime = endTime;
-                    this.dialogOpen = true;
-                },
-
-                openEdit(event) {
-                    this.isEdit = true;
-                    this.formId = event.id;
-                    this.formTitle = event.title;
-                    this.formDesc = event.description;
-                    this.formPriority = event.priority;
-                    this.formColor = event.colorIdx;
-                    this.formDayIdx = event.dayIdx;
-                    this.formStartSlot = event.startSlot;
-                    this.formDuration = event.duration;
-                    
-                    let { startTime, endTime } = this.slotsToISOTimes(event.dayIdx, event.startSlot, event.duration);
-                    this.formStartTime = startTime;
-                    this.formEndTime = endTime;
-                    this.dialogOpen = true;
-                },
-
-                handleCellMouseDown(dayIdx, slotIdx) {
-                    if (this.mode !== 'idle') return;
-                    this.mode = 'creating';
-                    this.dragCreate = { dayIdx: dayIdx, startSlot: slotIdx, endSlot: slotIdx };
-
-                    let gridContainer = document.getElementById('grid-container');
-                    if (!gridContainer) return;
-
-                    let onMove = (evMouse) => {
-                        if (this.mode !== 'creating' || !this.dragCreate) return;
-                        
-                        let rectContainer = gridContainer.getBoundingClientRect();
-                        let scrollContainer = gridContainer.closest('.overflow-auto');
-                        let scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
-                        let scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
-                        
-                        let relX = evMouse.clientX - rectContainer.left + scrollLeft;
-                        let relY = evMouse.clientY - rectContainer.top + scrollTop;
-                        
-                        let dayWidth = (rectContainer.width - 64) / 7;
-                        let day = 0;
-                        if (relX >= 64) {
-                            day = Math.floor((relX - 64) / dayWidth);
-                        }
-                        day = Math.max(0, Math.min(day, 6));
-                        
-                        let slotIdx = Math.floor(relY / 48);
-                        slotIdx = Math.max(0, Math.min(slotIdx, 33));
-                        
-                        this.dragCreate.endSlot = slotIdx;
-                    };
-
-                    let onUp = () => {
-                        if (this.mode === 'creating' && this.dragCreate) {
-                            let startSlot = Math.min(this.dragCreate.startSlot, this.dragCreate.endSlot);
-                            let endSlot = Math.max(this.dragCreate.startSlot, this.dragCreate.endSlot);
-                            let duration = endSlot - startSlot + 1;
-                            if (duration >= 1) {
-                                this.openAdd(this.dragCreate.dayIdx, startSlot, duration);
-                            }
-                        }
-                        this.mode = 'idle';
-                        this.dragCreate = null;
-                        document.removeEventListener('mousemove', onMove);
-                        document.removeEventListener('mouseup', onUp);
-                    };
-
-                    document.addEventListener('mousemove', onMove);
-                    document.addEventListener('mouseup', onUp);
-                },
-
-                handleCellMouseEnter(dayIdx, slotIdx) {
-                    // Global handlers manage pointer drag states seamlessly
-                },
-
-                async handleMouseUp() {
-                    // Handled globally by dynamic listener bindings
-                },
-
-                handleMouseLeave() {
-                    // Handled globally by dynamic listener bindings
-                },
-
-                startMoveTask(e, ev, dayIdx) {
-                    let gridContainer = document.getElementById('grid-container');
-                    if (!gridContainer) return;
-                    let rect = gridContainer.getBoundingClientRect();
-                    let scrollContainer = gridContainer.closest('.overflow-auto');
-                    let scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
-                    let scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
-                    
-                    let cardEl = document.getElementById('ev-' + ev.id);
-                    let rectCard = cardEl.getBoundingClientRect();
-                    let widthPx = rectCard.width;
-                    let heightPx = rectCard.height;
-                    let offsetX = e.clientX - rectCard.left;
-                    let offsetY = e.clientY - rectCard.top;
-                    
-                    let offsetSlot = Math.floor(offsetY / 48);
-                    
-                    this.mode = 'moving';
-                    this.movingTask = {
-                        taskId: ev.id,
-                        offsetSlot: offsetSlot,
-                        currentDayIdx: dayIdx,
-                        currentStartSlot: ev.startSlot
-                    };
-                    
-                    this.floatingDrag = {
-                        title: ev.title,
-                        description: ev.description,
-                        priority: ev.priority,
-                        colorIdx: ev.colorIdx,
-                        duration: ev.duration,
-                        widthPx: widthPx,
-                        heightPx: heightPx,
-                        offsetX: offsetX,
-                        offsetY: offsetY,
-                        x: e.clientX - offsetX,
-                        y: e.clientY - offsetY
-                    };
-
-                    let onMove = (evMouse) => {
-                        if (this.mode !== 'moving' || !this.movingTask || !this.floatingDrag) return;
-                        
-                        // Update floating coordinates in real-time smoothly with pixel accuracy
-                        this.floatingDrag = {
-                            ...this.floatingDrag,
-                            x: evMouse.clientX - this.floatingDrag.offsetX,
-                            y: evMouse.clientY - this.floatingDrag.offsetY
-                        };
-                        
-                        let rectContainer = gridContainer.getBoundingClientRect();
-                        let sContainer = gridContainer.closest('.overflow-auto');
-                        let sTop = sContainer ? sContainer.scrollTop : 0;
-                        let sLeft = sContainer ? sContainer.scrollLeft : 0;
-                        
-                        let relX = evMouse.clientX - rectContainer.left + sLeft;
-                        let relY = evMouse.clientY - rectContainer.top + sTop;
-                        
-                        let dayWidth = (rectContainer.width - 64) / 7;
-                        let day = 0;
-                        if (relX >= 64) {
-                            day = Math.floor((relX - 64) / dayWidth);
-                        }
-                        day = Math.max(0, Math.min(day, 6));
-                        
-                        let slotIdx = Math.floor(relY / 48);
-                        slotIdx = Math.max(0, Math.min(slotIdx, 33));
-                        
-                        let targetEv = this.events.find(x => x.id === this.movingTask.taskId);
-                        if (targetEv) {
-                            let newStart = Math.max(0, Math.min(slotIdx - this.movingTask.offsetSlot, 34 - targetEv.duration));
-                            this.movingTask.currentDayIdx = day;
-                            this.movingTask.currentStartSlot = newStart;
-                        }
-                    };
-
-                    let onUp = async () => {
-                        if (this.mode === 'moving' && this.movingTask) {
-                            let targetEv = this.events.find(x => x.id === this.movingTask.taskId);
-                            if (targetEv) {
-                                targetEv.dayIdx = this.movingTask.currentDayIdx;
-                                targetEv.startSlot = this.movingTask.currentStartSlot;
-                                
-                                let { startTime, endTime } = this.slotsToISOTimes(targetEv.dayIdx, targetEv.startSlot, targetEv.duration);
-                                targetEv.startDate = new Date(startTime);
-                                targetEv.endDate = new Date(endTime);
-                                await this.updateEventTimeInDb(targetEv.id, startTime, endTime);
-                            }
-                        }
-                        this.mode = 'idle';
-                        this.movingTask = null;
-                        this.floatingDrag = null;
-                        document.removeEventListener('mousemove', onMove);
-                        document.removeEventListener('mouseup', onUp);
-                    };
-
-                    document.addEventListener('mousemove', onMove);
-                    document.addEventListener('mouseup', onUp);
-                },
-
-                startResize(e, ev, edge) {
-                    this.mode = edge === 'top' ? 'resizing-top' : 'resizing-bottom';
-                    this.resizingTask = {
-                        taskId: ev.id,
-                        edge: edge,
-                        origStartSlot: ev.startSlot,
-                        origDuration: ev.duration,
-                        startY: e.clientY
-                    };
-
-                    let onMove = (evMouse) => {
-                        let dy = evMouse.clientY - e.clientY;
-                        let slotDelta = Math.round(dy / 48);
-                        let targetEv = this.events.find(x => x.id === ev.id);
-                        if (!targetEv) return;
-
-                        if (edge === 'bottom') {
-                            let newDuration = Math.max(1, this.resizingTask.origDuration + slotDelta);
-                            targetEv.duration = Math.min(newDuration, 34 - targetEv.startSlot);
-                        } else {
-                            let newStart = Math.max(0, this.resizingTask.origStartSlot + slotDelta);
-                            let endSlot = this.resizingTask.origStartSlot + this.resizingTask.origDuration;
-                            if (newStart >= endSlot) newStart = endSlot - 1;
-                            targetEv.startSlot = newStart;
-                            targetEv.duration = Math.max(1, endSlot - newStart);
-                        }
-                    };
-
-                    let onUp = async () => {
-                        this.mode = 'idle';
-                        let targetEv = this.events.find(x => x.id === ev.id);
-                        if (targetEv) {
-                            let { startTime, endTime } = this.slotsToISOTimes(targetEv.dayIdx, targetEv.startSlot, targetEv.duration);
-                            targetEv.startDate = new Date(startTime);
-                            targetEv.endDate = new Date(endTime);
-                            await this.updateEventTimeInDb(targetEv.id, startTime, endTime);
-                        }
-                        this.resizingTask = null;
-                        document.removeEventListener('mousemove', onMove);
-                        document.removeEventListener('mouseup', onUp);
-                    };
-
-                    document.addEventListener('mousemove', onMove);
-                    document.addEventListener('mouseup', onUp);
-                },
-
-                async updateEventTimeInDb(eventId, startTime, endTime) {
-                    let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-                    let payload = new URLSearchParams();
-                    payload.append('eventId', eventId);
-                    payload.append('startTime', startTime);
-                    payload.append('endTime', endTime);
-                    payload.append('__RequestVerificationToken', token);
-
-                    try {
-                        let response = await fetch('?handler=UpdateEventTime', {
-                            method: 'POST',
-                            body: payload
-                        });
-                        if (!response.ok) {
-                            console.error("Failed to update event times in database");
-                        }
-                    } catch (err) {
-                        console.error("Network error updating event times:", err);
-                    }
-                },
-
-                get createPreview() {
-                    if (this.mode !== 'creating' || !this.dragCreate) return null;
-                    let startSlot = Math.min(this.dragCreate.startSlot, this.dragCreate.endSlot);
-                    let endSlot = Math.max(this.dragCreate.startSlot, this.dragCreate.endSlot);
-                    return {
-                        dayIdx: this.dragCreate.dayIdx,
-                        startSlot: startSlot,
-                        duration: endSlot - startSlot + 1
-                    };
-                },
-
-                get movePreview() {
-                    if (this.mode !== 'moving' || !this.movingTask) return null;
-                    let ev = this.events.find(x => x.id === this.movingTask.taskId);
-                    if (!ev) return null;
-                    return {
-                        title: ev.title,
-                        dayIdx: this.movingTask.currentDayIdx,
-                        startSlot: this.movingTask.currentStartSlot,
-                        duration: ev.duration
-                    };
-                },
-
-                saveEvent() {
-                    if (!this.formTitle.trim()) return;
-                    
-                    let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-                    let payload = new URLSearchParams();
-                    
-                    let descJson = JSON.stringify({
-                        desc: this.formDesc,
-                        priority: this.formPriority,
-                        color: this.formColor
-                    });
-                    
-                    let { startTime, endTime } = this.slotsToISOTimes(this.formDayIdx, this.formStartSlot, this.formDuration);
-                    this.formStartTime = startTime;
-                    this.formEndTime = endTime;
-                    
-                    payload.append('title', this.formTitle);
-                    payload.append('description', descJson);
-                    payload.append('startTime', this.formStartTime);
-                    payload.append('endTime', this.formEndTime);
-                    payload.append('__RequestVerificationToken', token);
-                    
-                    if (this.isEdit) {
-                        payload.append('eventId', this.formId);
-                        fetch('?handler=EditEvent', {
-                            method: 'POST',
-                            body: payload
-                        })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.success) {
-                                let idx = this.events.findIndex(e => e.id === this.formId);
-                                if (idx !== -1) {
-                                    let e = data.eventItem;
-                                    let startDate = new Date(e.startTime);
-                                    let endDate = new Date(e.endTime);
-                                    let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                                    let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
-                                    let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
-                                    let duration = Math.max(1, endSlot - startSlot);
-
-                                    let descText = e.description || '';
-                                    let priority = 'medium';
-                                    let colorIdx = 0;
-                                    try {
-                                        if (descText.startsWith('{')) {
-                                            let descObj = JSON.parse(descText);
-                                            descText = descObj.desc || '';
-                                            priority = descObj.priority || 'medium';
-                                            colorIdx = descObj.color !== undefined ? descObj.color : 0;
-                                        }
-                                    } catch (err) {}
-
-                                    this.events[idx] = {
-                                        id: e.id,
-                                        title: e.title,
-                                        description: descText,
-                                        dayIdx: dayIdx,
-                                        startSlot: startSlot,
-                                        duration: duration,
-                                        priority: priority,
-                                        colorIdx: colorIdx,
-                                        startDate: startDate,
-                                        endDate: endDate
-                                    };
-                                }
-                                this.dialogOpen = false;
-                            }
-                        })
-                        .catch(err => console.error("Error saving event:", err));
-                    } else {
-                        fetch('?handler=CreateEvent', {
-                            method: 'POST',
-                            body: payload
-                        })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.success) {
-                                let e = data.eventItem;
-                                let startDate = new Date(e.startTime);
-                                let endDate = new Date(e.endTime);
-                                let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                                let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
-                                let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
-                                let duration = Math.max(1, endSlot - startSlot);
-
-                                let descText = e.description || '';
-                                let priority = 'medium';
-                                let colorIdx = 0;
-                                try {
-                                    if (descText.startsWith('{')) {
-                                        let descObj = JSON.parse(descText);
-                                        descText = descObj.desc || '';
-                                        priority = descObj.priority || 'medium';
-                                        colorIdx = descObj.color !== undefined ? descObj.color : 0;
-                                    }
-                                } catch (err) {}
-
-                                this.events.push({
-                                    id: e.id,
-                                    title: e.title,
-                                    description: descText,
-                                    dayIdx: dayIdx,
-                                    startSlot: startSlot,
-                                    duration: duration,
-                                    priority: priority,
-                                    colorIdx: colorIdx,
-                                    startDate: startDate,
-                                    endDate: endDate
-                                });
-                                this.dialogOpen = false;
-                            }
-                        })
-                        .catch(err => console.error("Error creating event:", err));
-                    }
-                },
-
-                deleteEvent() {
-                    if (confirm('Are you sure you want to delete this personal event?')) {
-                        let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-                        let payload = new URLSearchParams();
-                        payload.append('eventId', this.formId);
-                        payload.append('__RequestVerificationToken', token);
-                        
-                        fetch('?handler=DeleteEvent', {
-                            method: 'POST',
-                            body: payload
-                        })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.success) {
-                                this.events = this.events.filter(e => e.id !== this.formId);
-                                this.dialogOpen = false;
-                            }
-                        })
-                        .catch(err => console.error("Error deleting event:", err));
-                    }
-                },
-
-                duplicateEvent() {
-                    if (!this.formId) return;
-                    let targetDayIdx = (this.formDayIdx + 1) % 7;
-                    let { startTime, endTime } = this.slotsToISOTimes(targetDayIdx, this.formStartSlot, this.formDuration);
-                    
-                    let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-                    let payload = new URLSearchParams();
-                    
-                    let descJson = JSON.stringify({
-                        desc: this.formDesc,
-                        priority: this.formPriority,
-                        color: this.formColor
-                    });
-                    
-                    payload.append('title', this.formTitle);
-                    payload.append('description', descJson);
-                    payload.append('startTime', startTime);
-                    payload.append('endTime', endTime);
-                    payload.append('__RequestVerificationToken', token);
-
-                    fetch('?handler=CreateEvent', {
-                        method: 'POST',
-                        body: payload
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            let e = data.eventItem;
-                            let startDate = new Date(e.startTime);
-                            let endDate = new Date(e.endTime);
-                            let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                            let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
-                            let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
-                            let duration = Math.max(1, endSlot - startSlot);
-
-                            let descText = e.description || '';
-                            let priority = 'medium';
-                            let colorIdx = 0;
-                            try {
-                                if (descText.startsWith('{')) {
-                                    let descObj = JSON.parse(descText);
-                                    descText = descObj.desc || '';
-                                    priority = descObj.priority || 'medium';
-                                    colorIdx = descObj.color !== undefined ? descObj.color : 0;
-                                }
-                            } catch (err) {}
-
-                            this.events.push({
-                                id: e.id,
-                                title: e.title,
-                                description: descText,
-                                dayIdx: dayIdx,
-                                startSlot: startSlot,
-                                duration: duration,
-                                priority: priority,
-                                colorIdx: colorIdx,
-                                startDate: startDate,
-                                endDate: endDate
-                            });
-                            this.dialogOpen = false;
-                        }
-                    })
-                    .catch(err => console.error("Error duplicating event:", err));
-                }
-            };
-        }
+        window.scheduleRawEvents = @Html.Raw(jsonEvents);
+        window.scheduleRawTasks = @Html.Raw(jsonTasks);
     </script>
+    <script src="~/js/schedule.js" asp-append-version="true"></script>
 }
