@@ -4,10 +4,45 @@ function scheduleComponent() {
     return {
         weekOffset: 0,
         events: [],
+        workspaceTasks: [],
+        tasks: window.scheduleRawTasks || [],
+        
+        // Confirmation Modal and Pending states
+        confirmDialogOpen: false,
+        pendingChange: null,
+        
+        dialogOpen: false,
+        isEdit: false,
+        isTaskForm: false,
+        formWorkspaceName: '',
+        mode: 'idle', // 'idle', 'creating', 'moving', 'resizing-top', 'resizing-bottom'
+        dragCreate: null, // { dayIdx, startSlot, endSlot }
+        movingTask: null, // { taskId, offsetSlot, currentDayIdx, currentStartSlot }
+        resizingTask: null, // { taskId, edge, origStartSlot, origDuration, startY }
+        
+        // Physics and gesture drag variables
+        dragStartX: 0,
+        dragStartY: 0,
+        dragTranslateX: 0,
+        dragTranslateY: 0,
+        dragMoved: false,
+
+        // Form fields
+        formId: '',
+        formTitle: '',
+        formDesc: '',
+        formStartTime: '',
+        formEndTime: '',
+        formColor: 0,
+        formPriority: 'medium',
+        formDayIdx: 0,
+        formStartSlot: 0,
+        formDuration: 2,
+
         init() {
             // Load serialized C# Razor Page models
             let rawEvents = window.scheduleRawEvents || [];
-            this.events = rawEvents.map(e => {
+            let personalEvents = rawEvents.map(e => {
                 let startDate = new Date(e.startTime);
                 let endDate = new Date(e.endTime);
                 let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
@@ -37,36 +72,50 @@ function scheduleComponent() {
                     priority: priority,
                     colorIdx: colorIdx,
                     startDate: startDate,
-                    endDate: endDate
+                    endDate: endDate,
+                    isTask: false
                 };
             });
-        },
-        tasks: window.scheduleRawTasks || [],
-        dialogOpen: false,
-        isEdit: false,
-        mode: 'idle', // 'idle', 'creating', 'moving', 'resizing-top', 'resizing-bottom'
-        dragCreate: null, // { dayIdx, startSlot, endSlot }
-        movingTask: null, // { taskId, offsetSlot, currentDayIdx, currentStartSlot }
-        resizingTask: null, // { taskId, edge, origStartSlot, origDuration, startY }
-        
-        // Physics and gesture drag variables
-        dragStartX: 0,
-        dragStartY: 0,
-        dragTranslateX: 0,
-        dragTranslateY: 0,
-        dragMoved: false,
 
-        // Form fields
-        formId: '',
-        formTitle: '',
-        formDesc: '',
-        formStartTime: '',
-        formEndTime: '',
-        formColor: 0,
-        formPriority: 'medium',
-        formDayIdx: 0,
-        formStartSlot: 0,
-        formDuration: 2,
+            // Load and map Workspace Tasks with valid due dates
+            let rawTasks = window.scheduleRawTasks || [];
+            let taskEvents = rawTasks.filter(t => t.dueDate).map(t => {
+                let dueDate = new Date(t.dueDate);
+                let dayIdx = dueDate.getDay() === 0 ? 6 : dueDate.getDay() - 1;
+                
+                // If it represents a pure date deadline without custom hours (usually local/UTC midnight), default to 9 AM
+                let hours = dueDate.getHours();
+                let minutes = dueDate.getMinutes();
+                if (hours === 0 && minutes === 0) {
+                    hours = 9;
+                    minutes = 0;
+                }
+                
+                let startSlot = Math.max(0, (hours - 7) * 2 + (minutes >= 30 ? 1 : 0));
+                let duration = 2; // Default 1 hour duration (2 slots)
+
+                // High priority = red (colorIdx 3), medium = yellow/amber (2), low = slate/gray (4)
+                let colorIdx = t.priority === 'high' ? 3 : (t.priority === 'medium' ? 2 : 4);
+
+                return {
+                    id: t.id,
+                    title: t.title,
+                    description: t.description || '',
+                    dayIdx: dayIdx,
+                    startSlot: startSlot,
+                    duration: duration,
+                    priority: t.priority || 'medium',
+                    colorIdx: colorIdx,
+                    startDate: dueDate,
+                    endDate: new Date(dueDate.getTime() + 60 * 60 * 1000),
+                    isTask: true,
+                    workspaceName: t.workspaceName
+                };
+            });
+
+            this.events = personalEvents;
+            this.workspaceTasks = taskEvents;
+        },
 
         get weekDates() {
             return this.getWeekDates(this.weekOffset);
@@ -104,7 +153,7 @@ function scheduleComponent() {
             return dates;
         },
 
-        getEventsForDay(dayIdx) {
+        getPersonalEventsForDay(dayIdx) {
             let targetDate = this.weekDates[dayIdx];
             if (!targetDate) return [];
             let dayEvents = this.events.filter(e => {
@@ -114,7 +163,15 @@ function scheduleComponent() {
                        d.getDate() === targetDate.getDate();
             });
 
-            // Sort dayEvents chronologically by startSlot, then by longer durations
+            // Get all tasks for this day to perform cross-lane overlap checks
+            let dayTasks = this.workspaceTasks.filter(t => {
+                let d = new Date(t.startDate);
+                return d.getFullYear() === targetDate.getFullYear() &&
+                       d.getMonth() === targetDate.getMonth() &&
+                       d.getDate() === targetDate.getDate();
+            });
+
+            // Sort chronologically
             dayEvents.sort((a, b) => a.startSlot - b.startSlot || b.duration - a.duration);
 
             // Group overlapping events in the day
@@ -136,7 +193,7 @@ function scheduleComponent() {
                 matchedGroup.events.push(ev);
             }
 
-            // Assign virtual columns and properties within each group
+            // Assign virtual columns and properties within each group, dynamically adjusting lane based on cross-lane overlaps
             for (let g of groups) {
                 let groupCols = [];
                 for (let ev of g.events) {
@@ -154,14 +211,114 @@ function scheduleComponent() {
                     groupCols[colIdx].push(ev);
                     ev.colIdx = colIdx;
                 }
+
+                // Check if ANY event in this connected component overlaps with ANY workspace task on this day
+                let hasCrossOverlap = g.events.some(ev => {
+                    return dayTasks.some(task => {
+                        return ev.startSlot < task.startSlot + task.duration && 
+                               task.startSlot < ev.startSlot + ev.duration;
+                    });
+                });
+
+                let laneStart = 0;
+                let laneWidth = 100;
+                if (hasCrossOverlap) {
+                    laneStart = 0;
+                    laneWidth = 48; // Confine to left half
+                }
+
                 let numCols = groupCols.length;
                 for (let ev of g.events) {
-                    ev.left = (ev.colIdx / numCols) * 100;
-                    ev.width = 100 / numCols;
+                    ev.left = laneStart + (ev.colIdx / numCols) * laneWidth;
+                    ev.width = laneWidth / numCols;
                 }
             }
 
             return dayEvents;
+        },
+
+        getTasksForDay(dayIdx) {
+            let targetDate = this.weekDates[dayIdx];
+            if (!targetDate) return [];
+            let dayTasks = this.workspaceTasks.filter(e => {
+                let d = new Date(e.startDate);
+                return d.getFullYear() === targetDate.getFullYear() &&
+                       d.getMonth() === targetDate.getMonth() &&
+                       d.getDate() === targetDate.getDate();
+            });
+
+            // Get all personal events for this day to perform cross-lane overlap checks
+            let dayEvents = this.events.filter(e => {
+                let d = new Date(e.startDate);
+                return d.getFullYear() === targetDate.getFullYear() &&
+                       d.getMonth() === targetDate.getMonth() &&
+                       d.getDate() === targetDate.getDate();
+            });
+
+            // Sort chronologically
+            dayTasks.sort((a, b) => a.startSlot - b.startSlot || b.duration - a.duration);
+
+            // Group overlapping tasks in the day
+            let groups = [];
+            for (let ev of dayTasks) {
+                let matchedGroup = null;
+                for (let g of groups) {
+                    if (ev.startSlot < g.endSlot) {
+                        matchedGroup = g;
+                        break;
+                    }
+                }
+                if (!matchedGroup) {
+                    matchedGroup = { endSlot: ev.startSlot + ev.duration, events: [] };
+                    groups.push(matchedGroup);
+                } else {
+                    matchedGroup.endSlot = Math.max(matchedGroup.endSlot, ev.startSlot + ev.duration);
+                }
+                matchedGroup.events.push(ev);
+            }
+
+            // Assign virtual columns and properties within each group, dynamically adjusting lane based on cross-lane overlaps
+            for (let g of groups) {
+                let groupCols = [];
+                for (let ev of g.events) {
+                    let colIdx = 0;
+                    while (colIdx < groupCols.length) {
+                        let lastEvInCol = groupCols[colIdx][groupCols[colIdx].length - 1];
+                        if (ev.startSlot >= lastEvInCol.startSlot + lastEvInCol.duration) {
+                            break;
+                        }
+                        colIdx++;
+                    }
+                    if (colIdx === groupCols.length) {
+                        groupCols.push([]);
+                    }
+                    groupCols[colIdx].push(ev);
+                    ev.colIdx = colIdx;
+                }
+
+                // Check if ANY task in this connected component overlaps with ANY personal event on this day
+                let hasCrossOverlap = g.events.some(task => {
+                    return dayEvents.some(ev => {
+                        return task.startSlot < ev.startSlot + ev.duration && 
+                               ev.startSlot < task.startSlot + task.duration;
+                    });
+                });
+
+                let laneStart = 0;
+                let laneWidth = 100;
+                if (hasCrossOverlap) {
+                    laneStart = 52; // Confine to right half (leaving 4% central gutter)
+                    laneWidth = 48;
+                }
+
+                let numCols = groupCols.length;
+                for (let ev of g.events) {
+                    ev.left = laneStart + (ev.colIdx / numCols) * laneWidth;
+                    ev.width = laneWidth / numCols;
+                }
+            }
+
+            return dayTasks;
         },
 
         get weeklyDeadlines() {
@@ -215,6 +372,8 @@ function scheduleComponent() {
 
         openAdd(dayIdx, slotIdx, durationSlotCount = 2) {
             this.isEdit = false;
+            this.isTaskForm = false;
+            this.formWorkspaceName = '';
             this.formId = '';
             this.formTitle = '';
             this.formDesc = '';
@@ -232,6 +391,8 @@ function scheduleComponent() {
 
         openEdit(event) {
             this.isEdit = true;
+            this.isTaskForm = !!event.isTask;
+            this.formWorkspaceName = event.workspaceName || '';
             this.formId = event.id;
             this.formTitle = event.title;
             this.formDesc = event.description;
@@ -311,6 +472,10 @@ function scheduleComponent() {
         },
 
         startMoveTask(e, ev, dayIdx) {
+            if (ev.isTask) {
+                this.openEdit(ev);
+                return;
+            }
             let gridContainer = document.getElementById('grid-container');
             if (!gridContainer) return;
             
@@ -373,23 +538,39 @@ function scheduleComponent() {
                 }
             };
 
-            let onUp = async () => {
+            let onUp = () => {
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', onUp);
 
                 if (this.mode === 'moving' && this.movingTask) {
                     let targetEv = this.events.find(x => x.id === this.movingTask.taskId);
                     if (targetEv && this.dragMoved) {
-                        // Drag completed, snap card in database and local array
+                        let originalDayIdx = targetEv.dayIdx;
+                        let originalStartSlot = targetEv.startSlot;
+                        let originalDuration = targetEv.duration;
+
+                        // Visual snap immediately
                         targetEv.dayIdx = this.movingTask.currentDayIdx;
                         targetEv.startSlot = this.movingTask.currentStartSlot;
 
                         let { startTime, endTime } = this.slotsToISOTimes(targetEv.dayIdx, targetEv.startSlot, targetEv.duration);
                         targetEv.startDate = new Date(startTime);
                         targetEv.endDate = new Date(endTime);
-                        await this.updateEventTimeInDb(targetEv.id, startTime, endTime);
+
+                        // Capture pending change
+                        this.pendingChange = {
+                            eventId: targetEv.id,
+                            title: targetEv.title,
+                            originalDayIdx: originalDayIdx,
+                            originalStartSlot: originalStartSlot,
+                            originalDuration: originalDuration,
+                            newDayIdx: targetEv.dayIdx,
+                            newStartSlot: targetEv.startSlot,
+                            newDuration: targetEv.duration,
+                            isResize: false
+                        };
+                        this.confirmDialogOpen = true;
                     } else if (targetEv && !this.dragMoved) {
-                        // Mere click with zero coordinate move - open edit dialog
                         this.openEdit(targetEv);
                     }
                 }
@@ -433,14 +614,28 @@ function scheduleComponent() {
                 }
             };
 
-            let onUp = async () => {
+            let onUp = () => {
                 this.mode = 'idle';
                 let targetEv = this.events.find(x => x.id === ev.id);
                 if (targetEv) {
-                    let { startTime, endTime } = this.slotsToISOTimes(targetEv.dayIdx, targetEv.startSlot, targetEv.duration);
-                    targetEv.startDate = new Date(startTime);
-                    targetEv.endDate = new Date(endTime);
-                    await this.updateEventTimeInDb(targetEv.id, startTime, endTime);
+                    if (targetEv.startSlot !== this.resizingTask.origStartSlot || targetEv.duration !== this.resizingTask.origDuration) {
+                        let { startTime, endTime } = this.slotsToISOTimes(targetEv.dayIdx, targetEv.startSlot, targetEv.duration);
+                        targetEv.startDate = new Date(startTime);
+                        targetEv.endDate = new Date(endTime);
+
+                        this.pendingChange = {
+                            eventId: targetEv.id,
+                            title: targetEv.title,
+                            originalDayIdx: targetEv.dayIdx,
+                            originalStartSlot: this.resizingTask.origStartSlot,
+                            originalDuration: this.resizingTask.origDuration,
+                            newDayIdx: targetEv.dayIdx,
+                            newStartSlot: targetEv.startSlot,
+                            newDuration: targetEv.duration,
+                            isResize: true
+                        };
+                        this.confirmDialogOpen = true;
+                    }
                 }
                 this.resizingTask = null;
                 document.removeEventListener('mousemove', onMove);
@@ -449,6 +644,35 @@ function scheduleComponent() {
 
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
+        },
+
+        async confirmPendingChange() {
+            if (!this.pendingChange) return;
+            let pc = this.pendingChange;
+            let targetEv = this.events.find(x => x.id === pc.eventId);
+            if (targetEv) {
+                let { startTime, endTime } = this.slotsToISOTimes(pc.newDayIdx, pc.newStartSlot, pc.newDuration);
+                await this.updateEventTimeInDb(pc.eventId, startTime, endTime);
+            }
+            this.confirmDialogOpen = false;
+            this.pendingChange = null;
+        },
+
+        cancelPendingChange() {
+            if (!this.pendingChange) return;
+            let pc = this.pendingChange;
+            let targetEv = this.events.find(x => x.id === pc.eventId);
+            if (targetEv) {
+                targetEv.dayIdx = pc.originalDayIdx;
+                targetEv.startSlot = pc.originalStartSlot;
+                targetEv.duration = pc.originalDuration;
+                
+                let { startTime, endTime } = this.slotsToISOTimes(pc.originalDayIdx, pc.originalStartSlot, pc.originalDuration);
+                targetEv.startDate = new Date(startTime);
+                targetEv.endDate = new Date(endTime);
+            }
+            this.confirmDialogOpen = false;
+            this.pendingChange = null;
         },
 
         async updateEventTimeInDb(eventId, startTime, endTime) {
