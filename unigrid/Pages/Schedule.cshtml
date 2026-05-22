@@ -51,9 +51,9 @@
         <i data-lucide="info" class="w-5 h-5 text-indigo-500 shrink-0 mt-0.5"></i>
         <div class="text-xs text-slate-500 space-y-1">
             <p><strong class="text-slate-700">Create:</strong> Click & drag on empty grid slots (drag up or down).</p>
-            <p><strong class="text-slate-700">Move:</strong> Click and drag the event card to any day or time slot.</p>
-            <p><strong class="text-slate-700">Resize:</strong> Drag the top or bottom edge of an event block to change duration.</p>
-            <p><strong class="text-slate-700">Edit/Delete/Copy:</strong> Click on an event to open the edit dialog.</p>
+            <p><strong class="text-slate-700">Move:</strong> Click and drag a personal event card to reschedule (requires confirmation).</p>
+            <p><strong class="text-slate-700">Resize:</strong> Drag the top or bottom edge of a personal block to change duration.</p>
+            <p><strong class="text-slate-700">Lane Separation:</strong> Personal events render on the left half of the column; Workspace Tasks are pinned on the right.</p>
         </div>
     </div>
 
@@ -131,11 +131,11 @@
                                        x-text="createPreview ? (slotToTime(createPreview.startSlot) + ' – ' + slotToTime(createPreview.startSlot + createPreview.duration)) : ''"></span>
                              </div>
 
-                             <!-- Rendered Event Cards -->
-                             <template x-for="ev in getEventsForDay(@dIdx)" :key="ev.id">
+                             <!-- Personal Events (Left Lane: 0% to 48%) -->
+                             <template x-for="ev in getPersonalEventsForDay(@dIdx)" :key="ev.id">
                                  <div :id="'ev-' + ev.id" 
                                       @@mousedown.stop="startMoveTask($event, ev, @dIdx)"
-                                      class="event-card absolute rounded-lg border-l-[3px] px-2 py-1.5 text-xs leading-tight cursor-pointer overflow-hidden z-20 shadow-sm hover:shadow-md select-none flex flex-col justify-between"
+                                      class="event-card absolute rounded-lg border-l-[3px] px-2 py-1.5 text-xs leading-tight overflow-hidden z-20 shadow-sm hover:shadow-md select-none flex flex-col justify-between"
                                       :class="[
                                           ['bg-indigo-50 border-indigo-200 text-indigo-700',
                                            'bg-teal-50 border-teal-200 text-teal-700',
@@ -143,45 +143,91 @@
                                            'bg-rose-50 border-rose-200 text-rose-700',
                                            'bg-slate-50 border-slate-200 text-slate-700'][ev.colorIdx] || 'bg-indigo-50 border-indigo-200 text-indigo-700',
                                           ev.priority === 'high' ? 'ring-1 ring-rose-500/20' : '',
-                                          mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'event-card-dragging' : ''
+                                          mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'event-card-dragging' : 'cursor-grab active:cursor-grabbing'
                                       ]"
-                                      :style="'top: ' + (ev.startSlot * 48 + 1) + 'px; height: ' + (ev.duration * 48 - 2) + 'px; left: ' + (ev.left + 2) + '%; width: ' + (ev.width - 4) + '%;' + (mode === 'moving' && movingTask && movingTask.taskId === ev.id ? ' transform: translate3d(' + dragTranslateX + 'px, ' + dragTranslateY + 'px, 0px) scale(1.025) rotate(1.2deg);' : '')">
+                                      :style="'top: ' + (ev.startSlot * 48 + 1) + 'px; height: ' + (ev.duration * 48 - 2) + 'px; left: ' + (ev.left + 1) + '%; width: ' + (ev.width - 2) + '%;' + (mode === 'moving' && movingTask && movingTask.taskId === ev.id ? ' transform: translate3d(' + dragTranslateX + 'px, ' + dragTranslateY + 'px, 0px) scale(1.02) rotate(1.2deg);' : '')">
                                       
                                       <!-- Resize Handle Top -->
                                       <div @@mousedown.stop.prevent="startResize($event, ev, 'top')"
-                                           class="absolute top-0 left-0 right-0 h-2 cursor-n-resize rounded-t hover:bg-slate-800/10 flex items-center justify-center">
+                                           class="absolute top-0 left-0 right-0 h-1.5 cursor-n-resize rounded-t hover:bg-slate-800/10 flex items-center justify-center">
                                            <div class="h-0.5 w-6 rounded-full bg-slate-800/20"></div>
                                       </div>
 
-                                      <!-- Content -->
-                                      <div class="flex items-center gap-1.5 mt-1">
-                                          <span class="h-1.5 w-1.5 rounded-full shrink-0" 
-                                                :class="{
-                                                    'bg-slate-400': ev.priority === 'low',
-                                                    'bg-amber-500': ev.priority === 'medium',
-                                                    'bg-rose-500': ev.priority === 'high'
-                                                }"></span>
-                                          <span class="font-semibold truncate" x-text="ev.title"></span>
+                                      <!-- Content Area: Prominent Time & Title -->
+                                      <div class="flex flex-col h-full justify-between pt-1">
+                                          <div>
+                                              <!-- Header Time and Entity badge -->
+                                              <div class="flex items-center justify-between gap-1 mb-1.5">
+                                                  <span class="text-[9px] font-bold text-slate-500 tracking-tight uppercase" 
+                                                        x-text="slotToTime(ev.startSlot) + ' - ' + slotToTime(ev.startSlot + ev.duration)"></span>
+                                                  <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[7px] font-bold uppercase tracking-wider bg-white/60 border border-slate-200 text-slate-500 shadow-3xs">
+                                                      Personal
+                                                  </span>
+                                              </div>
+                                              
+                                              <!-- Title and Priority Indicator -->
+                                              <div class="flex items-center gap-1.5 mt-0.5">
+                                                  <span class="h-1.5 w-1.5 rounded-full shrink-0" 
+                                                        :class="{
+                                                            'bg-slate-400': ev.priority === 'low',
+                                                            'bg-amber-500': ev.priority === 'medium',
+                                                            'bg-rose-500': ev.priority === 'high'
+                                                        }"></span>
+                                                  <span class="font-bold text-slate-700 truncate text-[11px]" x-text="ev.title"></span>
+                                              </div>
+                                          </div>
                                       </div>
-
-                                      <!-- Scheduled Time Indicator -->
-                                      <template x-if="ev.duration >= 2">
-                                          <span class="text-[10px] opacity-70 block ml-3" 
-                                                x-text="slotToTime(ev.startSlot) + ' – ' + slotToTime(ev.startSlot + ev.duration)"></span>
-                                      </template>
-
-                                      <!-- Description Details -->
-                                      <template x-if="ev.duration >= 4 && ev.description">
-                                          <span class="text-[10px] opacity-60 block ml-3 line-clamp-2" x-text="ev.description"></span>
-                                      </template>
 
                                       <!-- Resize Handle Bottom -->
                                       <div @@mousedown.stop.prevent="startResize($event, ev, 'bottom')"
-                                           class="absolute bottom-0 left-0 right-0 h-2 cursor-s-resize rounded-b hover:bg-slate-800/10 flex items-center justify-center">
+                                           class="absolute bottom-0 left-0 right-0 h-1.5 cursor-s-resize rounded-b hover:bg-slate-800/10 flex items-center justify-center">
                                            <div class="h-0.5 w-6 rounded-full bg-slate-800/20"></div>
                                       </div>
                                  </div>
                              </template>
+
+                             <!-- Workspace Tasks (Right Lane: 52% to 100%) -->
+                             <template x-for="task in getTasksForDay(@dIdx)" :key="task.id">
+                                 <div :id="'task-' + task.id" 
+                                      @@click="openEdit(task)"
+                                      class="event-card absolute rounded-lg border-l-[3px] px-2 py-1.5 text-xs leading-tight overflow-hidden z-20 shadow-sm hover:shadow-md select-none flex flex-col justify-between cursor-pointer"
+                                      :class="[
+                                          ['bg-indigo-50/80 border-indigo-200/90 text-indigo-800',
+                                           'bg-teal-50/80 border-teal-200/90 text-teal-800',
+                                           'bg-amber-50/80 border-amber-200/90 text-amber-800',
+                                           'bg-rose-50/80 border-rose-200/90 text-rose-800',
+                                           'bg-slate-50/80 border-slate-200/90 text-slate-800'][task.colorIdx] || 'bg-slate-50/80 border-slate-200/90 text-slate-800',
+                                          task.priority === 'high' ? 'ring-1 ring-rose-500/25' : ''
+                                      ]"
+                                      :style="'top: ' + (task.startSlot * 48 + 1) + 'px; height: ' + (task.duration * 48 - 2) + 'px; left: ' + (task.left + 1) + '%; width: ' + (task.width - 2) + '%;'">
+                                      
+                                      <!-- Content Area: Prominent Time & Title -->
+                                      <div class="flex flex-col h-full justify-between pt-1">
+                                          <div>
+                                              <!-- Header Time and Entity badge -->
+                                              <div class="flex items-center justify-between gap-1 mb-1.5">
+                                                  <span class="text-[9px] font-bold text-slate-500 tracking-tight uppercase" 
+                                                        x-text="slotToTime(task.startSlot) + ' - ' + slotToTime(task.startSlot + task.duration)"></span>
+                                                  <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[7px] font-bold uppercase tracking-wider bg-indigo-50 border border-indigo-100 text-indigo-700 shadow-3xs truncate max-w-[80px]"
+                                                        x-text="task.workspaceName">
+                                                  </span>
+                                              </div>
+                                              
+                                              <!-- Title and Priority Indicator -->
+                                              <div class="flex items-center gap-1.5 mt-0.5">
+                                                  <span class="h-1.5 w-1.5 rounded-full shrink-0" 
+                                                        :class="{
+                                                            'bg-slate-400': task.priority === 'low',
+                                                            'bg-amber-500': task.priority === 'medium',
+                                                            'bg-rose-500': task.priority === 'high'
+                                                        }"></span>
+                                                  <span class="font-bold text-slate-700 truncate text-[11px]" x-text="task.title"></span>
+                                              </div>
+                                          </div>
+                                      </div>
+                                 </div>
+                             </template>
+
                         </div>
                     }
                 </div>
@@ -196,32 +242,86 @@
             </div>
             
             <div class="p-4 space-y-3">
-                <template x-show="weeklyDeadlines.length === 0">
-                    <div class="text-center py-6 text-xs font-medium text-slate-400">No deadlines due this week.</div>
-                </template>
+                <div x-show="weeklyDeadlines.length === 0" class="text-center py-6 text-xs font-medium text-slate-400">
+                    No deadlines due this week.
+                </div>
 
                 <template x-for="dl in weeklyDeadlines" :key="dl.id">
-                    <div class="rounded-lg border p-3 space-y-1 transition-all"
+                    <div class="rounded-lg border border-l-[4px] p-3 space-y-1.5 transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
                          :class="{
-                             'border-rose-100 bg-rose-50/20': dl.priority === 'high',
-                             'border-amber-100 bg-amber-50/15': dl.priority === 'medium',
-                             'border-slate-100 bg-slate-50/50': dl.priority === 'low'
+                             'border-l-rose-500 bg-rose-50/20 border-y-rose-100/50 border-r-rose-100/50 shadow-rose-100/10': dl.priority === 'high',
+                             'border-l-amber-500 bg-amber-50/20 border-y-amber-100/50 border-r-amber-100/50 shadow-amber-100/10': dl.priority === 'medium',
+                             'border-l-indigo-400 bg-indigo-50/20 border-y-indigo-100/50 border-r-indigo-100/50 shadow-indigo-100/10': dl.priority === 'low'
                          }">
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-start gap-2">
                             <template x-if="dl.priority === 'high'">
-                                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-500"></i>
+                                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-600 mt-0.5 shrink-0"></i>
                             </template>
-                            <p class="text-sm font-semibold text-slate-800" x-text="dl.title"></p>
+                            <p class="text-xs font-bold text-slate-800 leading-tight" x-text="dl.title"></p>
                         </div>
-                        <p class="text-xs text-slate-400 font-medium" x-text="dl.workspaceName"></p>
-                        <div class="inline-flex items-center px-2 py-0.5 border rounded-full text-[9px] font-bold mt-1"
-                             :class="{
-                                 'border-rose-200 text-rose-600 bg-white': dl.priority === 'high',
-                                 'border-amber-200 text-amber-600 bg-white': dl.priority === 'medium',
-                                 'border-slate-200 text-slate-500 bg-white': dl.priority === 'low'
-                             }" x-text="dl.formattedDate"></div>
+                        <div class="flex items-center justify-between pt-1">
+                            <span class="text-[10px] text-slate-500 font-bold tracking-tight uppercase" x-text="dl.workspaceName"></span>
+                            <div class="inline-flex items-center px-2 py-0.5 border rounded-full text-[9px] font-bold"
+                                 :class="{
+                                     'border-rose-200 text-rose-700 bg-white/80': dl.priority === 'high',
+                                     'border-amber-200 text-amber-700 bg-white/80': dl.priority === 'medium',
+                                     'border-indigo-200 text-indigo-700 bg-white/80': dl.priority === 'low'
+                                 }" x-text="dl.formattedDate"></div>
+                        </div>
                     </div>
                 </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Schedule Change Dialog Modal -->
+    <div x-show="confirmDialogOpen" 
+         class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+         x-transition x-cloak>
+        
+        <div @@click.away="cancelPendingChange()" 
+             class="w-full max-w-sm bg-white p-6 rounded-xl border border-slate-200 shadow-2xl space-y-4 relative animate-in fade-in zoom-in-95 duration-200">
+            
+            <div class="flex items-center gap-3 pb-2 border-b border-slate-100 text-indigo-600">
+                <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+                <h3 class="text-base font-bold text-slate-800">Confirm Schedule Change</h3>
+            </div>
+
+            <div class="space-y-3 py-1">
+                <p class="text-xs text-slate-500 leading-normal">
+                    Are you sure you want to reschedule your personal event <strong class="text-slate-800 font-semibold" x-text="pendingChange ? pendingChange.title : ''"></strong>?
+                </p>
+
+                <div class="p-3 bg-slate-50 border border-slate-150 rounded-lg space-y-2 text-xs">
+                    <!-- From original time -->
+                    <div class="flex items-center justify-between text-slate-500 font-medium">
+                        <span>Original Time:</span>
+                        <span class="font-bold text-slate-700" 
+                              x-text="pendingChange ? (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][pendingChange.originalDayIdx] + ' @@ ' + slotToTime(pendingChange.originalStartSlot)) : ''"></span>
+                    </div>
+                    <!-- Arrow Down visual -->
+                    <div class="flex justify-center text-indigo-500">
+                        <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>
+                    </div>
+                    <!-- To new time -->
+                    <div class="flex items-center justify-between text-slate-500 font-medium">
+                        <span>New Proposed:</span>
+                        <span class="font-bold text-indigo-600" 
+                              x-text="pendingChange ? (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][pendingChange.newDayIdx] + ' @@ ' + slotToTime(pendingChange.newStartSlot)) : ''"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button @@click="cancelPendingChange()" 
+                        class="px-4 py-2 border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-lg text-xs font-semibold transition-colors">
+                    Cancel Move
+                </button>
+                <button @@click="confirmPendingChange()" 
+                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-all">
+                    Confirm Move
+                </button>
             </div>
         </div>
     </div>
@@ -235,33 +335,44 @@
              class="w-full max-w-md bg-white p-6 rounded-xl border border-slate-200 shadow-2xl space-y-4 relative animate-in fade-in zoom-in-95 duration-200">
             
             <div class="flex items-center justify-between pb-2 border-b border-slate-100">
-                <h3 class="text-lg font-bold text-slate-800" x-text="isEdit ? 'Edit Personal Event' : 'Create Personal Event'"></h3>
+                <h3 class="text-lg font-bold text-slate-800" x-text="isTaskForm ? 'Workspace Task Details' : (isEdit ? 'Edit Personal Event' : 'Create Personal Event')"></h3>
                 <button @@click="dialogOpen = false" class="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
 
             <div class="space-y-4">
+                <!-- Workspace Task Warning Banner -->
+                <template x-if="isTaskForm">
+                    <div class="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg p-3 flex items-start gap-2.5">
+                        <i data-lucide="info" class="w-4.5 h-4.5 text-indigo-500 shrink-0 mt-0.5"></i>
+                        <div>
+                            <p class="font-bold">Managed Workspace Task</p>
+                            <p class="mt-0.5 text-[11px] text-indigo-600/90 leading-normal font-medium">This task is associated with the <strong x-text="formWorkspaceName"></strong> workspace. Changes must be made inside that workspace's task board.</p>
+                        </div>
+                    </div>
+                </template>
+
                 <!-- Title -->
                 <div class="space-y-1.5">
                     <label class="text-xs font-semibold text-slate-700">Title</label>
-                    <input type="text" x-model="formTitle" placeholder="Event title"
-                           class="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-sm text-slate-700">
+                    <input type="text" x-model="formTitle" placeholder="Event title" :disabled="isTaskForm"
+                           class="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-sm text-slate-700 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed">
                 </div>
 
                 <!-- Description -->
                 <div class="space-y-1.5">
                     <label class="text-xs font-semibold text-slate-700">Description</label>
-                    <textarea x-model="formDesc" placeholder="Optional description" rows="2"
-                              class="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm text-slate-700"></textarea>
+                    <textarea x-model="formDesc" placeholder="Optional description" rows="2" :disabled="isTaskForm"
+                              class="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm text-slate-700 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"></textarea>
                 </div>
 
                 <!-- Priority & Color selector Row -->
                 <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-1.5">
                         <label class="text-xs font-semibold text-slate-700">Priority</label>
-                        <select x-model="formPriority" 
-                                class="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white font-medium text-sm text-slate-700">
+                        <select x-model="formPriority" :disabled="isTaskForm"
+                                class="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none bg-white font-medium text-sm text-slate-700 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed">
                             <option value="low">Low</option>
                             <option value="medium">Medium</option>
                             <option value="high">High</option>
@@ -271,8 +382,8 @@
                         <label class="text-xs font-semibold text-slate-700">Color</label>
                         <div class="flex gap-1.5 pt-1">
                             <template x-for="(dotClass, idx) in ['bg-indigo-600', 'bg-teal-600', 'bg-amber-500', 'bg-rose-600', 'bg-slate-500']">
-                                <button type="button" 
-                                        class="h-7 w-7 rounded-full border-2 transition-all cursor-pointer"
+                                <button type="button" :disabled="isTaskForm"
+                                        class="h-7 w-7 rounded-full border-2 transition-all disabled:opacity-85 disabled:cursor-not-allowed"
                                         :class="[dotClass, formColor === idx ? 'scale-110 border-slate-800 ring-2 ring-slate-800/10' : 'border-transparent']"
                                         @@click="formColor = idx"
                                         :title="['Indigo', 'Teal', 'Yellow', 'Red', 'Gray'][idx]"></button>
@@ -291,7 +402,7 @@
             <!-- Footer Action buttons -->
             <div class="flex items-center justify-between border-t border-slate-100 pt-3 mt-4">
                 <div>
-                    <template x-if="isEdit">
+                    <template x-if="isEdit && !isTaskForm">
                         <div class="flex gap-2">
                             <button @@click="deleteEvent()" 
                                     class="px-3 py-1.5 bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors">
@@ -306,11 +417,14 @@
                 </div>
                 <div class="flex items-center gap-2">
                     <button @@click="dialogOpen = false" 
-                            class="px-4 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors">Cancel</button>
-                    <button @@click="saveEvent()" :disabled="!formTitle.trim()" 
-                            class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
-                        <span x-text="isEdit ? 'Save' : 'Create'"></span>
-                    </button>
+                            class="px-4 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors"
+                            x-text="isTaskForm ? 'Close' : 'Cancel'"></button>
+                    <template x-if="!isTaskForm">
+                        <button @@click="saveEvent()" :disabled="!formTitle.trim()" 
+                                class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                            <span x-text="isEdit ? 'Save' : 'Create'"></span>
+                        </button>
+                    </template>
                 </div>
             </div>
         </div>
