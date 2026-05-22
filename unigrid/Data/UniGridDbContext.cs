@@ -170,6 +170,7 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.Task).WithMany(p => p.Subtasks)
                 .HasForeignKey(d => d.TaskId)
+                .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_Subtasks_Tasks");
         });
 
@@ -206,6 +207,7 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.Task).WithMany(p => p.TaskComments)
                 .HasForeignKey(d => d.TaskId)
+                .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_Comments_Tasks");
 
             entity.HasOne(d => d.User).WithMany(p => p.TaskComments)

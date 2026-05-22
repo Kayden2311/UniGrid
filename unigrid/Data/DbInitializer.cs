@@ -125,18 +125,24 @@ namespace unigrid.Data
 
                 // 6. Seed Workspaces
                 var workspaceSE = new Workspace { Id = Guid.Parse("99999999-9999-9999-9999-999999999999"), Name = "Software Engineering", OwnerId = userAlice.Id, JoinCode = "SE-PRO", PackageTier = "ProPlus" };
-                var workspaceWeb = new Workspace { Id = Guid.NewGuid(), Name = "Web Development", OwnerId = userAlice.Id, JoinCode = "WEB-DEV", PackageTier = "Free" };
-                var workspaceCalc = new Workspace { Id = Guid.NewGuid(), Name = "Calculus II Study", OwnerId = userBob.Id, JoinCode = "MATH-101", PackageTier = "Free" };
+                var workspaceWeb = new Workspace { Id = Guid.Parse("88888888-8888-8888-8888-888888888888"), Name = "Web Development", OwnerId = userAlice.Id, JoinCode = "WEB-DEV", PackageTier = "Free" };
+                var workspaceCalc = new Workspace { Id = Guid.Parse("77777777-7777-7777-7777-777777777777"), Name = "Calculus II Study", OwnerId = userBob.Id, JoinCode = "MATH-101", PackageTier = "Free" };
+                var workspacePhysics = new Workspace { Id = Guid.Parse("66666666-6666-6666-6666-666666666666"), Name = "Physics Lab", OwnerId = userAlice.Id, JoinCode = "PHYS-101", PackageTier = "Free" };
+                var workspaceEnglish = new Workspace { Id = Guid.Parse("55555555-5555-5555-5555-555555555555"), Name = "English Composition", OwnerId = userAlice.Id, JoinCode = "ENGL-101", PackageTier = "Free" };
+                var workspaceResearch = new Workspace { Id = Guid.Parse("44444444-4444-4444-4444-444444444444"), Name = "Research Methods", OwnerId = userAlice.Id, JoinCode = "RES-101", PackageTier = "Free" };
 
-                await context.Workspaces.AddRangeAsync(workspaceSE, workspaceWeb, workspaceCalc);
+                await context.Workspaces.AddRangeAsync(workspaceSE, workspaceWeb, workspaceCalc, workspacePhysics, workspaceEnglish, workspaceResearch);
                 await context.SaveChangesAsync();
 
                 // 7. Seed Billings
                 var billingSE = new Billing { WorkspaceId = workspaceSE.Id, PackageId = "proplus_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(1) };
                 var billingWeb = new Billing { WorkspaceId = workspaceWeb.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
                 var billingCalc = new Billing { WorkspaceId = workspaceCalc.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
+                var billingPhysics = new Billing { WorkspaceId = workspacePhysics.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
+                var billingEnglish = new Billing { WorkspaceId = workspaceEnglish.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
+                var billingResearch = new Billing { WorkspaceId = workspaceResearch.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
 
-                await context.Billings.AddRangeAsync(billingSE, billingWeb, billingCalc);
+                await context.Billings.AddRangeAsync(billingSE, billingWeb, billingCalc, billingPhysics, billingEnglish, billingResearch);
                 await context.SaveChangesAsync();
 
                 // 8. Seed Members
@@ -149,7 +155,10 @@ namespace unigrid.Data
                     new WorkspaceMember { WorkspaceId = workspaceWeb.Id, UserId = userAlice.Id, Role = "Owner" },
                     new WorkspaceMember { WorkspaceId = workspaceWeb.Id, UserId = userCharlie.Id, Role = "Member" },
                     new WorkspaceMember { WorkspaceId = workspaceCalc.Id, UserId = userBob.Id, Role = "Owner" },
-                    new WorkspaceMember { WorkspaceId = workspaceCalc.Id, UserId = userAlice.Id, Role = "Member" }
+                    new WorkspaceMember { WorkspaceId = workspaceCalc.Id, UserId = userAlice.Id, Role = "Member" },
+                    new WorkspaceMember { WorkspaceId = workspacePhysics.Id, UserId = userAlice.Id, Role = "Owner" },
+                    new WorkspaceMember { WorkspaceId = workspaceEnglish.Id, UserId = userAlice.Id, Role = "Owner" },
+                    new WorkspaceMember { WorkspaceId = workspaceResearch.Id, UserId = userAlice.Id, Role = "Owner" }
                 );
                 await context.SaveChangesAsync();
 
@@ -168,20 +177,34 @@ namespace unigrid.Data
                 );
                 await context.SaveChangesAsync();
 
-                // 11. Seed Tasks
-                var t1 = new unigrid.Models.Task { Id = Guid.Parse("00000000-0000-0000-0000-000000000001"), WorkspaceId = workspaceSE.Id, AssigneeId = userAlice.Id, Title = "Design Database Schema", Description = "Create ERD and define all tables for the core schema.", Status = 1, Priority = 3, DueDate = DateTime.UtcNow.AddDays(2) };
-                var t2 = new unigrid.Models.Task { Id = Guid.Parse("00000000-0000-0000-0000-000000000002"), WorkspaceId = workspaceSE.Id, AssigneeId = userBob.Id, Title = "Setup CI/CD Pipeline", Description = "Configure GitHub Actions for automated building, linting, and testing.", Status = 2, Priority = 3, DueDate = DateTime.UtcNow.AddDays(5) };
-                var t3 = new unigrid.Models.Task { Id = Guid.Parse("00000000-0000-0000-0000-000000000003"), WorkspaceId = workspaceSE.Id, AssigneeId = userCharlie.Id, Title = "UI Wireframes", Description = "Create wireframes and mockups for all landing, pricing, and app dashboard pages.", Status = 3, Priority = 2, DueDate = DateTime.UtcNow.AddDays(-2) };
+                // Calculate Monday of the current week dynamically
+                var today = DateTime.UtcNow.Date;
+                int diff = (7 + (int)today.DayOfWeek - (int)DayOfWeek.Monday) % 7;
+                var currentMonday = today.AddDays(-diff);
 
-                await context.Tasks.AddRangeAsync(t1, t2, t3);
+                // 11. Seed Tasks (Synchronized with React Schedule.tsx deadlines)
+                var t1 = new unigrid.Models.Task { Id = Guid.NewGuid(), WorkspaceId = workspaceSE.Id, AssigneeId = userAlice.Id, Title = "AI Report", Description = "Generate summary and evaluation of modern transformer models.", Status = 1, Priority = 3, DueDate = currentMonday.AddDays(2).AddHours(23).AddMinutes(59) };
+                var t2 = new unigrid.Models.Task { Id = Guid.NewGuid(), WorkspaceId = workspaceCalc.Id, AssigneeId = userAlice.Id, Title = "Math Assignment", Description = "Solve differential equations and triple integrals problem sets.", Status = 0, Priority = 2, DueDate = currentMonday.AddDays(4).AddHours(23).AddMinutes(59) };
+                var t3 = new unigrid.Models.Task { Id = Guid.NewGuid(), WorkspaceId = workspaceSE.Id, AssigneeId = userAlice.Id, Title = "Database Project", Description = "Seeded SQL relational schema draft submission.", Status = 1, Priority = 3, DueDate = currentMonday.AddDays(6).AddHours(23).AddMinutes(59) };
+                var t4 = new unigrid.Models.Task { Id = Guid.NewGuid(), WorkspaceId = workspacePhysics.Id, AssigneeId = userAlice.Id, Title = "Lab Report #3", Description = "Calculate absolute error metrics in electric current fields.", Status = 0, Priority = 2, DueDate = currentMonday.AddDays(3).AddHours(23).AddMinutes(59) };
+                var t5 = new unigrid.Models.Task { Id = Guid.NewGuid(), WorkspaceId = workspaceEnglish.Id, AssigneeId = userAlice.Id, Title = "Essay Draft", Description = "Draft essay arguing for modern architecture paradigms.", Status = 0, Priority = 1, DueDate = currentMonday.AddDays(5).AddHours(23).AddMinutes(59) };
+                var t6 = new unigrid.Models.Task { Id = Guid.NewGuid(), WorkspaceId = workspaceResearch.Id, AssigneeId = userAlice.Id, Title = "Literature Review", Description = "Review academic research on adaptive web interfaces.", Status = 1, Priority = 3, DueDate = currentMonday.AddDays(4).AddHours(18) };
+
+                await context.Tasks.AddRangeAsync(t1, t2, t3, t4, t5, t6);
                 await context.SaveChangesAsync();
 
-                // 12. Seed Personal Schedules
+                // 12. Seed Personal Schedules (Synchronized with React Schedule.tsx initialTasks)
                 await context.PersonalSchedules.AddRangeAsync(
-                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Calculus Assignment Review", Description = "{\"desc\":\"Finish Calculus Homework sets 4 and 5 with Bob.\",\"priority\":\"medium\",\"color\":2}", StartTime = DateTime.UtcNow.AddHours(4), EndTime = DateTime.UtcNow.AddHours(6) },
-                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Weekly Team Sprint Sync", Description = "{\"desc\":\"Sync up database progress and assign new REST API routes.\",\"priority\":\"high\",\"color\":0}", StartTime = DateTime.UtcNow.AddDays(1).AddHours(2), EndTime = DateTime.UtcNow.AddDays(1).AddHours(4) },
-                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Preparation for Midterms", Description = "{\"desc\":\"Review Software Engineering concepts and patterns.\",\"priority\":\"medium\",\"color\":1}", StartTime = DateTime.UtcNow.AddDays(3).AddHours(1), EndTime = DateTime.UtcNow.AddDays(3).AddHours(4) },
-                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Database Project Deadline", Description = "{\"desc\":\"Final submission of the fully seeded SQL database script.\",\"priority\":\"high\",\"color\":3}", StartTime = DateTime.UtcNow.AddDays(5).AddHours(5), EndTime = DateTime.UtcNow.AddDays(5).AddHours(7) }
+                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Study AI", Description = "{\"desc\":\"Review chapters 5-7\",\"priority\":\"high\",\"color\":0}", StartTime = currentMonday.AddHours(9), EndTime = currentMonday.AddHours(11) },
+                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Team Meeting", Description = "{\"desc\":\"Sprint review\",\"priority\":\"medium\",\"color\":1}", StartTime = currentMonday.AddHours(10), EndTime = currentMonday.AddHours(11) },
+                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Gym", Description = "{\"desc\":\"\",\"priority\":\"low\",\"color\":2}", StartTime = currentMonday.AddDays(2).AddHours(12), EndTime = currentMonday.AddDays(2).AddHours(13).AddMinutes(30) },
+                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Math Practice", Description = "{\"desc\":\"Problem set 6\",\"priority\":\"medium\",\"color\":3}", StartTime = currentMonday.AddDays(4).AddHours(8), EndTime = currentMonday.AddDays(4).AddHours(10) },
+                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Write Essay", Description = "{\"desc\":\"First draft\",\"priority\":\"high\",\"color\":0}", StartTime = currentMonday.AddDays(1).AddHours(10), EndTime = currentMonday.AddDays(1).AddHours(12) },
+                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Physics Lab Prep", Description = "{\"desc\":\"Review procedures\",\"priority\":\"medium\",\"color\":1}", StartTime = currentMonday.AddDays(2).AddHours(8), EndTime = currentMonday.AddDays(2).AddHours(9).AddMinutes(30) },
+                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Study Group", Description = "{\"desc\":\"Calculus review\",\"priority\":\"medium\",\"color\":2}", StartTime = currentMonday.AddDays(3).AddHours(11), EndTime = currentMonday.AddDays(3).AddHours(12).AddMinutes(30) },
+                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Research Reading", Description = "{\"desc\":\"Papers for lit review\",\"priority\":\"low\",\"color\":4}", StartTime = currentMonday.AddDays(5).AddHours(9), EndTime = currentMonday.AddDays(5).AddHours(11).AddMinutes(30) },
+                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Lunch Break", Description = "{\"desc\":\"\",\"priority\":\"low\",\"color\":4}", StartTime = currentMonday.AddDays(1).AddHours(11), EndTime = currentMonday.AddDays(1).AddHours(12) },
+                    new PersonalSchedule { Id = Guid.NewGuid(), UserId = userAlice.Id, Title = "Code Review", Description = "{\"desc\":\"Review PR #42\",\"priority\":\"high\",\"color\":3}", StartTime = currentMonday.AddDays(3).AddHours(8), EndTime = currentMonday.AddDays(3).AddHours(9) }
                 );
                 await context.SaveChangesAsync();
 
