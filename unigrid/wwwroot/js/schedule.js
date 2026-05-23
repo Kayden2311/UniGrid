@@ -10,11 +10,14 @@ function scheduleComponent() {
         // Confirmation Modal and Pending states
         confirmDialogOpen: false,
         pendingChange: null,
+        hoveredId: null,
+        ignoreNextClick: false,
         
         dialogOpen: false,
         isEdit: false,
         isTaskForm: false,
         formWorkspaceName: '',
+        formWorkspaceJoinCode: '',
         mode: 'idle', // 'idle', 'creating', 'moving', 'resizing-top', 'resizing-bottom'
         dragCreate: null, // { dayIdx, startSlot, endSlot }
         movingTask: null, // { taskId, offsetSlot, currentDayIdx, currentStartSlot }
@@ -109,7 +112,8 @@ function scheduleComponent() {
                     startDate: dueDate,
                     endDate: new Date(dueDate.getTime() + 60 * 60 * 1000),
                     isTask: true,
-                    workspaceName: t.workspaceName
+                    workspaceName: t.workspaceName,
+                    workspaceJoinCode: t.workspaceJoinCode || ''
                 };
             });
 
@@ -338,9 +342,27 @@ function scheduleComponent() {
                 return {
                     id: t.id,
                     title: t.title,
+                    description: t.description || '',
                     workspaceName: t.workspaceName,
+                    workspaceJoinCode: t.workspaceJoinCode || '',
                     formattedDate: dDate.toLocaleDateString('en-US', options),
-                    priority: t.priority
+                    priority: t.priority,
+                    isTask: true
+                };
+            });
+        },
+
+        get unscheduledTasks() {
+            return this.tasks.filter(t => !t.dueDate).map(t => {
+                return {
+                    id: t.id,
+                    title: t.title,
+                    description: t.description || '',
+                    workspaceName: t.workspaceName,
+                    workspaceJoinCode: t.workspaceJoinCode || '',
+                    formattedDate: "No Date",
+                    priority: t.priority,
+                    isTask: true
                 };
             });
         },
@@ -352,6 +374,27 @@ function scheduleComponent() {
             let displayHour = h % 12;
             if (displayHour === 0) displayHour = 12;
             return displayHour.toString().padStart(2, '0') + ':' + m + ' ' + suffix;
+        },
+
+        formatTimeRange(startSlot, duration) {
+            let endSlot = startSlot + duration;
+            let sh = 7 + Math.floor(startSlot / 2);
+            let sm = startSlot % 2 === 0 ? '00' : '30';
+            let sSuffix = sh >= 12 ? 'PM' : 'AM';
+            let sHour = sh % 12 === 0 ? 12 : sh % 12;
+
+            let eh = 7 + Math.floor(endSlot / 2);
+            let em = endSlot % 2 === 0 ? '00' : '30';
+            let eSuffix = eh >= 12 ? 'PM' : 'AM';
+            let eHour = eh % 12 === 0 ? 12 : eh % 12;
+
+            let sStr = sHour.toString().padStart(2, '0') + ':' + sm;
+            let eStr = eHour.toString().padStart(2, '0') + ':' + em;
+            if (sSuffix === eSuffix) {
+                return `${sStr} - ${eStr} ${eSuffix}`;
+            } else {
+                return `${sStr} ${sSuffix} - ${eStr} ${eSuffix}`;
+            }
         },
 
         slotsToISOTimes(dayIdx, startSlot, duration) {
@@ -390,9 +433,14 @@ function scheduleComponent() {
         },
 
         openEdit(event) {
+            if (this.ignoreNextClick) {
+                this.ignoreNextClick = false;
+                return;
+            }
             this.isEdit = true;
             this.isTaskForm = !!event.isTask;
             this.formWorkspaceName = event.workspaceName || '';
+            this.formWorkspaceJoinCode = event.workspaceJoinCode || '';
             this.formId = event.id;
             this.formTitle = event.title;
             this.formDesc = event.description;
@@ -402,9 +450,14 @@ function scheduleComponent() {
             this.formStartSlot = event.startSlot;
             this.formDuration = event.duration;
             
-            let { startTime, endTime } = this.slotsToISOTimes(event.dayIdx, event.startSlot, event.duration);
-            this.formStartTime = startTime;
-            this.formEndTime = endTime;
+            if (event.dayIdx !== null && event.dayIdx !== undefined) {
+                let { startTime, endTime } = this.slotsToISOTimes(event.dayIdx, event.startSlot, event.duration || 2);
+                this.formStartTime = startTime;
+                this.formEndTime = endTime;
+            } else {
+                this.formStartTime = '';
+                this.formEndTime = '';
+            }
             this.dialogOpen = true;
         },
 
@@ -483,7 +536,7 @@ function scheduleComponent() {
             if (!dl) {
                 let id = ev.dataTransfer.getData('text/plain');
                 if (id) {
-                    dl = this.weeklyDeadlines.find(d => d.id === id);
+                    dl = this.weeklyDeadlines.find(d => d.id === id) || this.unscheduledTasks.find(d => d.id === id);
                 }
             }
             if (!dl) return;
@@ -520,10 +573,6 @@ function scheduleComponent() {
         },
 
         startMoveTask(e, ev, dayIdx) {
-            if (ev.isTask) {
-                this.openEdit(ev);
-                return;
-            }
             let gridContainer = document.getElementById('grid-container');
             if (!gridContainer) return;
             
@@ -533,7 +582,7 @@ function scheduleComponent() {
             this.dragTranslateY = 0;
             this.dragMoved = false;
 
-            let cardEl = document.getElementById('ev-' + ev.id);
+            let cardEl = document.getElementById((ev.isTask ? 'task-' : 'ev-') + ev.id);
             let rectCard = cardEl.getBoundingClientRect();
             let offsetY = e.clientY - rectCard.top;
             let offsetSlot = Math.floor(offsetY / 48);
@@ -541,6 +590,7 @@ function scheduleComponent() {
             this.mode = 'moving';
             this.movingTask = {
                 taskId: ev.id,
+                isTask: !!ev.isTask,
                 offsetSlot: offsetSlot,
                 currentDayIdx: dayIdx,
                 currentStartSlot: ev.startSlot
@@ -578,7 +628,9 @@ function scheduleComponent() {
                 let slotIdx = Math.floor(relY / 48);
                 slotIdx = Math.max(0, Math.min(slotIdx, 33));
 
-                let targetEv = this.events.find(x => x.id === this.movingTask.taskId);
+                let targetEv = this.movingTask.isTask
+                    ? this.workspaceTasks.find(x => x.id === this.movingTask.taskId)
+                    : this.events.find(x => x.id === this.movingTask.taskId);
                 if (targetEv) {
                     let newStart = Math.max(0, Math.min(slotIdx - this.movingTask.offsetSlot, 34 - targetEv.duration));
                     this.movingTask.currentDayIdx = day;
@@ -591,8 +643,11 @@ function scheduleComponent() {
                 document.removeEventListener('mouseup', onUp);
 
                 if (this.mode === 'moving' && this.movingTask) {
-                    let targetEv = this.events.find(x => x.id === this.movingTask.taskId);
+                    let targetEv = this.movingTask.isTask
+                        ? this.workspaceTasks.find(x => x.id === this.movingTask.taskId)
+                        : this.events.find(x => x.id === this.movingTask.taskId);
                     if (targetEv && this.dragMoved) {
+                        this.ignoreNextClick = true;
                         let originalDayIdx = targetEv.dayIdx;
                         let originalStartSlot = targetEv.startSlot;
                         let originalDuration = targetEv.duration;
@@ -607,6 +662,8 @@ function scheduleComponent() {
 
                         // Capture pending change
                         this.pendingChange = {
+                            isTask: !!targetEv.isTask,
+                            taskId: targetEv.id,
                             eventId: targetEv.id,
                             title: targetEv.title,
                             originalDayIdx: originalDayIdx,
@@ -667,6 +724,7 @@ function scheduleComponent() {
                 let targetEv = this.events.find(x => x.id === ev.id);
                 if (targetEv) {
                     if (targetEv.startSlot !== this.resizingTask.origStartSlot || targetEv.duration !== this.resizingTask.origDuration) {
+                        this.ignoreNextClick = true;
                         let { startTime, endTime } = this.slotsToISOTimes(targetEv.dayIdx, targetEv.startSlot, targetEv.duration);
                         targetEv.startDate = new Date(startTime);
                         targetEv.endDate = new Date(endTime);
@@ -730,7 +788,8 @@ function scheduleComponent() {
                             startDate: dueDate,
                             endDate: new Date(dueDate.getTime() + 60 * 60 * 1000),
                             isTask: true,
-                            workspaceName: rawTask.workspaceName
+                            workspaceName: rawTask.workspaceName,
+                            workspaceJoinCode: rawTask.workspaceJoinCode || ''
                         });
                     }
                 }

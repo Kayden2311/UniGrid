@@ -20,7 +20,7 @@
                 <i data-lucide="target" class="w-6 h-6"></i>
             </div>
             <div>
-                <p class="text-2xl font-bold text-slate-800">@Model.TotalTasksCount</p>
+                <p class="text-2xl font-bold text-slate-800" x-text="totalTasks()"></p>
                 <p class="text-xs text-slate-500 font-medium">Total Tasks</p>
             </div>
         </div>
@@ -29,7 +29,7 @@
                 <i data-lucide="check-circle" class="w-6 h-6"></i>
             </div>
             <div>
-                <p class="text-2xl font-bold text-slate-800">@Model.CompletedTasksCount</p>
+                <p class="text-2xl font-bold text-slate-800" x-text="completedTasks()"></p>
                 <p class="text-xs text-slate-500 font-medium">Completed</p>
             </div>
         </div>
@@ -38,7 +38,7 @@
                 <i data-lucide="alert-triangle" class="w-6 h-6"></i>
             </div>
             <div>
-                <p class="text-2xl font-bold text-slate-800">@Model.DueSoonCount</p>
+                <p class="text-2xl font-bold text-slate-800" x-text="dueSoonCount()"></p>
                 <p class="text-xs text-slate-500 font-medium">Due Soon</p>
             </div>
         </div>
@@ -47,7 +47,7 @@
                 <i data-lucide="flame" class="w-6 h-6"></i>
             </div>
             <div>
-                <p class="text-2xl font-bold text-slate-800">@Model.OverdueCount</p>
+                <p class="text-2xl font-bold text-slate-800" x-text="overdueCount()"></p>
                 <p class="text-xs text-slate-500 font-medium">Overdue</p>
             </div>
         </div>
@@ -58,10 +58,10 @@
         <div class="flex-1">
             <div class="flex items-center justify-between mb-2">
                 <p class="text-sm font-bold text-slate-700">Monthly Completion</p>
-                <span class="text-sm font-black text-indigo-600">@Model.CompletionRate.ToString("0")%</span>
+                <span class="text-sm font-black text-indigo-600" x-text="completionRate() + '%'"></span>
             </div>
             <div class="h-3 bg-slate-100 rounded-full overflow-hidden">
-                <div class="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full transition-all duration-1000" style="width: @Model.CompletionRate.ToString("0")%"></div>
+                <div class="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full transition-all duration-1000" :style="'width: ' + completionRate() + '%'"></div>
             </div>
         </div>
         <i data-lucide="trending-up" class="w-5 h-5 text-slate-300"></i>
@@ -396,7 +396,28 @@
                 },
                 
                 toggleTask(task) {
+                    const oldStatus = task.status;
                     task.status = task.status === 3 ? 0 : 3;
+                    
+                    // Recalculate workspace stats dynamically for the workspace this task belongs to
+                    const ws = this.workspaces.find(w => w.id === task.workspaceId);
+                    if (ws) {
+                        if (task.status === 3) {
+                            // Checked to Done
+                            if (oldStatus === 1) {
+                                ws.doingTasks--;
+                            } else {
+                                ws.todoTasks--;
+                            }
+                            ws.completedTasks++;
+                        } else {
+                            // Unchecked to Todo
+                            ws.completedTasks--;
+                            ws.todoTasks++;
+                        }
+                        ws.percent = ws.totalTasks > 0 ? Math.round((ws.completedTasks / ws.totalTasks) * 100) : 0;
+                    }
+
                     fetch('/Dashboard?handler=ToggleTask', {
                         method: 'POST',
                         headers: {
@@ -405,6 +426,45 @@
                         },
                         body: new URLSearchParams({ taskId: task.id })
                     });
+                },
+
+                totalTasks() {
+                    return this.tasks.length;
+                },
+                completedTasks() {
+                    return this.tasks.filter(t => t.status === 3).length;
+                },
+                dueSoonCount() {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const threeDaysLater = new Date();
+                    threeDaysLater.setDate(today.getDate() + 3);
+                    threeDaysLater.setHours(23, 59, 59, 999);
+                    return this.tasks.filter(t => {
+                        if (t.status === 3 || !t.dueDate) return false;
+                        const due = new Date(t.dueDate);
+                        return due >= today && due <= threeDaysLater;
+                    }).length;
+                },
+                overdueCount() {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return this.tasks.filter(t => {
+                        if (t.status === 3 || !t.dueDate) return false;
+                        const due = new Date(t.dueDate);
+                        return due < today;
+                    }).length;
+                },
+                completionRate() {
+                    const today = new Date();
+                    const currentMonthTasks = this.tasks.filter(t => {
+                        if (!t.dueDate) return false;
+                        const due = new Date(t.dueDate);
+                        return due.getMonth() === today.getMonth() && due.getFullYear() === today.getFullYear();
+                    });
+                    const total = currentMonthTasks.length;
+                    const completed = currentMonthTasks.filter(t => t.status === 3).length;
+                    return total > 0 ? Math.round((completed / total) * 100) : 0;
                 },
                 
                 get filteredTasks() {
