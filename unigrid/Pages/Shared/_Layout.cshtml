@@ -71,7 +71,7 @@
                 <div x-show="wsOpen" x-transition class="space-y-0.5">
                     @foreach (var ws in (List<unigrid.Models.Workspace>)(ViewData["Workspaces"] ?? new List<unigrid.Models.Workspace>()))
                     {
-                        <a href="/WorkspaceDetail/@ws.Id" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm">
+                        <a href="/WorkspaceDetail/@ws.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm">
                             <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-indigo-50 text-[10px] font-black text-indigo-600">
                                 @ws.Name.Substring(0, 1)
                             </div>
