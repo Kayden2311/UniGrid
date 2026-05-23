@@ -168,4 +168,30 @@ public class ScheduleModel : PageModel
 
         return new JsonResult(new { success = false, message = "Event not found" });
     }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateTaskTimeAsync(Guid taskId, DateTime dueDate)
+    {
+        var accountIdClaim = User.FindFirst("AccountId")?.Value;
+        if (string.IsNullOrEmpty(accountIdClaim)) return new JsonResult(new { success = false, message = "Not authenticated" });
+
+        var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId);
+        if (task != null)
+        {
+            task.DueDate = dueDate.ToUniversalTime();
+            await _context.SaveChangesAsync();
+
+            return new JsonResult(new
+            {
+                success = true,
+                taskItem = new
+                {
+                    id = task.Id,
+                    title = task.Title,
+                    dueDate = task.DueDate?.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                }
+            });
+        }
+
+        return new JsonResult(new { success = false, message = "Task not found" });
+    }
 }

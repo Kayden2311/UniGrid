@@ -68,7 +68,7 @@
             <div style="min-width: 800px;">
                 <!-- Day Headers -->
                 <div class="sticky top-0 z-10 border-b border-slate-200 bg-white"
-                     style="display: grid; grid-template-columns: 64px repeat(7, 1fr);">
+                     style="display: grid; grid-template-columns: 80px repeat(7, 1fr);">
                     <div class="border-r border-slate-200"></div>
                     @for (int idx = 0; idx < 7; idx++)
                     {
@@ -87,7 +87,7 @@
                      @@mouseleave="handleMouseLeave()" 
                      class="relative select-none" 
                      :class="mode === 'moving' ? 'cursor-grabbing' : ''"
-                     style="display: grid; grid-template-columns: 64px repeat(7, 1fr); height: 1632px;"
+                     style="display: grid; grid-template-columns: 80px repeat(7, 1fr); height: 1632px;"
                      id="grid-container">
                     
                     <!-- Vertical Time Grid Rails -->
@@ -114,6 +114,8 @@
                                  var sIdx = slotIdx;
                                  <div @@mousedown="handleCellMouseDown(@dIdx, @sIdx)" 
                                       @@mouseenter="handleCellMouseEnter(@dIdx, @sIdx)" 
+                                      @@dragover.prevent
+                                      @@drop="handleDeadlineDrop($event, @dIdx, @sIdx)"
                                       class="border-b transition-colors"
                                       :class="[
                                           @sIdx % 2 === 0 ? 'border-slate-100' : 'border-slate-100/40',
@@ -146,6 +148,19 @@
                                           mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'event-card-dragging' : 'cursor-grab active:cursor-grabbing'
                                       ]"
                                       :style="'top: ' + (ev.startSlot * 48 + 1) + 'px; height: ' + (ev.duration * 48 - 2) + 'px; left: ' + (ev.left + 1) + '%; width: ' + (ev.width - 2) + '%;' + (mode === 'moving' && movingTask && movingTask.taskId === ev.id ? ' transform: translate3d(' + dragTranslateX + 'px, ' + dragTranslateY + 'px, 0px) scale(1.02) rotate(1.2deg);' : '')">
+                                      
+                                      <!-- 3x3 Dot Grid Overlay for Personal Cards -->
+                                      <div class="absolute top-2 left-2 flex flex-wrap w-[11px] h-[11px] gap-[1.5px] opacity-[0.22] pointer-events-none z-10 text-current">
+                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                      </div>
                                       
                                       <!-- Resize Handle Top -->
                                       <div @@mousedown.stop.prevent="startResize($event, ev, 'top')"
@@ -201,6 +216,11 @@
                                       ]"
                                       :style="'top: ' + (task.startSlot * 48 + 1) + 'px; height: ' + (task.duration * 48 - 2) + 'px; left: ' + (task.left + 1) + '%; width: ' + (task.width - 2) + '%;'">
                                       
+                                      <!-- Corner Triangle Overlay for Workspace Tasks -->
+                                      <div class="absolute top-0 left-0 w-3.5 h-3.5 overflow-hidden pointer-events-none z-10">
+                                          <div class="absolute -top-3.5 -left-3.5 w-7 h-7 bg-indigo-600/90 rotate-45 shadow-[0_1px_2px_rgba(0,0,0,0.15)]"></div>
+                                      </div>
+
                                       <!-- Content Area: Prominent Time & Title -->
                                       <div class="flex flex-col h-full justify-between pt-1">
                                           <div>
@@ -247,7 +267,9 @@
                 </div>
 
                 <template x-for="dl in weeklyDeadlines" :key="dl.id">
-                    <div class="rounded-lg border border-l-[4px] p-3 space-y-1.5 transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+                    <div draggable="true" 
+                         @@dragstart="handleDeadlineDragStart($event, dl)"
+                         class="rounded-lg border border-l-[4px] p-3 space-y-1.5 transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
                          :class="{
                              'border-l-rose-500 bg-rose-50/20 border-y-rose-100/50 border-r-rose-100/50 shadow-rose-100/10': dl.priority === 'high',
                              'border-l-amber-500 bg-amber-50/20 border-y-amber-100/50 border-r-amber-100/50 shadow-amber-100/10': dl.priority === 'medium',
@@ -289,7 +311,7 @@
 
             <div class="space-y-3 py-1">
                 <p class="text-xs text-slate-500 leading-normal">
-                    Are you sure you want to reschedule your personal event <strong class="text-slate-800 font-semibold" x-text="pendingChange ? pendingChange.title : ''"></strong>?
+                    Are you sure you want to reschedule <strong class="text-slate-800 font-semibold" x-text="pendingChange ? pendingChange.title : ''"></strong>?
                 </p>
 
                 <div class="p-3 bg-slate-50 border border-slate-150 rounded-lg space-y-2 text-xs">
@@ -297,7 +319,7 @@
                     <div class="flex items-center justify-between text-slate-500 font-medium">
                         <span>Original Time:</span>
                         <span class="font-bold text-slate-700" 
-                              x-text="pendingChange ? (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][pendingChange.originalDayIdx] + ' @@ ' + slotToTime(pendingChange.originalStartSlot)) : ''"></span>
+                              x-text="pendingChange ? (pendingChange.originalDayIdx !== null && pendingChange.originalDayIdx !== undefined ? (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][pendingChange.originalDayIdx] + ' @@ ' + slotToTime(pendingChange.originalStartSlot)) : 'Unscheduled') : ''"></span>
                     </div>
                     <!-- Arrow Down visual -->
                     <div class="flex justify-center text-indigo-500">
@@ -310,7 +332,7 @@
                               x-text="pendingChange ? (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][pendingChange.newDayIdx] + ' @@ ' + slotToTime(pendingChange.newStartSlot)) : ''"></span>
                     </div>
                 </div>
-            </div>
+            </div>div>
 
             <!-- Action buttons -->
             <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
