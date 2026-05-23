@@ -18,7 +18,9 @@
     var jsonTasks = System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceTasks.Select(t => new {
         id = t.Id,
         title = t.Title,
+        description = t.Description ?? "",
         workspaceName = t.Workspace?.Name ?? "Workspace",
+        workspaceJoinCode = t.Workspace?.JoinCode ?? "",
         dueDate = t.DueDate?.ToString("yyyy-MM-ddTHH:mm:ssZ"),
         priority = t.Priority == 3 ? "high" : (t.Priority == 2 ? "medium" : "low")
     }), serializerSettings);
@@ -97,8 +99,8 @@
                             var slotLabelIdx = i;
                             <div class="flex items-start justify-end pr-2 text-[11px] text-slate-400 font-medium" 
                                  style="height: 48px;">
-                                <span class="-mt-1.5" x-text="@slotLabelIdx % 2 === 0 ? slotToTime(@slotLabelIdx) : ''"></span>
-                            </div>
+                                 <span :class="@slotLabelIdx === 0 ? 'mt-1' : '-mt-1.5'" x-text="@slotLabelIdx % 2 === 0 ? slotToTime(@slotLabelIdx) : ''"></span>
+                             </div>
                         }
                     </div>
 
@@ -136,8 +138,10 @@
                              <!-- Personal Events (Left Lane: 0% to 48%) -->
                              <template x-for="ev in getPersonalEventsForDay(@dIdx)" :key="ev.id">
                                  <div :id="'ev-' + ev.id" 
-                                      @@mousedown.stop="startMoveTask($event, ev, @dIdx)"
-                                      class="event-card absolute rounded-lg border-l-[3px] px-2 py-1.5 text-xs leading-tight overflow-hidden z-20 shadow-sm hover:shadow-md select-none flex flex-col justify-between"
+                                      @@click="openEdit(ev)"
+                                      @@mouseenter="hoveredId = ev.id" 
+                                      @@mouseleave="hoveredId = null"
+                                      class="event-card absolute rounded-lg border-l-[3px] px-2 py-1 text-xs leading-normal z-20 shadow-sm hover:shadow-md select-none flex flex-col justify-start gap-0.5 cursor-pointer group transition-shadow"
                                       :class="[
                                           ['bg-indigo-50 border-indigo-200 text-indigo-700',
                                            'bg-teal-50 border-teal-200 text-teal-700',
@@ -145,58 +149,65 @@
                                            'bg-rose-50 border-rose-200 text-rose-700',
                                            'bg-slate-50 border-slate-200 text-slate-700'][ev.colorIdx] || 'bg-indigo-50 border-indigo-200 text-indigo-700',
                                           ev.priority === 'high' ? 'ring-1 ring-rose-500/20' : '',
-                                          mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'event-card-dragging' : 'cursor-grab active:cursor-grabbing'
+                                          mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'event-card-dragging' : ''
                                       ]"
                                       :style="'top: ' + (ev.startSlot * 48 + 1) + 'px; height: ' + (ev.duration * 48 - 2) + 'px; left: ' + (ev.left + 1) + '%; width: ' + (ev.width - 2) + '%;' + (mode === 'moving' && movingTask && movingTask.taskId === ev.id ? ' transform: translate3d(' + dragTranslateX + 'px, ' + dragTranslateY + 'px, 0px) scale(1.02) rotate(1.2deg);' : '')">
                                       
-                                      <!-- 3x3 Dot Grid Overlay for Personal Cards -->
-                                      <div class="absolute top-2 left-2 flex flex-wrap w-[11px] h-[11px] gap-[1.5px] opacity-[0.22] pointer-events-none z-10 text-current">
-                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                          <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                      <!-- Row 1: Grip + Dot -->
+                                      <div class="flex items-center gap-1.5 select-none w-full shrink-0">
+                                          <!-- 3x3 Dot Grid Overlay (acts as GRIP handle) -->
+                                          <div @@mousedown.stop.prevent="startMoveTask($event, ev, @dIdx)"
+                                               class="flex flex-wrap w-[11px] h-[11px] gap-[1.5px] opacity-[0.4] hover:opacity-[0.9] pointer-events-auto shrink-0 text-current cursor-grab active:cursor-grabbing">
+                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                          </div>
+
+                                          <!-- Priority Dot -->
+                                          <span class="h-1.5 w-1.5 rounded-full shrink-0" 
+                                                :class="{
+                                                    'bg-slate-400': ev.priority === 'low',
+                                                    'bg-amber-500': ev.priority === 'medium',
+                                                    'bg-rose-500': ev.priority === 'high'
+                                                }"></span>
                                       </div>
-                                      
+
+                                      <!-- Row 2: Title (Full Width) -->
+                                      <div class="font-bold text-slate-700 truncate text-[11px] select-none leading-none w-full min-w-0" 
+                                           x-text="ev.title"></div>
+
+                                      <!-- Row 3: Time details (Full Width, Compact Formatted) -->
+                                      <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none"
+                                           x-text="formatTimeRange(ev.startSlot, ev.duration)"></div>
+
                                       <!-- Resize Handle Top -->
                                       <div @@mousedown.stop.prevent="startResize($event, ev, 'top')"
                                            class="absolute top-0 left-0 right-0 h-1.5 cursor-n-resize rounded-t hover:bg-slate-800/10 flex items-center justify-center">
                                            <div class="h-0.5 w-6 rounded-full bg-slate-800/20"></div>
                                       </div>
 
-                                      <!-- Content Area: Prominent Time & Title -->
-                                      <div class="flex flex-col h-full justify-between pt-1">
-                                          <div>
-                                              <!-- Header Time and Entity badge -->
-                                              <div class="flex items-center justify-between gap-1 mb-1.5">
-                                                  <span class="text-[9px] font-bold text-slate-500 tracking-tight uppercase" 
-                                                        x-text="slotToTime(ev.startSlot) + ' - ' + slotToTime(ev.startSlot + ev.duration)"></span>
-                                                  <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[7px] font-bold uppercase tracking-wider bg-white/60 border border-slate-200 text-slate-500 shadow-3xs">
-                                                      Personal
-                                                  </span>
-                                              </div>
-                                              
-                                              <!-- Title and Priority Indicator -->
-                                              <div class="flex items-center gap-1.5 mt-0.5">
-                                                  <span class="h-1.5 w-1.5 rounded-full shrink-0" 
-                                                        :class="{
-                                                            'bg-slate-400': ev.priority === 'low',
-                                                            'bg-amber-500': ev.priority === 'medium',
-                                                            'bg-rose-500': ev.priority === 'high'
-                                                        }"></span>
-                                                  <span class="font-bold text-slate-700 truncate text-[11px]" x-text="ev.title"></span>
-                                              </div>
-                                          </div>
-                                      </div>
-
                                       <!-- Resize Handle Bottom -->
                                       <div @@mousedown.stop.prevent="startResize($event, ev, 'bottom')"
                                            class="absolute bottom-0 left-0 right-0 h-1.5 cursor-s-resize rounded-b hover:bg-slate-800/10 flex items-center justify-center">
                                            <div class="h-0.5 w-6 rounded-full bg-slate-800/20"></div>
+                                      </div>
+
+                                      <!-- Hover Tooltip Popover (Floating centered above card) -->
+                                      <div x-show="hoveredId === ev.id" x-cloak
+                                           class="absolute z-50 min-w-[200px] max-w-[280px] bg-white border border-slate-100 rounded-2xl p-4 shadow-xl text-xs text-left cursor-default pointer-events-none transition-all duration-200"
+                                           :class="'left-1/2 -translate-x-1/2 bottom-full mb-2'"
+                                           x-transition>
+                                          <div class="space-y-1">
+                                              <h4 class="font-bold text-slate-800 text-xs leading-snug" x-text="ev.title"></h4>
+                                              <p class="text-slate-550 font-semibold text-[10px] tracking-tight mt-0.5" 
+                                                 x-text="formatTimeRange(ev.startSlot, ev.duration) + ' · ' + ev.priority + ' priority'"></p>
+                                          </div>
                                       </div>
                                  </div>
                              </template>
@@ -205,44 +216,55 @@
                              <template x-for="task in getTasksForDay(@dIdx)" :key="task.id">
                                  <div :id="'task-' + task.id" 
                                       @@click="openEdit(task)"
-                                      class="event-card absolute rounded-lg border-l-[3px] px-2 py-1.5 text-xs leading-tight overflow-hidden z-20 shadow-sm hover:shadow-md select-none flex flex-col justify-between cursor-pointer"
+                                      @@mouseenter="hoveredId = task.id" 
+                                      @@mouseleave="hoveredId = null"
+                                      class="event-card absolute rounded-lg border-l-[3px] px-2 py-1 text-xs leading-normal z-20 shadow-sm hover:shadow-md select-none flex flex-col justify-start gap-1 cursor-pointer group transition-shadow"
                                       :class="[
                                           ['bg-indigo-50/80 border-indigo-200/90 text-indigo-800',
                                            'bg-teal-50/80 border-teal-200/90 text-teal-800',
                                            'bg-amber-50/80 border-amber-200/90 text-amber-800',
                                            'bg-rose-50/80 border-rose-200/90 text-rose-800',
                                            'bg-slate-50/80 border-slate-200/90 text-slate-800'][task.colorIdx] || 'bg-slate-50/80 border-slate-200/90 text-slate-800',
-                                          task.priority === 'high' ? 'ring-1 ring-rose-500/25' : ''
+                                          task.priority === 'high' ? 'ring-1 ring-rose-500/25' : '',
+                                          mode === 'moving' && movingTask && movingTask.taskId === task.id ? 'event-card-dragging' : ''
                                       ]"
-                                      :style="'top: ' + (task.startSlot * 48 + 1) + 'px; height: ' + (task.duration * 48 - 2) + 'px; left: ' + (task.left + 1) + '%; width: ' + (task.width - 2) + '%;'">
+                                      :style="'top: ' + (task.startSlot * 48 + 1) + 'px; height: ' + (task.duration * 48 - 2) + 'px; left: ' + (task.left + 1) + '%; width: ' + (task.width - 2) + '%;' + (mode === 'moving' && movingTask && movingTask.taskId === task.id ? ' transform: translate3d(' + dragTranslateX + 'px, ' + dragTranslateY + 'px, 0px) scale(1.02) rotate(1.2deg);' : '')">
                                       
-                                      <!-- Corner Triangle Overlay for Workspace Tasks -->
-                                      <div class="absolute top-0 left-0 w-3.5 h-3.5 overflow-hidden pointer-events-none z-10">
-                                          <div class="absolute -top-3.5 -left-3.5 w-7 h-7 bg-indigo-600/90 rotate-45 shadow-[0_1px_2px_rgba(0,0,0,0.15)]"></div>
+                                      <!-- Corner Triangle Overlay for Workspace Tasks (acts as GRIP handle) -->
+                                      <div @@mousedown.stop.prevent="startMoveTask($event, task, @dIdx)"
+                                           class="absolute top-0 left-0 w-4.5 h-4.5 overflow-hidden pointer-events-auto z-30 cursor-grab active:cursor-grabbing"
+                                           title="Drag handle">
+                                          <div class="absolute -top-3.5 -left-3.5 w-7 h-7 bg-indigo-600/90 rotate-45 shadow-[0_1px_2px_rgba(0,0,0,0.15)] hover:bg-indigo-700 transition-colors"></div>
                                       </div>
 
-                                      <!-- Content Area: Prominent Time & Title -->
-                                      <div class="flex flex-col h-full justify-between pt-1">
-                                          <div>
-                                              <!-- Header Time and Entity badge -->
-                                              <div class="flex items-center justify-between gap-1 mb-1.5">
-                                                  <span class="text-[9px] font-bold text-slate-500 tracking-tight uppercase" 
-                                                        x-text="slotToTime(task.startSlot) + ' - ' + slotToTime(task.startSlot + task.duration)"></span>
-                                                  <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[7px] font-bold uppercase tracking-wider bg-indigo-50 border border-indigo-100 text-indigo-700 shadow-3xs truncate max-w-[80px]"
-                                                        x-text="task.workspaceName">
-                                                  </span>
-                                              </div>
-                                              
-                                              <!-- Title and Priority Indicator -->
-                                              <div class="flex items-center gap-1.5 mt-0.5">
-                                                  <span class="h-1.5 w-1.5 rounded-full shrink-0" 
-                                                        :class="{
-                                                            'bg-slate-400': task.priority === 'low',
-                                                            'bg-amber-500': task.priority === 'medium',
-                                                            'bg-rose-500': task.priority === 'high'
-                                                        }"></span>
-                                                  <span class="font-bold text-slate-700 truncate text-[11px]" x-text="task.title"></span>
-                                              </div>
+                                      <!-- Row 1: Priority Dot (offset to clear the top-left triangle handle) -->
+                                      <div class="flex items-center pl-[22px] select-none w-full shrink-0 h-[11px]">
+                                          <!-- Priority Dot -->
+                                          <span class="h-1.5 w-1.5 rounded-full shrink-0" 
+                                                :class="{
+                                                    'bg-slate-400': task.priority === 'low',
+                                                    'bg-amber-500': task.priority === 'medium',
+                                                    'bg-rose-500': task.priority === 'high'
+                                                }"></span>
+                                      </div>
+
+                                      <!-- Row 2: Title (Full Width) -->
+                                      <div class="font-bold text-slate-700 truncate text-[11px] select-none leading-none w-full min-w-0" 
+                                           x-text="task.title"></div>
+
+                                      <!-- Row 3: Time details (Full Width, Compact Formatted) -->
+                                      <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none"
+                                           x-text="formatTimeRange(task.startSlot, task.duration)"></div>
+
+                                      <!-- Hover Tooltip Popover (Floating centered above card like in pic 2) -->
+                                      <div x-show="hoveredId === task.id" x-cloak
+                                           class="absolute z-50 min-w-[200px] max-w-[280px] bg-white border border-slate-100 rounded-2xl p-4 shadow-xl text-xs text-left cursor-default pointer-events-none transition-all duration-200"
+                                           :class="'left-1/2 -translate-x-1/2 bottom-full mb-2'"
+                                           x-transition>
+                                          <div class="space-y-1">
+                                              <h4 class="font-bold text-slate-800 text-xs leading-snug" x-text="task.title"></h4>
+                                              <p class="text-slate-550 font-semibold text-[10px] tracking-tight mt-0.5" 
+                                                 x-text="formatTimeRange(task.startSlot, task.duration) + ' · ' + task.priority + ' priority'"></p>
                                           </div>
                                       </div>
                                  </div>
@@ -253,48 +275,84 @@
                 </div>
             </div>
         </div>
-
         <!-- Right Side: Deadlines Widget Panel -->
         <div class="w-72 shrink-0 self-start border border-slate-200 bg-white rounded-xl shadow-sm overflow-hidden">
             <div class="p-4 border-b border-slate-100 flex items-center gap-2">
-                <i data-lucide="clock" class="w-4 h-4 text-rose-500"></i>
-                <h3 class="text-sm font-semibold text-slate-800">Deadlines This Week</h3>
+                <i data-lucide="clock" class="w-4 h-4 text-indigo-650 animate-pulse"></i>
+                <h3 class="text-sm font-semibold text-slate-800">Workspace Deadlines</h3>
             </div>
             
-            <div class="p-4 space-y-3">
-                <div x-show="weeklyDeadlines.length === 0" class="text-center py-6 text-xs font-medium text-slate-400">
-                    No deadlines due this week.
+            <div class="p-4 space-y-5 max-h-[600px] overflow-y-auto">
+                <!-- Section 1: Due This Week -->
+                <div class="space-y-2.5">
+                    <h4 class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Due This Week</h4>
+                    <div x-show="weeklyDeadlines.length === 0" class="text-center py-4 text-xs font-semibold text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-100">
+                        No deadlines due this week.
+                    </div>
+                    <div class="space-y-2">
+                        <template x-for="dl in weeklyDeadlines" :key="dl.id">
+                            <div draggable="true" 
+                                 @@dragstart="handleDeadlineDragStart($event, dl)"
+                                 @@click="openEdit(dl)"
+                                 class="rounded-lg border border-l-[4px] p-3 space-y-1.5 transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+                                 :class="{
+                                     'border-l-rose-500 bg-rose-50/20 border-y-rose-100/50 border-r-rose-100/50 shadow-rose-100/10': dl.priority === 'high',
+                                     'border-l-amber-500 bg-amber-50/20 border-y-amber-100/50 border-r-amber-100/50 shadow-amber-100/10': dl.priority === 'medium',
+                                     'border-l-indigo-400 bg-indigo-50/20 border-y-indigo-100/50 border-r-indigo-100/50 shadow-indigo-100/10': dl.priority === 'low'
+                                 }">
+                                <div class="flex items-start gap-2">
+                                    <template x-if="dl.priority === 'high'">
+                                        <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-600 mt-0.5 shrink-0"></i>
+                                    </template>
+                                    <p class="text-xs font-bold text-slate-800 leading-tight" x-text="dl.title"></p>
+                                </div>
+                                <div class="flex items-center justify-between pt-1">
+                                    <span class="text-[10px] text-slate-500 font-bold tracking-tight uppercase" x-text="dl.workspaceName"></span>
+                                    <div class="inline-flex items-center px-2 py-0.5 border rounded-full text-[9px] font-bold"
+                                         :class="{
+                                             'border-rose-200 text-rose-700 bg-white/80': dl.priority === 'high',
+                                             'border-amber-200 text-amber-700 bg-white/80': dl.priority === 'medium',
+                                             'border-indigo-200 text-indigo-700 bg-white/80': dl.priority === 'low'
+                                         }" x-text="dl.formattedDate"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
                 </div>
 
-                <template x-for="dl in weeklyDeadlines" :key="dl.id">
-                    <div draggable="true" 
-                         @@dragstart="handleDeadlineDragStart($event, dl)"
-                         class="rounded-lg border border-l-[4px] p-3 space-y-1.5 transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
-                         :class="{
-                             'border-l-rose-500 bg-rose-50/20 border-y-rose-100/50 border-r-rose-100/50 shadow-rose-100/10': dl.priority === 'high',
-                             'border-l-amber-500 bg-amber-50/20 border-y-amber-100/50 border-r-amber-100/50 shadow-amber-100/10': dl.priority === 'medium',
-                             'border-l-indigo-400 bg-indigo-50/20 border-y-indigo-100/50 border-r-indigo-100/50 shadow-indigo-100/10': dl.priority === 'low'
-                         }">
-                        <div class="flex items-start gap-2">
-                            <template x-if="dl.priority === 'high'">
-                                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-600 mt-0.5 shrink-0"></i>
-                            </template>
-                            <p class="text-xs font-bold text-slate-800 leading-tight" x-text="dl.title"></p>
-                        </div>
-                        <div class="flex items-center justify-between pt-1">
-                            <span class="text-[10px] text-slate-500 font-bold tracking-tight uppercase" x-text="dl.workspaceName"></span>
-                            <div class="inline-flex items-center px-2 py-0.5 border rounded-full text-[9px] font-bold"
-                                 :class="{
-                                     'border-rose-200 text-rose-700 bg-white/80': dl.priority === 'high',
-                                     'border-amber-200 text-amber-700 bg-white/80': dl.priority === 'medium',
-                                     'border-indigo-200 text-indigo-700 bg-white/80': dl.priority === 'low'
-                                 }" x-text="dl.formattedDate"></div>
-                        </div>
+                <!-- Section 2: Unscheduled Tasks -->
+                <div class="space-y-2.5 pt-3 border-t border-slate-100">
+                    <h4 class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Unscheduled Tasks</h4>
+                    <div x-show="unscheduledTasks.length === 0" class="text-center py-4 text-xs font-semibold text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-100">
+                        No unscheduled tasks.
                     </div>
-                </template>
+                    <div class="space-y-2">
+                        <template x-for="dl in unscheduledTasks" :key="dl.id">
+                            <div draggable="true" 
+                                 @@dragstart="handleDeadlineDragStart($event, dl)"
+                                 @@click="openEdit(dl)"
+                                 class="rounded-lg border border-l-[4px] p-3 space-y-1.5 transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+                                 :class="{
+                                     'border-l-rose-500 bg-rose-50/20 border-y-rose-100/50 border-r-rose-100/50 shadow-rose-100/10': dl.priority === 'high',
+                                     'border-l-amber-500 bg-amber-50/20 border-y-amber-100/50 border-r-amber-100/50 shadow-amber-100/10': dl.priority === 'medium',
+                                     'border-l-indigo-400 bg-indigo-50/20 border-y-indigo-100/50 border-r-indigo-100/50 shadow-indigo-100/10': dl.priority === 'low'
+                                 }">
+                                <div class="flex items-start gap-2">
+                                    <template x-if="dl.priority === 'high'">
+                                        <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-600 mt-0.5 shrink-0"></i>
+                                    </template>
+                                    <p class="text-xs font-bold text-slate-800 leading-tight" x-text="dl.title"></p>
+                                </div>
+                                <div class="flex items-center justify-between pt-1">
+                                    <span class="text-[10px] text-slate-500 font-bold tracking-tight uppercase" x-text="dl.workspaceName"></span>
+                                    <div class="inline-flex items-center px-2 py-0.5 border rounded-full text-[9px] font-bold border-slate-200 text-slate-500 bg-white/80">No Date</div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
             </div>
-        </div>
-    </div>
+        </div></div>
 
     <!-- Confirm Schedule Change Dialog Modal -->
     <div x-show="confirmDialogOpen" 
@@ -306,12 +364,12 @@
             
             <div class="flex items-center gap-3 pb-2 border-b border-slate-100 text-indigo-600">
                 <i data-lucide="calendar-clock" class="w-5 h-5"></i>
-                <h3 class="text-base font-bold text-slate-800">Confirm Schedule Change</h3>
+                <h3 class="text-base font-bold text-slate-800" x-text="pendingChange && pendingChange.isResize ? 'Confirm Duration Change' : 'Confirm Schedule Change'"></h3>
             </div>
 
             <div class="space-y-3 py-1">
                 <p class="text-xs text-slate-500 leading-normal">
-                    Are you sure you want to reschedule <strong class="text-slate-800 font-semibold" x-text="pendingChange ? pendingChange.title : ''"></strong>?
+                    Are you sure you want to <span x-text="pendingChange && pendingChange.isResize ? 'change the duration of' : 'reschedule'"></span> <strong class="text-slate-800 font-semibold" x-text="pendingChange ? pendingChange.title : ''"></strong>?
                 </p>
 
                 <div class="p-3 bg-slate-50 border border-slate-150 rounded-lg space-y-2 text-xs">
@@ -319,7 +377,7 @@
                     <div class="flex items-center justify-between text-slate-500 font-medium">
                         <span>Original Time:</span>
                         <span class="font-bold text-slate-700" 
-                              x-text="pendingChange ? (pendingChange.originalDayIdx !== null && pendingChange.originalDayIdx !== undefined ? (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][pendingChange.originalDayIdx] + ' @@ ' + slotToTime(pendingChange.originalStartSlot)) : 'Unscheduled') : ''"></span>
+                              x-text="pendingChange ? (pendingChange.originalDayIdx !== null && pendingChange.originalDayIdx !== undefined ? (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][pendingChange.originalDayIdx] + ' @@ ' + formatTimeRange(pendingChange.originalStartSlot, pendingChange.originalDuration)) : 'Unscheduled') : ''"></span>
                     </div>
                     <!-- Arrow Down visual -->
                     <div class="flex justify-center text-indigo-500">
@@ -329,20 +387,20 @@
                     <div class="flex items-center justify-between text-slate-500 font-medium">
                         <span>New Proposed:</span>
                         <span class="font-bold text-indigo-600" 
-                              x-text="pendingChange ? (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][pendingChange.newDayIdx] + ' @@ ' + slotToTime(pendingChange.newStartSlot)) : ''"></span>
+                              x-text="pendingChange ? (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][pendingChange.newDayIdx] + ' @@ ' + formatTimeRange(pendingChange.newStartSlot, pendingChange.newDuration)) : ''"></span>
                     </div>
                 </div>
-            </div>div>
+            </div>
 
             <!-- Action buttons -->
             <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button @@click="cancelPendingChange()" 
-                        class="px-4 py-2 border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-lg text-xs font-semibold transition-colors">
-                    Cancel Move
+                        class="px-4 py-2 border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-lg text-xs font-semibold transition-colors"
+                        x-text="pendingChange && pendingChange.isResize ? 'Cancel Resize' : 'Cancel Move'">
                 </button>
                 <button @@click="confirmPendingChange()" 
-                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-all">
-                    Confirm Move
+                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
+                        x-text="pendingChange && pendingChange.isResize ? 'Confirm Resize' : 'Confirm Move'">
                 </button>
             </div>
         </div>
@@ -366,12 +424,18 @@
             <div class="space-y-4">
                 <!-- Workspace Task Warning Banner -->
                 <template x-if="isTaskForm">
-                    <div class="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg p-3 flex items-start gap-2.5">
-                        <i data-lucide="info" class="w-4.5 h-4.5 text-indigo-500 shrink-0 mt-0.5"></i>
-                        <div>
-                            <p class="font-bold">Managed Workspace Task</p>
-                            <p class="mt-0.5 text-[11px] text-indigo-600/90 leading-normal font-medium">This task is associated with the <strong x-text="formWorkspaceName"></strong> workspace. Changes must be made inside that workspace's task board.</p>
+                    <div class="space-y-3">
+                        <div class="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg p-3 flex items-start gap-2.5">
+                            <i data-lucide="info" class="w-4.5 h-4.5 text-indigo-500 shrink-0 mt-0.5"></i>
+                            <div>
+                                <p class="font-bold">Managed Workspace Task</p>
+                                <p class="mt-0.5 text-[11px] text-indigo-600/90 leading-normal font-medium">This task is associated with the <strong x-text="formWorkspaceName"></strong> workspace. Changes, comments, and task chat must be accessed on the workspace task board.</p>
+                            </div>
                         </div>
+                        <a :href="'/WorkspaceDetail/' + formWorkspaceJoinCode" 
+                           class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white rounded-lg text-xs font-bold shadow-md shadow-indigo-100/50 hover:shadow-indigo-200/50 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                            <i data-lucide="message-square" class="w-3.5 h-3.5"></i> View Comments & Workspace Chat
+                        </a>
                     </div>
                 </template>
 

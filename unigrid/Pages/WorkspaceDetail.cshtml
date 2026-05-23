@@ -55,6 +55,19 @@
         newCommentContent: '',
         newChatContent: '',
         draggedTaskId: null,
+        draggedTaskTitle: '',
+        confirmKanbanOpen: false,
+        pendingKanbanTaskId: null,
+        pendingKanbanStatus: null,
+        pendingKanbanTaskTitle: '',
+
+        statusLabel(status) {
+            if (status === 0) return 'Todo';
+            if (status === 1) return 'In Progress';
+            if (status === 2) return 'Review';
+            if (status === 3) return 'Done';
+            return 'Unknown';
+        },
         
         updateTaskStatus(taskId, newStatus) {
             fetch(`/api/tasks/${taskId}/status`, {
@@ -261,35 +274,145 @@
                 </div>
             </div>
 
-            <!-- 2. Member Contributions Chart -->
-            <div class="glass p-6 rounded-[2.5rem] shadow-sm flex flex-col justify-between lg:col-span-2">
-                <div class="flex items-center gap-2 mb-4">
-                    <i data-lucide="trending-up" class="w-5 h-5 text-indigo-600"></i>
-                    <h3 class="text-base font-black text-slate-800">Member Contributions</h3>
-                </div>
-                <div class="flex-1 flex flex-col justify-center gap-4">
-                    @foreach (var m in memberChartData.Take(4))
-                    {
-                        <div class="space-y-1.5">
-                            <div class="flex items-center justify-between text-xs font-bold text-slate-600">
-                                <div class="flex items-center gap-2">
-                                    <div class="h-6 w-6 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] text-indigo-600">
-                                        @m.Initials
-                                    </div>
-                                    <span>@m.FullName</span>
-                                </div>
-                                <span>@m.Completed / @m.Assigned Tasks Done (@m.Rate%)</span>
-                            </div>
-                            <div class="h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
-                                <div class="bg-indigo-600 rounded-full transition-all duration-500" style="width: @m.Rate%"></div>
-                            </div>
-                        </div>
-                    }
-                </div>
-                <div class="mt-4 text-[10px] text-slate-400 font-medium">
-                    Showing top contributing members in this workspace based on completed assignments.
-                </div>
-            </div>
+            <!-- Member Contributions Chart -->
+<div class="glass p-6 rounded-[2.5rem] shadow-sm flex flex-col justify-between">
+    <div class="flex items-center gap-2 mb-4">
+        <i data-lucide="trending-up" class="w-5 h-5 text-indigo-600"></i>
+        <h3 class="text-base font-black text-slate-800">Member Contributions</h3>
+    </div>
+    <div class="flex-1 flex flex-col justify-center py-2">
+        @{
+            int maxTasks = memberChartData.Any() ? memberChartData.Max(m => Math.Max(m.Assigned, 1)) : 5;
+        }
+        <svg viewBox="0 0 300 200" class="w-full h-44">
+            <!-- Grid Lines -->
+            <line x1="30" y1="30" x2="280" y2="30" stroke="#f8fafc" stroke-width="1" />
+            <line x1="30" y1="70" x2="280" y2="70" stroke="#f8fafc" stroke-width="1" />
+            <line x1="30" y1="110" x2="280" y2="110" stroke="#f8fafc" stroke-width="1" />
+            <line x1="30" y1="150" x2="280" y2="150" stroke="#e2e8f0" stroke-width="1.5" />
+            
+            <!-- Y-Axis Labels -->
+            <text x="20" y="34" text-anchor="end" class="text-[9px] font-bold text-slate-400 fill-current">@maxTasks</text>
+            <text x="20" y="94" text-anchor="end" class="text-[9px] font-bold text-slate-400 fill-current">@(maxTasks / 2)</text>
+            <text x="20" y="154" text-anchor="end" class="text-[9px] font-bold text-slate-400 fill-current">0</text>
+
+            @for (int i = 0; i < Math.Min(memberChartData.Count, 4); i++)
+            {
+                var m = memberChartData[i];
+                double hAssigned = ((double)m.Assigned / maxTasks) * 110;
+                double hCompleted = ((double)m.Completed / maxTasks) * 110;
+                double xBase = 55 + i * 65;
+                string xStr = (xBase + 4).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+                string initialsStr = m.Initials;
+                string countsStr = $"{m.Completed}/{m.Assigned}";
+                
+                <!-- Assigned Bar (Indigo) -->
+                <rect x="@(xBase - 8)" y="@(150 - hAssigned)" width="12" height="@hAssigned" fill="#4f46e5" rx="2.5" />
+                
+                <!-- Completed Bar (Green) -->
+                <rect x="@(xBase + 4)" y="@(150 - hCompleted)" width="12" height="@hCompleted" fill="#22c55e" rx="2.5" />
+
+                <!-- Label (Initials) -->
+                @Html.Raw("<text x='" + xStr + "' y='172' text-anchor='middle' class='text-[9px] font-bold text-slate-500 fill-current'>" + initialsStr + "</text>")
+                @Html.Raw("<text x='" + xStr + "' y='184' text-anchor='middle' class='text-[8px] font-bold text-slate-400 fill-current'>" + countsStr + "</text>")
+            }
+        </svg>
+    </div>
+    <!-- Legend -->
+    <div class="flex items-center gap-4 mt-2 justify-center text-[10px] font-bold text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-indigo-600 inline-block"></span> Assigned</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-green-500 inline-block"></span> Completed</span>
+    </div>
+</div>
+
+<!-- 3. Completion Rate Area Chart -->
+<div class="glass p-6 rounded-[2.5rem] shadow-sm flex flex-col justify-between">
+    <div class="flex items-center gap-2 mb-4">
+        <i data-lucide="activity" class="w-5 h-5 text-indigo-600"></i>
+        <h3 class="text-base font-black text-slate-800">Completion Rate</h3>
+    </div>
+    <div class="flex-1 flex flex-col justify-center py-2">
+        <svg viewBox="0 0 300 200" class="w-full h-44">
+            <defs>
+                <linearGradient id="rateGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#4f46e5" stop-opacity="0.25" />
+                    <stop offset="100%" stop-color="#4f46e5" stop-opacity="0.0" />
+                </linearGradient>
+            </defs>
+
+            <!-- Grid Lines -->
+            <line x1="30" y1="30" x2="280" y2="30" stroke="#f8fafc" stroke-width="1" />
+            <line x1="30" y1="70" x2="280" y2="70" stroke="#f8fafc" stroke-width="1" />
+            <line x1="30" y1="110" x2="280" y2="110" stroke="#f8fafc" stroke-width="1" />
+            <line x1="30" y1="150" x2="280" y2="150" stroke="#e2e8f0" stroke-width="1.5" />
+            
+            <!-- Y-Axis Labels -->
+            <text x="20" y="34" text-anchor="end" class="text-[9px] font-bold text-slate-400 fill-current">100%</text>
+            <text x="20" y="94" text-anchor="end" class="text-[9px] font-bold text-slate-400 fill-current">50%</text>
+            <text x="20" y="154" text-anchor="end" class="text-[9px] font-bold text-slate-400 fill-current">0%</text>
+
+            @{
+                var points = new List<string>();
+                var areaPoints = new List<string>();
+                int memberCount = Math.Min(memberChartData.Count, 4);
+                
+                // Start area path at bottom axis
+                if (memberCount > 0) {
+                    areaPoints.Add("40,150");
+                }
+                
+                for (int i = 0; i < memberCount; i++)
+                {
+                    var m = memberChartData[i];
+                    double xVal = 40 + i * 75;
+                    double yVal = 150 - ((double)m.Rate / 100) * 110;
+                    points.Add($"{xVal.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)},{yVal.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}");
+                    areaPoints.Add($"{xVal.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)},{yVal.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}");
+                }
+                
+                if (memberCount > 0) {
+                    areaPoints.Add($"{(40 + (memberCount - 1) * 75).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)},150");
+                }
+                
+                var pathStr = string.Join(" L ", points);
+                var areaStr = string.Join(" L ", areaPoints);
+            }
+
+            @if (memberCount > 0)
+            {
+                <!-- Area Fill -->
+                <path d="M @areaStr Z" fill="url(#rateGradient)" />
+                
+                <!-- Top Stroke line -->
+                <path d="M @pathStr" fill="none" stroke="#4f46e5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                
+                @for (int i = 0; i < memberCount; i++)
+                {
+                    var m = memberChartData[i];
+                    double xVal = 40 + i * 75;
+                    double yVal = 150 - ((double)m.Rate / 100) * 110;
+                    string xStr = xVal.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+                    string yStr = (yVal - 8).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+                    string rateStrStr = m.Rate.ToString();
+                    string initialsStr = m.Initials;
+                    
+                    <!-- Circular point -->
+                    <circle cx="@xVal" cy="@yVal" r="4.5" fill="#ffffff" stroke="#4f46e5" stroke-width="2.5" />
+                    
+                    <!-- Rate Text label above point -->
+                    @Html.Raw("<text x='" + xStr + "' y='" + yStr + "' text-anchor='middle' class='text-[9px] font-black text-indigo-600 fill-current'>" + rateStrStr + "%</text>")
+
+                    <!-- Initials label at bottom -->
+                    @Html.Raw("<text x='" + xStr + "' y='172' text-anchor='middle' class='text-[9px] font-bold text-slate-500 fill-current'>" + initialsStr + "</text>")
+                }
+            }
+        </svg>
+    </div>
+    <!-- Legend Footer -->
+    <div class="mt-2 text-[10px] text-slate-400 font-bold text-center tracking-tight">
+        Individual task completion rate percentages.
+    </div>
+</div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -314,7 +437,7 @@
                     }
                     @foreach (var task in highPriority)
                     {
-                        <div @@click="selectedTask = @Html.Raw(Model.SerializeTask(task)); detailOpen = true;"
+                        <div @@click="selectedTask = JSON.parse(atob('@Model.SerializeTaskBase64(task)')); if (selectedTask) { selectedTask.dueDateFormatted = selectedTask.dueDate ? selectedTask.dueDate.substring(0, 16) : ''; selectedTask.assigneeId = selectedTask.assignee ? selectedTask.assignee.id : ''; } isEditing = false; detailOpen = true;"
                              class="p-4 bg-white/60 hover:bg-white border border-slate-100 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer hover:shadow transition-all group">
                             <div class="flex items-center gap-3 min-w-0">
                                 <div class="h-9 w-9 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
@@ -354,7 +477,7 @@
                     @foreach (var task in upcoming)
                     {
                         var remainingDays = (task.DueDate.Value - DateTime.UtcNow).Days;
-                        <div @@click="selectedTask = @Html.Raw(Model.SerializeTask(task)); detailOpen = true;"
+                        <div @@click="selectedTask = JSON.parse(atob('@Model.SerializeTaskBase64(task)')); if (selectedTask) { selectedTask.dueDateFormatted = selectedTask.dueDate ? selectedTask.dueDate.substring(0, 16) : ''; selectedTask.assigneeId = selectedTask.assignee ? selectedTask.assignee.id : ''; } isEditing = false; detailOpen = true;"
                              class="p-4 bg-white/60 hover:bg-white border border-slate-100 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer hover:shadow transition-all group">
                             <div class="min-w-0">
                                 <p class="text-sm font-bold text-slate-700 truncate group-hover:text-indigo-600 transition-colors">@task.Title</p>
@@ -426,7 +549,7 @@
 
                 <div class="rounded-3xl p-4 @colBg border @colBorder flex flex-col gap-3"
                      @@dragover.prevent
-                     @@drop="const taskId = draggedTaskId; if (taskId) { updateTaskStatus(taskId, @colStatus); draggedTaskId = null; }">
+                     @@drop="const taskId = draggedTaskId; if (taskId) { pendingKanbanTaskId = taskId; pendingKanbanStatus = @colStatus; pendingKanbanTaskTitle = draggedTaskTitle; confirmKanbanOpen = true; draggedTaskId = null; }">
                     <div class="flex items-center justify-between px-2">
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-black @colText">@colLabel</span>
@@ -445,12 +568,12 @@
                             var priorityDot = task.Priority == 1 ? "bg-blue-500" : task.Priority == 2 ? "bg-amber-500" : "bg-rose-500";
                             var isOverdue = task.Status != 3 && task.DueDate < DateTime.UtcNow;
 
-                            <div @@click="selectedTask = @Html.Raw(Model.SerializeTask(task)); if (selectedTask) { selectedTask.dueDateFormatted = selectedTask.dueDate ? selectedTask.dueDate.substring(0, 16) : ''; selectedTask.assigneeId = selectedTask.assignee ? selectedTask.assignee.id : ''; } isEditing = false; detailOpen = true;"
+                            <div @@click="selectedTask = JSON.parse(atob('@Model.SerializeTaskBase64(task)')); if (selectedTask) { selectedTask.dueDateFormatted = selectedTask.dueDate ? selectedTask.dueDate.substring(0, 16) : ''; selectedTask.assigneeId = selectedTask.assignee ? selectedTask.assignee.id : ''; } isEditing = false; detailOpen = true;"
                                  x-show="(searchQuery === '' || '@task.Title.ToLower()'.includes(searchQuery.toLowerCase())) && 
                                          (filterPriority === '' || '@task.Priority' === filterPriority) && 
                                          (filterAssignee === '' || '@task.AssigneeId' === filterAssignee)"
                                  draggable="true"
-                                 @@dragstart="draggedTaskId = '@task.Id'"
+                                 @@dragstart="draggedTaskId = '@task.Id'; draggedTaskTitle = '@Html.Raw(task.Title.Replace("'", "\\'").Replace("\"", "\\\""))'"
                                  class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md cursor-pointer hover:border-slate-200 transition-all space-y-3 group">
                                 
                                 <div class="flex items-start justify-between gap-2">
@@ -697,7 +820,7 @@
                         var icon = file.FileType == "pdf" ? "file-text" : file.FileType == "doc" ? "file-text" : file.FileType == "spreadsheet" ? "file-spreadsheet" : "image";
                         var iconColor = file.FileType == "pdf" ? "text-rose-500 bg-rose-50" : file.FileType == "doc" ? "text-indigo-600 bg-indigo-50" : file.FileType == "spreadsheet" ? "text-green-600 bg-green-50" : "text-purple-500 bg-purple-50";
 
-                        <div @@click="previewFile = @Html.Raw(Model.SerializeFile(file))"
+                        <div @@click="previewFile = JSON.parse(atob('@Model.SerializeFileBase64(file)'))"
                              class="p-4 bg-white/60 hover:bg-white border border-slate-100 hover:border-slate-200 hover:shadow shadow-sm rounded-2xl flex flex-col items-center text-center cursor-pointer transition-all relative group">
                             
                             <div class="h-12 w-12 rounded-xl flex items-center justify-center mb-3 @iconColor">
@@ -722,7 +845,7 @@
                         <tbody class="divide-y divide-slate-100 text-xs font-bold text-slate-500">
                             @foreach (var file in Model.Files)
                             {
-                                <tr @@click="previewFile = @Html.Raw(Model.SerializeFile(file))" class="hover:bg-slate-50/50 transition-colors cursor-pointer">
+                                <tr @@click="previewFile = JSON.parse(atob('@Model.SerializeFileBase64(file)'))" class="hover:bg-slate-50/50 transition-colors cursor-pointer">
                                     <td class="px-6 py-3 text-slate-700">@file.FileName</td>
                                     <td class="px-6 py-3">@file.User.FullName</td>
                                     <td class="px-6 py-3">@(file.CreatedAt?.ToString("MMM dd, yyyy") ?? "Just now")</td>
@@ -1041,4 +1164,56 @@
         </div>
     </div>
 
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── KANBAN STATUS VERIFY MODAL DIALOG ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="confirmKanbanOpen" 
+         class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
+         style="display: none;"
+         x-transition>
+        
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-md p-8 relative flex flex-col gap-6"
+             @@click.away="confirmKanbanOpen = false">
+            
+            <button @@click="confirmKanbanOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <div class="flex items-center gap-3">
+                <div class="h-10 w-10 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
+                    <i data-lucide="help-circle" class="w-5 h-5"></i>
+                </div>
+                <h3 class="text-lg font-black text-slate-800">Confirm Status Change</h3>
+            </div>
+
+            <div class="text-xs font-bold text-slate-500 space-y-3 leading-relaxed">
+                <p>Are you sure you want to change the status of this task?</p>
+                <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-2">
+                    <div>
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Task Title</span>
+                        <span class="text-slate-800 text-sm font-black break-words" x-text="pendingKanbanTaskTitle"></span>
+                    </div>
+                    <div>
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">New Status</span>
+                        <span class="px-2.5 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-50 text-indigo-600 inline-block mt-0.5" x-text="statusLabel(pendingKanbanStatus)"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button type="button" 
+                        @@click="updateTaskStatus(pendingKanbanTaskId, pendingKanbanStatus); confirmKanbanOpen = false;" 
+                        class="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-md shadow-indigo-100 transition-all flex items-center justify-center gap-1.5">
+                    Confirm Move
+                </button>
+                <button type="button" 
+                        @@click="confirmKanbanOpen = false" 
+                        class="flex-1 py-3.5 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-2xl font-bold transition-all">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
 </div>
+
