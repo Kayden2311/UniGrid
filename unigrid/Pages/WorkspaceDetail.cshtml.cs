@@ -68,9 +68,9 @@ public class WorkspaceDetailModel : PageModel
     [BindProperty]
     public string InviteRole { get; set; } = "Member";
 
-    public async System.Threading.Tasks.Task<IActionResult> OnGetAsync(Guid id)
+    public async System.Threading.Tasks.Task<IActionResult> OnGetAsync(string joinCode)
     {
-        var result = await LoadWorkspaceDataAsync(id);
+        var result = await LoadWorkspaceDataAsync(joinCode);
         if (!result)
         {
             return RedirectToPage("/Dashboard");
@@ -85,7 +85,7 @@ public class WorkspaceDetailModel : PageModel
         return Page();
     }
 
-    private async System.Threading.Tasks.Task<bool> LoadWorkspaceDataAsync(Guid workspaceId)
+    private async System.Threading.Tasks.Task<bool> LoadWorkspaceDataAsync(string joinCode)
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
         if (string.IsNullOrEmpty(accountIdClaim)) return false;
@@ -99,12 +99,14 @@ public class WorkspaceDetailModel : PageModel
         UserInitials = string.Concat(CurrentUser.FullName.Split(' ').Select(n => n[0]));
         ViewData["UserInitials"] = UserInitials;
 
-        // Fetch Workspace
+        // Fetch Workspace by JoinCode
         Workspace = await _context.Workspaces
             .Include(w => w.Owner)
-            .FirstOrDefaultAsync(w => w.Id == workspaceId);
+            .FirstOrDefaultAsync(w => w.JoinCode == joinCode);
 
         if (Workspace == null) return false;
+
+        var workspaceId = Workspace.Id;
 
         // Check if user is a member or owner
         var isMember = await _context.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == CurrentUser.Id);
@@ -149,16 +151,16 @@ public class WorkspaceDetailModel : PageModel
         return true;
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostCreateTaskAsync(Guid id)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostCreateTaskAsync(string joinCode)
     {
-        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
 
         if (!string.IsNullOrEmpty(NewTaskTitle))
         {
             var task = new unigrid.Models.Task
             {
                 Id = Guid.NewGuid(),
-                WorkspaceId = id,
+                WorkspaceId = Workspace.Id,
                 AssigneeId = NewTaskAssigneeId,
                 Title = NewTaskTitle,
                 Description = NewTaskDescription,
@@ -170,17 +172,17 @@ public class WorkspaceDetailModel : PageModel
 
             await _context.Tasks.AddAsync(task);
             await _context.SaveChangesAsync();
-            _logger.LogInformation("Task created: {Title} in Workspace {WorkspaceId}", NewTaskTitle, id);
+            _logger.LogInformation("Task created: {Title} in Workspace {WorkspaceId}", NewTaskTitle, Workspace.Id);
         }
 
-        return RedirectToPage(new { id });
+        return RedirectToPage(new { joinCode });
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateTaskStatusAsync(Guid id, Guid taskId, int status)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateTaskStatusAsync(string joinCode, Guid taskId, int status)
     {
-        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
 
-        var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId && t.WorkspaceId == id);
+        var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId && t.WorkspaceId == Workspace.Id);
         if (task != null)
         {
             task.Status = status;
@@ -188,12 +190,32 @@ public class WorkspaceDetailModel : PageModel
             _logger.LogInformation("Task status updated. TaskId: {TaskId}, NewStatus: {Status}", taskId, status);
         }
 
-        return RedirectToPage(new { id });
+        return RedirectToPage(new { joinCode });
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostAddTaskCommentAsync(Guid id)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostEditTaskAsync(string joinCode, Guid editTaskId, string editTaskTitle, string editTaskDescription, int editTaskPriority, Guid? editTaskAssigneeId, DateTime? editTaskDueDate)
     {
-        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+
+        var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == editTaskId && t.WorkspaceId == Workspace.Id);
+        if (task != null)
+        {
+            task.Title = editTaskTitle;
+            task.Description = editTaskDescription;
+            task.Priority = editTaskPriority;
+            task.AssigneeId = editTaskAssigneeId;
+            task.DueDate = editTaskDueDate;
+
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Task edited. TaskId: {TaskId}", editTaskId);
+        }
+
+        return RedirectToPage(new { joinCode });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostAddTaskCommentAsync(string joinCode)
+    {
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
 
         if (!string.IsNullOrEmpty(CommentContent) && CommentTaskId != Guid.Empty)
         {
@@ -211,12 +233,12 @@ public class WorkspaceDetailModel : PageModel
             _logger.LogInformation("Comment added to task {TaskId} by {UserId}", CommentTaskId, CurrentUser.Id);
         }
 
-        return RedirectToPage(new { id });
+        return RedirectToPage(new { joinCode });
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostSendChatMessageAsync(Guid id)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostSendChatMessageAsync(string joinCode)
     {
-        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
 
         if (!string.IsNullOrEmpty(ChatContent) && ChatRoom != null)
         {
@@ -235,19 +257,19 @@ public class WorkspaceDetailModel : PageModel
             _logger.LogInformation("Chat message sent in room {RoomId} by {UserId}", ChatRoom.Id, CurrentUser.Id);
         }
 
-        return RedirectToPage(new { id });
+        return RedirectToPage(new { joinCode });
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostUploadFileAsync(Guid id)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostUploadFileAsync(string joinCode)
     {
-        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
 
         if (!string.IsNullOrEmpty(NewFileName))
         {
             var file = new WorkspaceFile
             {
                 Id = Guid.NewGuid(),
-                WorkspaceId = id,
+                WorkspaceId = Workspace.Id,
                 UserId = CurrentUser.Id,
                 FileName = NewFileName,
                 FileUrl = "files/" + NewFileName.ToLower().Replace(" ", "_"),
@@ -258,15 +280,15 @@ public class WorkspaceDetailModel : PageModel
 
             await _context.WorkspaceFiles.AddAsync(file);
             await _context.SaveChangesAsync();
-            _logger.LogInformation("File uploaded in workspace {WorkspaceId} by {UserId}", id, CurrentUser.Id);
+            _logger.LogInformation("File uploaded in workspace {WorkspaceId} by {UserId}", Workspace.Id, CurrentUser.Id);
         }
 
-        return RedirectToPage(new { id });
+        return RedirectToPage(new { joinCode });
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostInviteMemberAsync(Guid id)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostInviteMemberAsync(string joinCode)
     {
-        if (!await LoadWorkspaceDataAsync(id)) return RedirectToPage("/Dashboard");
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
 
         if (!string.IsNullOrEmpty(InviteEmail))
         {
@@ -278,12 +300,12 @@ public class WorkspaceDetailModel : PageModel
             if (inviteeUser != null)
             {
                 // Check if already member
-                var alreadyMember = await _context.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == id && wm.UserId == inviteeUser.Id);
+                var alreadyMember = await _context.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == Workspace.Id && wm.UserId == inviteeUser.Id);
                 if (!alreadyMember)
                 {
                     var newMember = new WorkspaceMember
                     {
-                        WorkspaceId = id,
+                        WorkspaceId = Workspace.Id,
                         UserId = inviteeUser.Id,
                         Role = InviteRole,
                         JoinedAt = DateTime.UtcNow
@@ -291,12 +313,12 @@ public class WorkspaceDetailModel : PageModel
 
                     await _context.WorkspaceMembers.AddAsync(newMember);
                     await _context.SaveChangesAsync();
-                    _logger.LogInformation("User {Invitee} added as {Role} in Workspace {WorkspaceId}", inviteeUser.FullName, InviteRole, id);
+                    _logger.LogInformation("User {Invitee} added as {Role} in Workspace {WorkspaceId}", inviteeUser.FullName, InviteRole, Workspace.Id);
                 }
             }
         }
 
-        return RedirectToPage(new { id });
+        return RedirectToPage(new { joinCode });
     }
 
     public string SerializeTask(unigrid.Models.Task task)

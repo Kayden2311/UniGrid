@@ -59,13 +59,17 @@ public class DashboardModel : PageModel
                 .ToListAsync();
 
             TotalTasksCount = allUserTasks.Count;
-            CompletedTasksCount = allUserTasks.Count(t => t.Status == 2); // 2 = Completed
+            CompletedTasksCount = allUserTasks.Count(t => t.Status == 3); // 3 = Done
             
             var today = DateTime.UtcNow;
-            OverdueCount = allUserTasks.Count(t => t.Status != 2 && t.DueDate.HasValue && t.DueDate.Value < today);
-            DueSoonCount = allUserTasks.Count(t => t.Status != 2 && t.DueDate.HasValue && t.DueDate.Value >= today && t.DueDate.Value <= today.AddDays(3));
+            OverdueCount = allUserTasks.Count(t => t.Status != 3 && t.DueDate.HasValue && t.DueDate.Value < today);
+            DueSoonCount = allUserTasks.Count(t => t.Status != 3 && t.DueDate.HasValue && t.DueDate.Value >= today && t.DueDate.Value <= today.AddDays(3));
 
-            CompletionRate = TotalTasksCount > 0 ? (decimal)CompletedTasksCount / TotalTasksCount * 100 : 0;
+            // Monthly Completion Rate specifically using tasks due within the active calendar month
+            var currentMonthTasks = allUserTasks.Where(t => t.DueDate.HasValue && t.DueDate.Value.Month == today.Month && t.DueDate.Value.Year == today.Year).ToList();
+            var currentMonthTotal = currentMonthTasks.Count;
+            var currentMonthCompleted = currentMonthTasks.Count(t => t.Status == 3);
+            CompletionRate = currentMonthTotal > 0 ? (decimal)currentMonthCompleted / currentMonthTotal * 100 : 0;
 
             // Filtered tasks for the list (Recent)
             RecentTasks = allUserTasks
@@ -77,5 +81,17 @@ public class DashboardModel : PageModel
         }
 
         return RedirectToPage("/Login");
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostToggleTaskAsync(Guid taskId)
+    {
+        var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId);
+        if (task == null) return NotFound();
+
+        // Toggle status between 0 (Todo) and 3 (Done)
+        task.Status = task.Status == 3 ? 0 : 3;
+        await _context.SaveChangesAsync();
+
+        return new JsonResult(new { success = true, newStatus = task.Status });
     }
 }

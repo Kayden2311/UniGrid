@@ -43,7 +43,7 @@
             var pct = totalTasks > 0 ? (int)((double)completedTasks / totalTasks * 100) : 0;
             var dueThisWeek = ws.Tasks.Count(t => t.Status != 3 && t.DueDate.HasValue && t.DueDate.Value >= DateTime.UtcNow && t.DueDate.Value <= DateTime.UtcNow.AddDays(7));
 
-            <div onclick="window.location.href='/WorkspaceDetail/@ws.Id'"
+            <div onclick="window.location.href='/WorkspaceDetail/@ws.JoinCode'"
                  class="group cursor-pointer transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/5 hover:border-indigo-500/30 border border-slate-100 rounded-3xl bg-white p-6 relative overflow-hidden flex flex-col justify-between h-full shadow-sm"
                  x-show="searchQuery == '' || '@ws.Name.ToLower()'.includes(searchQuery.toLowerCase())">
                 

@@ -427,10 +427,10 @@ function scheduleComponent() {
                 let relX = evMouse.clientX - rectContainer.left + scrollLeft;
                 let relY = evMouse.clientY - rectContainer.top + scrollTop;
                 
-                let dayWidth = (rectContainer.width - 64) / 7;
+                let dayWidth = (rectContainer.width - 80) / 7;
                 let day = 0;
-                if (relX >= 64) {
-                    day = Math.floor((relX - 64) / dayWidth);
+                if (relX >= 80) {
+                    day = Math.floor((relX - 80) / dayWidth);
                 }
                 day = Math.max(0, Math.min(day, 6));
                 
@@ -469,6 +469,54 @@ function scheduleComponent() {
 
         handleMouseLeave() {
             // Managed seamlessly
+        },
+
+        handleDeadlineDragStart(ev, dl) {
+            this.draggedTask = dl;
+            ev.dataTransfer.effectAllowed = 'move';
+            ev.dataTransfer.setData('text/plain', dl.id);
+        },
+
+        handleDeadlineDrop(ev, dayIdx, slotIdx) {
+            ev.preventDefault();
+            let dl = this.draggedTask;
+            if (!dl) {
+                let id = ev.dataTransfer.getData('text/plain');
+                if (id) {
+                    dl = this.weeklyDeadlines.find(d => d.id === id);
+                }
+            }
+            if (!dl) return;
+
+            let rawTask = this.tasks.find(x => x.id === dl.id);
+            let originalDayIdx = null;
+            let originalStartSlot = null;
+            if (rawTask && rawTask.dueDate) {
+                let dDate = new Date(rawTask.dueDate);
+                originalDayIdx = dDate.getDay() === 0 ? 6 : dDate.getDay() - 1;
+                let hours = dDate.getHours();
+                let minutes = dDate.getMinutes();
+                if (hours === 0 && minutes === 0) {
+                    hours = 9;
+                    minutes = 0;
+                }
+                originalStartSlot = Math.max(0, (hours - 7) * 2 + (minutes >= 30 ? 1 : 0));
+            }
+
+            this.pendingChange = {
+                isTask: true,
+                taskId: dl.id,
+                title: dl.title,
+                originalDayIdx: originalDayIdx,
+                originalStartSlot: originalStartSlot,
+                originalDuration: 2,
+                newDayIdx: dayIdx,
+                newStartSlot: slotIdx,
+                newDuration: 2
+            };
+
+            this.confirmDialogOpen = true;
+            this.draggedTask = null;
         },
 
         startMoveTask(e, ev, dayIdx) {
@@ -520,10 +568,10 @@ function scheduleComponent() {
                 let relX = evMouse.clientX - rectContainer.left + sLeft;
                 let relY = evMouse.clientY - rectContainer.top + sTop;
 
-                let dayWidth = (rectContainer.width - 64) / 7;
+                let dayWidth = (rectContainer.width - 80) / 7;
                 let day = 0;
-                if (relX >= 64) {
-                    day = Math.floor((relX - 64) / dayWidth);
+                if (relX >= 80) {
+                    day = Math.floor((relX - 80) / dayWidth);
                 }
                 day = Math.max(0, Math.min(day, 6));
 
@@ -649,10 +697,49 @@ function scheduleComponent() {
         async confirmPendingChange() {
             if (!this.pendingChange) return;
             let pc = this.pendingChange;
-            let targetEv = this.events.find(x => x.id === pc.eventId);
-            if (targetEv) {
-                let { startTime, endTime } = this.slotsToISOTimes(pc.newDayIdx, pc.newStartSlot, pc.newDuration);
-                await this.updateEventTimeInDb(pc.eventId, startTime, endTime);
+            if (pc.isTask) {
+                let { startTime } = this.slotsToISOTimes(pc.newDayIdx, pc.newStartSlot, pc.newDuration);
+                await this.updateTaskTimeInDb(pc.taskId, startTime);
+                
+                // Update local task state
+                let taskInList = this.tasks.find(x => x.id === pc.taskId);
+                if (taskInList) {
+                    taskInList.dueDate = startTime;
+                }
+                let wTask = this.workspaceTasks.find(x => x.id === pc.taskId);
+                if (wTask) {
+                    let dDate = new Date(startTime);
+                    wTask.startDate = dDate;
+                    wTask.endDate = new Date(dDate.getTime() + 60 * 60 * 1000);
+                    wTask.dayIdx = pc.newDayIdx;
+                    wTask.startSlot = pc.newStartSlot;
+                } else {
+                    let rawTask = this.tasks.find(x => x.id === pc.taskId);
+                    if (rawTask) {
+                        let dueDate = new Date(startTime);
+                        let colorIdx = rawTask.priority === 'high' ? 3 : (rawTask.priority === 'medium' ? 2 : 4);
+                        this.workspaceTasks.push({
+                            id: rawTask.id,
+                            title: rawTask.title,
+                            description: rawTask.description || '',
+                            dayIdx: pc.newDayIdx,
+                            startSlot: pc.newStartSlot,
+                            duration: 2,
+                            priority: rawTask.priority || 'medium',
+                            colorIdx: colorIdx,
+                            startDate: dueDate,
+                            endDate: new Date(dueDate.getTime() + 60 * 60 * 1000),
+                            isTask: true,
+                            workspaceName: rawTask.workspaceName
+                        });
+                    }
+                }
+            } else {
+                let targetEv = this.events.find(x => x.id === pc.eventId);
+                if (targetEv) {
+                    let { startTime, endTime } = this.slotsToISOTimes(pc.newDayIdx, pc.newStartSlot, pc.newDuration);
+                    await this.updateEventTimeInDb(pc.eventId, startTime, endTime);
+                }
             }
             this.confirmDialogOpen = false;
             this.pendingChange = null;
@@ -661,15 +748,17 @@ function scheduleComponent() {
         cancelPendingChange() {
             if (!this.pendingChange) return;
             let pc = this.pendingChange;
-            let targetEv = this.events.find(x => x.id === pc.eventId);
-            if (targetEv) {
-                targetEv.dayIdx = pc.originalDayIdx;
-                targetEv.startSlot = pc.originalStartSlot;
-                targetEv.duration = pc.originalDuration;
-                
-                let { startTime, endTime } = this.slotsToISOTimes(pc.originalDayIdx, pc.originalStartSlot, pc.originalDuration);
-                targetEv.startDate = new Date(startTime);
-                targetEv.endDate = new Date(endTime);
+            if (!pc.isTask) {
+                let targetEv = this.events.find(x => x.id === pc.eventId);
+                if (targetEv) {
+                    targetEv.dayIdx = pc.originalDayIdx;
+                    targetEv.startSlot = pc.originalStartSlot;
+                    targetEv.duration = pc.originalDuration;
+                    
+                    let { startTime, endTime } = this.slotsToISOTimes(pc.originalDayIdx, pc.originalStartSlot, pc.originalDuration);
+                    targetEv.startDate = new Date(startTime);
+                    targetEv.endDate = new Date(endTime);
+                }
             }
             this.confirmDialogOpen = false;
             this.pendingChange = null;
@@ -693,6 +782,26 @@ function scheduleComponent() {
                 }
             } catch (err) {
                 console.error("Network error updating event times:", err);
+            }
+        },
+
+        async updateTaskTimeInDb(taskId, dueDate) {
+            let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+            let payload = new URLSearchParams();
+            payload.append('taskId', taskId);
+            payload.append('dueDate', dueDate);
+            payload.append('__RequestVerificationToken', token);
+
+            try {
+                let response = await fetch('?handler=UpdateTaskTime', {
+                    method: 'POST',
+                    body: payload
+                });
+                if (!response.ok) {
+                    console.error("Failed to update task times in database");
+                }
+            } catch (err) {
+                console.error("Network error updating task times:", err);
             }
         },
 
