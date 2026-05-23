@@ -71,10 +71,9 @@ public class DashboardModel : PageModel
             var currentMonthCompleted = currentMonthTasks.Count(t => t.Status == 3);
             CompletionRate = currentMonthTotal > 0 ? (decimal)currentMonthCompleted / currentMonthTotal * 100 : 0;
 
-            // Filtered tasks for the list (Recent)
+            // Filtered tasks for the list (All user tasks)
             RecentTasks = allUserTasks
                 .OrderByDescending(t => t.CreatedAt)
-                .Take(10)
                 .ToList();
 
             return Page();

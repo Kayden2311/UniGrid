@@ -166,7 +166,7 @@ public class WorkspaceDetailModel : PageModel
                 Description = NewTaskDescription,
                 Status = NewTaskStatus,
                 Priority = NewTaskPriority,
-                DueDate = NewTaskDueDate ?? DateTime.UtcNow.AddDays(7),
+                DueDate = NewTaskDueDate,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -343,6 +343,12 @@ public class WorkspaceDetailModel : PageModel
         });
     }
 
+    public string SerializeTaskBase64(unigrid.Models.Task task)
+    {
+        var json = SerializeTask(task);
+        return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
+    }
+
     public string SerializeFile(WorkspaceFile file)
     {
         var cleanFile = new {
@@ -357,5 +363,11 @@ public class WorkspaceDetailModel : PageModel
         return System.Text.Json.JsonSerializer.Serialize(cleanFile, new System.Text.Json.JsonSerializerOptions {
             PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
         });
+    }
+
+    public string SerializeFileBase64(WorkspaceFile file)
+    {
+        var json = SerializeFile(file);
+        return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
     }
 }
