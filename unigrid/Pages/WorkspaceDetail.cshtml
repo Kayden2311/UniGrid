@@ -67,7 +67,7 @@
             </div>
         </div>
         <div class="flex items-center gap-3">
-            <a href="/Pricing" class="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-orange-100 hover:shadow-orange-200 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2">
+            <a href="/Pricing?joinCode=@Model.Workspace.JoinCode" class="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-orange-100 hover:shadow-orange-200 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2">
                 <i data-lucide="crown" class="w-4 h-4"></i> Upgrade Package
             </a>
             <button @@click="inviteOpen = true" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2">
