@@ -59,13 +59,16 @@
         confirmKanbanOpen: false,
         pendingKanbanTaskId: null,
         pendingKanbanStatus: null,
+        currentUserRole: '@Model.CurrentUserRole',
+        currentUserId: '@Model.CurrentUser.Id',
+        workspaceOwnerId: '@Model.Workspace.OwnerId',
         pendingKanbanTaskTitle: '',
 
         statusLabel(status) {
-            if (status === 0) return 'Todo';
-            if (status === 1) return 'In Progress';
-            if (status === 2) return 'Review';
-            if (status === 3) return 'Done';
+            if (status === 0) return 'Phân việc (To Do)';
+            if (status === 1) return 'Thực thi (In Progress)';
+            if (status === 2) return 'Kiểm soát (Review/Assurance)';
+            if (status === 3) return 'Hoàn thành (Done)';
             return 'Unknown';
         },
         
@@ -75,14 +78,20 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: newStatus })
             })
-            .then(res => {
+            .then(async res => {
                 if (res.ok) {
                     window.location.reload();
                 } else {
-                    console.error('Failed to update task status in DB.');
+                    const data = await res.json().catch(() => ({}));
+                    alert(data.message || 'Không thể cập nhật trạng thái công việc. Vui lòng kiểm tra quyền hạn của bạn.');
+                    window.location.reload();
                 }
             })
-            .catch(err => console.error(err));
+            .catch(err => {
+                console.error(err);
+                alert('Có lỗi xảy ra khi kết nối đến máy chủ.');
+                window.location.reload();
+            });
         },
         
         // Auto-scroll chat to bottom
@@ -543,7 +552,7 @@
             @for (int colIndex = 0; colIndex < 4; colIndex++)
             {
                 var colStatus = colIndex;
-                var colLabel = colStatus == 0 ? "To Do" : colStatus == 1 ? "In Progress" : colStatus == 2 ? "Review" : "Done";
+                var colLabel = colStatus == 0 ? "Phân việc (To Do)" : colStatus == 1 ? "Thực thi (In Progress)" : colStatus == 2 ? "Kiểm soát (Review/Assurance)" : "Hoàn thành (Done)";
                 var colBg = colStatus == 0 ? "bg-slate-50" : colStatus == 1 ? "bg-indigo-50/40" : colStatus == 2 ? "bg-purple-50/40" : "bg-green-50/40";
                 var colBorder = colStatus == 0 ? "border-slate-200" : colStatus == 1 ? "border-indigo-100" : colStatus == 2 ? "border-purple-100" : "border-green-100";
                 var colText = colStatus == 0 ? "text-slate-500" : colStatus == 1 ? "text-indigo-600" : colStatus == 2 ? "text-purple-600" : "text-green-600";
@@ -552,7 +561,21 @@
 
                 <div class="rounded-3xl p-4 @colBg border @colBorder flex flex-col gap-3"
                      @@dragover.prevent
-                     @@drop="const taskId = draggedTaskId; if (taskId) { pendingKanbanTaskId = taskId; pendingKanbanStatus = @colStatus; pendingKanbanTaskTitle = draggedTaskTitle; confirmKanbanOpen = true; draggedTaskId = null; }">
+                     @@drop="
+                          const taskId = draggedTaskId;
+                          if (taskId) {
+                              if (currentUserRole !== 'Owner' && currentUserRole !== 'Manager' && @colStatus === 3) {
+                                  alert('Chỉ Quản lý hoặc Chủ sở hữu mới có quyền duyệt (Approve) và hoàn thành công việc!');
+                                  draggedTaskId = null;
+                                  return;
+                              }
+                              pendingKanbanTaskId = taskId;
+                              pendingKanbanStatus = @colStatus;
+                              pendingKanbanTaskTitle = draggedTaskTitle;
+                              confirmKanbanOpen = true;
+                              draggedTaskId = null;
+                          }
+                      ">
                     <div class="flex items-center justify-between px-2">
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-black @colText">@colLabel</span>
@@ -571,19 +594,44 @@
                             var priorityDot = task.Priority == 1 ? "bg-blue-500" : task.Priority == 2 ? "bg-amber-500" : "bg-rose-500";
                             var isOverdue = task.Status != 3 && task.DueDate < DateTime.UtcNow;
 
+                            var glowHoverClass = colStatus == 0 ? "hover:shadow-slate-100/80 hover:border-slate-300" :
+                                                 colStatus == 1 ? "hover:shadow-indigo-200/50 hover:border-indigo-300/80" :
+                                                 colStatus == 2 ? "hover:shadow-purple-200/50 hover:border-purple-300/80" :
+                                                                  "hover:shadow-green-200/50 hover:border-green-300/80";
+
+                            var statusBadgeHtml = colStatus == 0 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-50 border border-slate-100 text-[8px] font-black text-slate-400 uppercase tracking-wide""><i data-lucide=""user"" class=""w-2.5 h-2.5""></i> Phân việc</span>" :
+                                                  colStatus == 1 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100/50 text-[8px] font-black text-indigo-500 uppercase tracking-wide animate-pulse""><i data-lucide=""play"" class=""w-2.5 h-2.5""></i> Thực thi</span>" :
+                                                  colStatus == 2 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-50 border border-purple-100 text-[8px] font-black text-purple-600 uppercase tracking-wide""><i data-lucide=""shield-alert"" class=""w-2.5 h-2.5""></i> Kiểm soát</span>" :
+                                                                   @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-50 border border-green-100 text-[8px] font-black text-green-600 uppercase tracking-wide""><i data-lucide=""check-check"" class=""w-2.5 h-2.5""></i> Đã Duyệt</span>";
+
                             <div @@click="selectedTask = JSON.parse(atob('@Model.SerializeTaskBase64(task)')); if (selectedTask) { selectedTask.dueDateFormatted = selectedTask.dueDate ? selectedTask.dueDate.substring(0, 16) : ''; selectedTask.assigneeId = selectedTask.assignee ? selectedTask.assignee.id : ''; } isEditing = false; detailOpen = true;"
                                  x-show="(searchQuery === '' || '@task.Title.ToLower()'.includes(searchQuery.toLowerCase())) && 
                                          (filterPriority === '' || '@task.Priority' === filterPriority) && 
                                          (filterAssignee === '' || '@task.AssigneeId' === filterAssignee)"
                                  draggable="true"
-                                 @@dragstart="draggedTaskId = '@task.Id'; draggedTaskTitle = '@Html.Raw(task.Title.Replace("'", "\\'").Replace("\"", "\\\""))'"
-                                 class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md cursor-pointer hover:border-slate-200 transition-all space-y-3 group">
+                                 @@dragstart="
+                                     if (currentUserRole !== 'Owner' && currentUserRole !== 'Manager' && '@task.AssigneeId' !== currentUserId) {
+                                         alert('Bạn chỉ có thể di chuyển công việc được giao cho chính bạn!');
+                                         $event.preventDefault();
+                                         return;
+                                     }
+                                     draggedTaskId = '@task.Id';
+                                     draggedTaskTitle = '@Html.Raw(task.Title.Replace("'", "\\'").Replace("\"", "\\\""))';
+                                 "
+                                 class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-3 group @glowHoverClass">
                                 
                                 <div class="flex items-start justify-between gap-2">
-                                    <span class="text-sm font-bold text-slate-700 leading-snug group-hover:text-indigo-600 transition-colors">@task.Title</span>
+                                    <div class="flex items-start gap-1.5 min-w-0">
+                                        <i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-400 cursor-grab active:cursor-grabbing mt-0.5 shrink-0"></i>
+                                        <span class="text-sm font-bold text-slate-700 leading-snug group-hover:text-indigo-600 transition-colors">@task.Title</span>
+                                    </div>
                                     <div class="h-6 w-6 rounded-full bg-slate-100 border border-slate-50 flex items-center justify-center text-[8px] font-bold text-slate-500 shrink-0 uppercase">
                                         @(task.Assignee != null ? string.Concat(task.Assignee.FullName.Split(' ').Select(n => n[0])) : "??")
                                     </div>
+                                </div>
+
+                                <div class="flex items-center gap-2">
+                                    @Html.Raw(statusBadgeHtml)
                                 </div>
 
                                 @if (!string.IsNullOrEmpty(task.Description))
@@ -949,26 +997,39 @@
                 </div>
 
                 <!-- Review Actions (Available only for tasks in status = 2) -->
-                <div x-show="selectedTask?.status === 2" class="p-4 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-3">
-                    <p class="text-xs font-black text-purple-700 flex items-center gap-1.5">
-                        <i data-lucide="eye" class="w-4 h-4"></i> Task Review Controls
-                    </p>
-                    <div class="flex gap-2">
-                        <form method="post" asp-page-handler="UpdateTaskStatus" class="inline-block">
-                            <input type="hidden" name="taskId" :value="selectedTask?.id">
-                            <input type="hidden" name="status" value="3">
-                            <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-green-700 shadow shadow-green-100 transition-all flex items-center gap-1.5">
-                                <i data-lucide="check" class="w-4 h-4"></i> Approve & Close
-                            </button>
-                        </form>
-                        <form method="post" asp-page-handler="UpdateTaskStatus" class="inline-block">
-                            <input type="hidden" name="taskId" :value="selectedTask?.id">
-                            <input type="hidden" name="status" value="1">
-                            <button type="submit" class="border border-purple-300 text-purple-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-purple-100 transition-all flex items-center gap-1.5">
-                                <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Request Rework
-                            </button>
-                        </form>
-                    </div>
+                <div x-show="selectedTask?.status === 2">
+                    <template x-if="currentUserRole === 'Owner' || currentUserRole === 'Manager'">
+                        <div class="p-4 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-3">
+                            <p class="text-xs font-black text-purple-700 flex items-center gap-1.5">
+                                <i data-lucide="eye" class="w-4 h-4"></i> Phê Duyệt Hoàn Thành (Quy trình Assurance)
+                            </p>
+                            <div class="flex gap-2">
+                                <form method="post" asp-page-handler="UpdateTaskStatus" class="inline-block">
+                                    <input type="hidden" name="taskId" :value="selectedTask?.id">
+                                    <input type="hidden" name="status" value="3">
+                                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow shadow-green-100 transition-all flex items-center gap-1.5 cursor-pointer">
+                                        <i data-lucide="check" class="w-4 h-4"></i> Duyệt & Hoàn Thành (Approve)
+                                    </button>
+                                </form>
+                                <form method="post" asp-page-handler="UpdateTaskStatus" class="inline-block">
+                                    <input type="hidden" name="taskId" :value="selectedTask?.id">
+                                    <input type="hidden" name="status" value="1">
+                                    <button type="submit" class="border border-purple-300 text-purple-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-purple-100 transition-all flex items-center gap-1.5 cursor-pointer">
+                                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Yêu Cầu Sửa Lại (Rework)
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'">
+                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-2.5">
+                            <i data-lucide="shield-alert" class="w-4.5 h-4.5 text-indigo-500 shrink-0 mt-0.5 animate-pulse"></i>
+                            <div>
+                                <p class="text-xs font-black text-slate-700">Đang Chờ Quản Lý Phê Duyệt</p>
+                                <p class="mt-0.5 text-[10px] text-slate-500 leading-normal font-semibold">Công việc đã được nộp lên cột Review và đang chờ chủ sở hữu hoặc quản lý đánh giá chất lượng (Assurance) duyệt hoàn thành.</p>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </div>
 
@@ -981,7 +1042,8 @@
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Task Title</label>
                     <input type="text" name="editTaskTitle" x-model="selectedTask.title" required
-                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                           :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
+                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
                 </div>
 
                 <div class="space-y-1">
@@ -993,7 +1055,9 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-1">
                         <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Priority</label>
-                        <select name="editTaskPriority" x-model="selectedTask.priority" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        <select name="editTaskPriority" x-model="selectedTask.priority"
+                                :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
                             <option value="1">Low</option>
                             <option value="2">Medium</option>
                             <option value="3">High</option>
@@ -1002,13 +1066,16 @@
                     <div class="space-y-1">
                         <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date & Time</label>
                         <input type="datetime-local" name="editTaskDueDate" x-model="selectedTask.dueDateFormatted"
-                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                               :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
+                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
                     </div>
                 </div>
 
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Assignee</label>
-                    <select name="editTaskAssigneeId" x-model="selectedTask.assigneeId" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    <select name="editTaskAssigneeId" x-model="selectedTask.assigneeId"
+                            :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
                         <option value="">Unassigned</option>
                         @foreach (var m in Model.Members)
                         {
@@ -1018,10 +1085,10 @@
                 </div>
 
                 <div class="flex gap-3 pt-2">
-                    <button type="submit" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow hover:bg-indigo-700 transition-all flex items-center justify-center gap-1.5">
+                    <button type="submit" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow hover:bg-indigo-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
                         <i data-lucide="save" class="w-4 h-4"></i> Save Changes
                     </button>
-                    <button type="button" @@click="isEditing = false" class="flex-1 py-3 border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5">
+                    <button type="button" @@click="isEditing = false" class="flex-1 py-3 border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
                         Cancel
                     </button>
                 </div>
