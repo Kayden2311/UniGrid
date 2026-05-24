@@ -5,7 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using unigrid.Data;
-using unigrid.Models;
+using System.Security.Claims;
+
 
 namespace unigrid.Controllers
 {
@@ -33,6 +34,49 @@ namespace unigrid.Controllers
             {
                 _logger.LogWarning("REST API: Task {TaskId} not found.", id);
                 return NotFound(new { message = "Task not found." });
+            }
+
+            // Retrieve current user and verify workspace permissions
+            var accountIdClaim = User.FindFirst("AccountId")?.Value;
+            if (string.IsNullOrEmpty(accountIdClaim))
+            {
+                return Unauthorized(new { message = "Bạn cần đăng nhập để thực hiện tác vụ này." });
+            }
+
+            var accountId = Guid.Parse(accountIdClaim);
+            var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+            if (userProfile == null)
+            {
+                return Unauthorized(new { message = "Không tìm thấy thông tin tài khoản." });
+            }
+
+            var workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.Id == task.WorkspaceId);
+            if (workspace == null)
+            {
+                return BadRequest(new { message = "Workspace không tồn tại." });
+            }
+
+            var memberRecord = await _context.WorkspaceMembers
+                .FirstOrDefaultAsync(wm => wm.WorkspaceId == task.WorkspaceId && wm.UserId == userProfile.Id);
+
+            string currentUserRole = memberRecord?.Role ?? (workspace.OwnerId == userProfile.Id ? "Owner" : "Member");
+
+            // Enforcement of Role Governance:
+            // - Owners and Managers can move any task and transition to/from any status.
+            // - Normal Members can only move tasks assigned specifically to them.
+            // - Normal Members cannot drag/move tasks directly to status = 3 (Done).
+            if (currentUserRole != "Owner" && currentUserRole != "Manager")
+            {
+                if (task.AssigneeId != userProfile.Id)
+                {
+                    _logger.LogWarning("REST API: Member {UserId} attempted to move unassigned task {TaskId}.", userProfile.Id, id);
+                    return StatusCode(403, new { message = "Bạn chỉ có thể di chuyển công việc được giao cho chính bạn!" });
+                }
+                if (request.Status == 3)
+                {
+                    _logger.LogWarning("REST API: Member {UserId} attempted to complete task {TaskId} without management approval.", userProfile.Id, id);
+                    return StatusCode(403, new { message = "Chỉ Quản lý hoặc Chủ sở hữu mới có quyền duyệt (Approve) và hoàn thành công việc!" });
+                }
             }
 
             task.Status = request.Status;

@@ -29,6 +29,7 @@ public class WorkspaceDetailModel : PageModel
 
     public User CurrentUser { get; set; } = null!;
     public string UserInitials { get; set; } = string.Empty;
+    public string CurrentUserRole { get; set; } = "Member";
 
     // Direct binding for task creation
     [BindProperty]
@@ -121,6 +122,9 @@ public class WorkspaceDetailModel : PageModel
             .Where(wm => wm.WorkspaceId == workspaceId)
             .ToListAsync();
 
+        var memberRecord = Members.FirstOrDefault(m => m.UserId == CurrentUser.Id);
+        CurrentUserRole = memberRecord?.Role ?? (Workspace.OwnerId == CurrentUser.Id ? "Owner" : "Member");
+
         // Load Tasks
         WorkspaceTasks = await _context.Tasks
             .Include(t => t.Assignee)
@@ -185,6 +189,19 @@ public class WorkspaceDetailModel : PageModel
         var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId && t.WorkspaceId == Workspace.Id);
         if (task != null)
         {
+            // Backend Permission Check
+            if (CurrentUserRole != "Owner" && CurrentUserRole != "Manager")
+            {
+                if (task.AssigneeId != CurrentUser.Id)
+                {
+                    return Forbid(); // Members can only move their own assigned tasks
+                }
+                if (status == 3)
+                {
+                    return Forbid(); // Normal members cannot move tasks directly to Done
+                }
+            }
+
             task.Status = status;
             await _context.SaveChangesAsync();
             _logger.LogInformation("Task status updated. TaskId: {TaskId}, NewStatus: {Status}", taskId, status);
@@ -200,11 +217,17 @@ public class WorkspaceDetailModel : PageModel
         var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == editTaskId && t.WorkspaceId == Workspace.Id);
         if (task != null)
         {
-            task.Title = editTaskTitle;
+            // Backend Permission Check
+            // Members can only edit description, while Managers/Owners can edit everything
+            if (CurrentUserRole == "Owner" || CurrentUserRole == "Manager")
+            {
+                task.Title = editTaskTitle;
+                task.Priority = editTaskPriority;
+                task.AssigneeId = editTaskAssigneeId;
+                task.DueDate = editTaskDueDate;
+            }
+            
             task.Description = editTaskDescription;
-            task.Priority = editTaskPriority;
-            task.AssigneeId = editTaskAssigneeId;
-            task.DueDate = editTaskDueDate;
 
             await _context.SaveChangesAsync();
             _logger.LogInformation("Task edited. TaskId: {TaskId}", editTaskId);
