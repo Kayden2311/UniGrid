@@ -177,10 +177,8 @@ namespace unigrid.Data
                 );
                 await context.SaveChangesAsync();
 
-                // Calculate Monday of the current week dynamically
-                var today = DateTime.UtcNow.Date;
-                int diff = (7 + (int)today.DayOfWeek - (int)DayOfWeek.Monday) % 7;
-                var currentMonday = today.AddDays(-diff);
+                // Set the base date starting from today dynamically
+                var currentMonday = DateTime.UtcNow.Date;
 
                 // 11. Seed Tasks (Synchronized with React Schedule.tsx deadlines)
                 var t1 = new unigrid.Models.Task { Id = Guid.NewGuid(), WorkspaceId = workspaceSE.Id, AssigneeId = userAlice.Id, Title = "AI Report", Description = "Generate summary and evaluation of modern transformer models.", Status = 1, Priority = 3, DueDate = currentMonday.AddDays(2).AddHours(23).AddMinutes(59) };
