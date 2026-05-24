@@ -82,8 +82,15 @@
                     <i data-lucide="x" class="w-4 h-4 text-slate-300 shrink-0"></i> No File Storage
                 </li>
             </ul>
-            @if(Model.CurrentPlan == "Free") {
-                <button disabled class="w-full py-4 bg-slate-100 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+            @if (User.Identity?.IsAuthenticated == true) {
+                @if (Model.CurrentPlan == "Free") {
+                    <button disabled class="w-full py-4 bg-slate-100 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+                } else if (Model.GetPlanRank(Model.CurrentPlan) > 0) {
+                    <!-- Hidden for downgraded plan -->
+                } else {
+                    <button @@click="triggerUpgrade('Free', 'Free', 'Free', ['1 Workspace', '5 Members', 'Basic Analytics', 'Task Assignment', '1 Chat Channel'])" 
+                            class="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50 transition-all">Get Started</button>
+                }
             } else {
                 <button @@click="triggerUpgrade('Free', 'Free', 'Free', ['1 Workspace', '5 Members', 'Basic Analytics', 'Task Assignment', '1 Chat Channel'])" 
                         class="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50 transition-all">Get Started</button>
@@ -124,8 +131,15 @@
                     <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Basic Analytics
                 </li>
             </ul>
-            @if(Model.CurrentPlan == "Pro") {
-                <button disabled class="w-full py-4 bg-indigo-50 text-indigo-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+            @if (User.Identity?.IsAuthenticated == true) {
+                @if (Model.CurrentPlan == "Pro") {
+                    <button disabled class="w-full py-4 bg-indigo-50 text-indigo-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+                } else if (Model.GetPlanRank(Model.CurrentPlan) > 1) {
+                    <!-- Hidden for downgraded plan -->
+                } else {
+                    <button @@click="triggerUpgrade('Pro', '299K', '2.9M', ['1 Workspace', '10 Members', '20 GB Storage', '3 Chat Channels', '2 Task Branches', 'Basic Analytics'])" 
+                            class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">Upgrade Now</button>
+                }
             } else {
                 <button @@click="triggerUpgrade('Pro', '299K', '2.9M', ['1 Workspace', '10 Members', '20 GB Storage', '3 Chat Channels', '2 Task Branches', 'Basic Analytics'])" 
                         class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">Upgrade Now</button>
@@ -170,8 +184,15 @@
                     <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Role Permissions
                 </li>
             </ul>
-            @if(Model.CurrentPlan == "ProPlus") {
-                <button disabled class="w-full py-4 bg-violet-50 text-violet-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+            @if (User.Identity?.IsAuthenticated == true) {
+                @if (Model.CurrentPlan == "ProPlus") {
+                    <button disabled class="w-full py-4 bg-violet-50 text-violet-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+                } else if (Model.GetPlanRank(Model.CurrentPlan) > 2) {
+                    <!-- Hidden for downgraded plan -->
+                } else {
+                    <button @@click="triggerUpgrade('ProPlus', '449K', '4.4M', ['1 Workspace', '15 Members', '40 GB Storage', '5 Chat Channels', '4 Task Branches', 'Advanced Analytics', 'Role Permissions'])" 
+                            class="w-full py-4 bg-violet-600 text-white rounded-2xl font-bold shadow-lg shadow-violet-100 hover:bg-violet-700 transition-all">Upgrade Now</button>
+                }
             } else {
                 <button @@click="triggerUpgrade('ProPlus', '449K', '4.4M', ['1 Workspace', '15 Members', '40 GB Storage', '5 Chat Channels', '4 Task Branches', 'Advanced Analytics', 'Role Permissions'])" 
                         class="w-full py-4 bg-violet-600 text-white rounded-2xl font-bold shadow-lg shadow-violet-100 hover:bg-violet-700 transition-all">Upgrade Now</button>
@@ -215,8 +236,13 @@
                     <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Role Permissions
                 </li>
             </ul>
-            @if(Model.CurrentPlan == "Business") {
-                <button disabled class="w-full py-4 bg-slate-800/10 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+            @if (User.Identity?.IsAuthenticated == true) {
+                @if (Model.CurrentPlan == "Business") {
+                    <button disabled class="w-full py-4 bg-slate-800/10 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+                } else {
+                    <button @@click="triggerUpgrade('Business', '899K', '8.9M', ['1 Workspace', '30 Members', '80 GB Storage', 'Unlimited Chat', 'Unlimited Task Branches', 'Advanced Analytics', 'Role Permissions', 'Priority Support'])" 
+                            class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-900 transition-all">Contact Us</button>
+                }
             } else {
                 <button @@click="triggerUpgrade('Business', '899K', '8.9M', ['1 Workspace', '30 Members', '80 GB Storage', 'Unlimited Chat', 'Unlimited Task Branches', 'Advanced Analytics', 'Role Permissions', 'Priority Support'])" 
                         class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-900 transition-all">Contact Us</button>
@@ -381,15 +407,30 @@
         <div class="absolute -top-24 -left-24 w-96 h-96 bg-indigo-400 rounded-full blur-[100px] opacity-30"></div>
         
         <div class="relative z-10 max-w-2xl mx-auto space-y-6">
-            <h2 class="font-display text-3xl font-extrabold sm:text-4xl">Ready to supercharge your team?</h2>
-            <p class="text-indigo-100 text-lg leading-relaxed">Upgrade now to unlock advanced planning features, extra chat channels, and unlimited task branches.</p>
-            <div class="pt-2">
-                <button @@click="triggerUpgrade('ProPlus', '449K', '4.4M', ['1 Workspace', '15 Members', '40 GB Storage', '5 Chat Channels', '4 Task Branches', 'Advanced Analytics', 'Role Permissions'])" 
-                        class="inline-flex items-center gap-2 px-8 py-4 bg-white text-indigo-600 hover:bg-indigo-50 rounded-2xl font-bold shadow-xl transition-all hover:scale-105">
-                    <span>Upgrade to Pro+</span>
-                    <i data-lucide="arrow-right" class="w-5 h-5"></i>
-                </button>
-            </div>
+            @if (User.Identity?.IsAuthenticated == true && Model.GetPlanRank(Model.CurrentPlan) == 2) {
+                <h2 class="font-display text-3xl font-extrabold sm:text-4xl">Ready to upgrade to Business?</h2>
+                <p class="text-indigo-100 text-lg leading-relaxed">Upgrade to Business now to unlock ultimate features, unlimited chat channels, and unlimited task branches.</p>
+                <div class="pt-2">
+                    <button @@click="triggerUpgrade('Business', '899K', '8.9M', ['1 Workspace', '30 Members', '80 GB Storage', 'Unlimited Chat', 'Unlimited Task Branches', 'Advanced Analytics', 'Role Permissions', 'Priority Support'])" 
+                            class="inline-flex items-center gap-2 px-8 py-4 bg-white text-indigo-600 hover:bg-indigo-50 rounded-2xl font-bold shadow-xl transition-all hover:scale-105">
+                        <span>Upgrade to Business</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            } else if (User.Identity?.IsAuthenticated == true && Model.GetPlanRank(Model.CurrentPlan) == 3) {
+                <h2 class="font-display text-3xl font-extrabold sm:text-4xl">You're on our highest tier!</h2>
+                <p class="text-indigo-100 text-lg leading-relaxed">Thank you for supporting UniGrid! You're already utilizing our maximum potential Business tier.</p>
+            } else {
+                <h2 class="font-display text-3xl font-extrabold sm:text-4xl">Ready to supercharge your team?</h2>
+                <p class="text-indigo-100 text-lg leading-relaxed">Upgrade now to unlock advanced planning features, extra chat channels, and unlimited task branches.</p>
+                <div class="pt-2">
+                    <button @@click="triggerUpgrade('ProPlus', '449K', '4.4M', ['1 Workspace', '15 Members', '40 GB Storage', '5 Chat Channels', '4 Task Branches', 'Advanced Analytics', 'Role Permissions'])" 
+                            class="inline-flex items-center gap-2 px-8 py-4 bg-white text-indigo-600 hover:bg-indigo-50 rounded-2xl font-bold shadow-xl transition-all hover:scale-105">
+                        <span>Upgrade to Pro+</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            }
         </div>
     </div>
 
@@ -409,5 +450,6 @@
 
 <form method="post" asp-page-handler="Upgrade" id="upgradeForm" style="display:none;">
     <input type="hidden" name="tier" id="upgradeTier" />
+    <input type="hidden" name="joinCode" value="@Model.ActiveWorkspaceJoinCode" />
     @Html.AntiForgeryToken()
 </form>

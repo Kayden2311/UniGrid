@@ -15,7 +15,24 @@ public class PricingModel : PageModel
         _context = context;
     }
 
+    [BindProperty(SupportsGet = true)]
+    public string? JoinCode { get; set; }
+
+    public string? ActiveWorkspaceJoinCode { get; set; }
+    public bool IsWorkspaceUpgrade { get; set; }
+
     public string CurrentPlan { get; set; } = "None";
+
+    public int GetPlanRank(string? plan)
+    {
+        return plan switch
+        {
+            "Pro" => 1,
+            "ProPlus" => 2,
+            "Business" => 3,
+            _ => 0
+        };
+    }
 
     public async System.Threading.Tasks.Task OnGetAsync()
     {
@@ -35,6 +52,18 @@ public class PricingModel : PageModel
                     .Where(w => w.OwnerId == userProfile.Id || w.WorkspaceMembers.Any(m => m.UserId == userProfile.Id))
                     .ToListAsync();
                 ViewData["Workspaces"] = userWorkspaces;
+
+                // If workspace context is provided, align pricing page with workspace's active package tier
+                if (!string.IsNullOrEmpty(JoinCode))
+                {
+                    var workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == JoinCode);
+                    if (workspace != null)
+                    {
+                        CurrentPlan = workspace.PackageTier ?? "Free";
+                        ActiveWorkspaceJoinCode = JoinCode;
+                        IsWorkspaceUpgrade = true;
+                    }
+                }
             }
         }
     }
@@ -48,6 +77,19 @@ public class PricingModel : PageModel
         var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
         if (userProfile != null)
         {
+            // If upgrading an active workspace, update workspace's package tier directly
+            if (!string.IsNullOrEmpty(JoinCode))
+            {
+                var workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == JoinCode);
+                if (workspace != null)
+                {
+                    workspace.PackageTier = tier;
+                    await _context.SaveChangesAsync();
+                    return RedirectToPage("/WorkspaceDetail", new { joinCode = JoinCode });
+                }
+            }
+
+            // Fallback to personal subscription upgrade
             userProfile.SubscriptionTier = tier;
             userProfile.SubscriptionExpires = DateTime.UtcNow.AddYears(1);
             await _context.SaveChangesAsync();
