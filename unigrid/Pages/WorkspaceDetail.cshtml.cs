@@ -259,25 +259,36 @@ public class WorkspaceDetailModel : PageModel
         return RedirectToPage(new { joinCode });
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostSendChatMessageAsync(string joinCode)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostSendChatMessageAsync(string joinCode, string activeChannel, Guid? selectedFileId)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
 
         if (!string.IsNullOrEmpty(ChatContent) && ChatRoom != null)
         {
+            string contentWithChannel = ChatContent;
+            if (!string.IsNullOrEmpty(activeChannel) && activeChannel != "general")
+            {
+                contentWithChannel = $"[channel:{activeChannel}]{ChatContent}";
+            }
+
+            if (selectedFileId.HasValue)
+            {
+                contentWithChannel = $"[file:{selectedFileId.Value}]{contentWithChannel}";
+            }
+
             var message = new ChatMessage
             {
                 Id = Guid.NewGuid(),
                 RoomId = ChatRoom.Id,
                 SenderId = CurrentUser.Id,
-                Content = ChatContent,
+                Content = contentWithChannel,
                 SentAt = DateTime.UtcNow,
                 IsDeleted = false
             };
 
             await _context.ChatMessages.AddAsync(message);
             await _context.SaveChangesAsync();
-            _logger.LogInformation("Chat message sent in room {RoomId} by {UserId}", ChatRoom.Id, CurrentUser.Id);
+            _logger.LogInformation("Chat message sent in room {RoomId} in channel {Channel} by {UserId}", ChatRoom.Id, activeChannel, CurrentUser.Id);
         }
 
         return RedirectToPage(new { joinCode });
@@ -391,6 +402,55 @@ public class WorkspaceDetailModel : PageModel
     public string SerializeFileBase64(WorkspaceFile file)
     {
         var json = SerializeFile(file);
+        return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
+    }
+
+    public string SerializeChatMessages()
+    {
+        var cleanMessages = ChatMessages.Select(cm => {
+            string channel = "general";
+            string cleanContent = cm.Content;
+            
+            if (cm.Content.StartsWith("[channel:"))
+            {
+                var endIndex = cm.Content.IndexOf("]");
+                if (endIndex > 9)
+                {
+                    channel = cm.Content.Substring(9, endIndex - 9);
+                    cleanContent = cm.Content.Substring(endIndex + 1);
+                }
+            }
+            
+            // Check for potential nested file prefix in remainder content
+            if (cleanContent.StartsWith("[file:"))
+            {
+                var fileEndIndex = cleanContent.IndexOf("]");
+                if (fileEndIndex > 6)
+                {
+                    cleanContent = cleanContent.Substring(fileEndIndex + 1);
+                }
+            }
+
+            return new {
+                id = cm.Id,
+                roomId = cm.RoomId,
+                senderId = cm.SenderId,
+                senderName = cm.Sender.FullName,
+                content = cleanContent,
+                rawContent = cm.Content,
+                sentAt = cm.SentAt,
+                channel = channel
+            };
+        }).ToList();
+
+        return System.Text.Json.JsonSerializer.Serialize(cleanMessages, new System.Text.Json.JsonSerializerOptions {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        });
+    }
+
+    public string SerializeChatMessagesBase64()
+    {
+        var json = SerializeChatMessages();
         return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
     }
 }

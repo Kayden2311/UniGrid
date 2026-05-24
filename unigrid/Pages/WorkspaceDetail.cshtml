@@ -35,79 +35,18 @@
 }
 
 <div class="space-y-6" 
-     x-data="{ 
-        activeTab: localStorage.getItem('unigrid_workspace_tab_' + '@Model.Workspace.JoinCode') || 'dashboard',
-        searchQuery: '',
-        filterPriority: '',
-        filterAssignee: '',
-        detailOpen: false,
-        isEditing: false,
-        createOpen: false,
-        inviteOpen: false,
-        previewFile: null,
-        renameOpen: false,
-        renameFileId: null,
-        renameFileName: '',
-        selectedTask: null,
-        createTaskStatus: 0,
-        activeFileSection: 'files',
-        viewMode: 'grid',
-        newCommentContent: '',
-        newChatContent: '',
-        draggedTaskId: null,
-        draggedTaskTitle: '',
-        confirmKanbanOpen: false,
-        pendingKanbanTaskId: null,
-        pendingKanbanStatus: null,
-        currentUserRole: '@Model.CurrentUserRole',
-        currentUserId: '@Model.CurrentUser.Id',
-        workspaceOwnerId: '@Model.Workspace.OwnerId',
-        pendingKanbanTaskTitle: '',
-
-        statusLabel(status) {
-            if (status === 0) return 'Phân việc (To Do)';
-            if (status === 1) return 'Thực thi (In Progress)';
-            if (status === 2) return 'Kiểm soát (Review/Assurance)';
-            if (status === 3) return 'Hoàn thành (Done)';
-            return 'Unknown';
-        },
-        
-        updateTaskStatus(taskId, newStatus) {
-            fetch(`/api/tasks/${taskId}/status`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: newStatus })
-            })
-            .then(async res => {
-                if (res.ok) {
-                    window.location.reload();
-                } else {
-                    const data = await res.json().catch(() => ({}));
-                    alert(data.message || 'Không thể cập nhật trạng thái công việc. Vui lòng kiểm tra quyền hạn của bạn.');
-                    window.location.reload();
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                alert('Có lỗi xảy ra khi kết nối đến máy chủ.');
-                window.location.reload();
-            });
-        },
-        
-        // Auto-scroll chat to bottom
-        scrollChatToBottom() {
-            this.$nextTick(() => {
-                const el = document.getElementById('chat-messages-container');
-                if (el) el.scrollTop = el.scrollHeight;
-            });
+     x-data="workspaceDetail"
+     @@open-task-detail.window="
+        const matchedTask = workspaceTasks.find(t => t.id === $event.detail);
+        if (matchedTask) {
+            const selector = `[draggable='true'][@@dragstart*='${$event.detail}']`;
+            const card = document.querySelector(selector);
+            if (card) {
+                card.click();
+            } else {
+                alert('Mở chi tiết công việc: ' + matchedTask.title);
+            }
         }
-     }"
-     x-init="
-        scrollChatToBottom();
-        $watch('activeTab', value => {
-            localStorage.setItem('unigrid_workspace_tab_' + '@Model.Workspace.JoinCode', value);
-            if (value === 'chat') scrollChatToBottom();
-        });
      ">
 
     <!-- ─── Workspace Header ─── -->
@@ -657,18 +596,36 @@
     </div>
 
     <!-- ════════════════════════════════════════ -->
-    <!-- ─── TAB 3: CHAT ROOM ─── -->
+    <!-- ─── TAB 3: CHAT ROOM (DISCORD STYLE) ─── -->
     <!-- ════════════════════════════════════════ -->
     <div x-show="activeTab === 'chat'" class="h-[calc(100vh-22rem)] min-h-[500px] border border-slate-200 rounded-[2.5rem] bg-white flex overflow-hidden shadow-sm" x-transition>
-        <!-- Left panel - Channels -->
-        <div class="w-64 border-r border-slate-100 flex flex-col bg-slate-50/50 shrink-0">
-            <div class="p-4 border-b border-slate-100">
-                <h3 class="text-sm font-black text-slate-700">Workspace Chats</h3>
-            </div>
-            <div class="flex-1 p-2 space-y-1">
-                <button class="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 border border-indigo-100/50 text-indigo-600 text-left text-xs font-bold transition-all">
-                    <i data-lucide="hash" class="w-4 h-4"></i> general
+        <!-- Left panel - Channels (Discord Style) -->
+        <div class="w-64 border-r border-slate-100 flex flex-col bg-slate-50/50 shrink-0 select-none">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-sm font-black text-slate-700 flex items-center gap-1.5 uppercase tracking-wide">
+                    <i data-lucide="message-square" class="w-4 h-4 text-indigo-500"></i>
+                    <span>Workspace Chats</span>
+                </h3>
+                <button type="button" @@click="createChannelOpen = true" class="h-6 w-6 rounded-lg hover:bg-slate-200/60 flex items-center justify-center text-slate-500 transition-colors" title="Tạo kênh mới">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
                 </button>
+            </div>
+            <div class="flex-1 p-2 space-y-1 overflow-y-auto">
+                <template x-for="chan in channels" :key="chan">
+                    <button type="button"
+                            @@click="activeChannel = chan"
+                            :class="activeChannel === chan ? 'bg-indigo-50 border-indigo-100/50 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'"
+                            class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-left text-xs font-bold transition-all group">
+                        <span class="flex items-center gap-2 truncate">
+                            <i data-lucide="hash" class="w-4 h-4 text-slate-400 shrink-0"></i>
+                            <span class="truncate" x-text="chan"></span>
+                        </span>
+                        <!-- Lock badge if private or general -->
+                        <template x-if="chan === 'general'">
+                            <i data-lucide="lock" class="w-3.5 h-3.5 text-slate-400 shrink-0 opacity-60"></i>
+                        </template>
+                    </button>
+                </template>
             </div>
         </div>
 
@@ -676,52 +633,163 @@
         <div class="flex-1 flex flex-col min-w-0 bg-white">
             <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                    <i data-lucide="hash" class="w-4 h-4 text-slate-400"></i>
-                    <span class="text-sm font-black text-slate-700">general</span>
+                    <i data-lucide="hash" class="w-4.5 h-4.5 text-slate-400"></i>
+                    <span class="text-sm font-black text-slate-800" x-text="activeChannel"></span>
+                    <span class="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-md uppercase tracking-wider">Discord Channel</span>
                 </div>
-                <span class="text-xs font-bold text-slate-400">@Model.Members.Count members active</span>
+                <span class="text-xs font-bold text-slate-400"><span x-text="workspaceMembers.length"></span> members active</span>
             </div>
 
             <!-- Messages Stream -->
             <div id="chat-messages-container" class="flex-1 p-6 overflow-y-auto space-y-4">
-                @if (!Model.ChatMessages.Any())
-                {
-                    <div class="text-center py-20 text-slate-400">
-                        <i data-lucide="message-square" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
-                        <p class="font-bold">No messages in general yet.</p>
-                        <p class="text-xs text-slate-400 mt-1">Start the conversation below!</p>
-                    </div>
-                }
-                @foreach (var msg in Model.ChatMessages)
-                {
-                    var isMe = msg.SenderId == Model.CurrentUser.Id;
-                    var initials = string.Concat(msg.Sender.FullName.Split(' ').Select(n => n[0]));
-                    
-                    <div class="flex gap-3 max-w-[80%] @(isMe ? "ml-auto flex-row-reverse" : "")">
-                        <div class="h-8 w-8 rounded-full bg-slate-100 border flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0">
-                            @initials
+                <!-- Empty state -->
+                <div x-show="filteredMessages.length === 0" class="text-center py-20 text-slate-400 transition-all">
+                    <i data-lucide="messages-square" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+                    <p class="font-bold" x-text="'Không có tin nhắn nào trong kênh #' + activeChannel + '...'"></p>
+                    <p class="text-xs text-slate-400 mt-1">Hãy bắt đầu câu chuyện đầu tiên trong kênh này!</p>
+                </div>
+
+                <template x-for="msg in filteredMessages" :key="msg.id">
+                    <div class="flex gap-3 max-w-[80%] transition-all" :class="msg.senderId === currentUserId ? 'ml-auto flex-row-reverse' : ''">
+                        <div class="h-8 w-8 rounded-full bg-slate-100 border flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0 select-none" 
+                             x-text="msg.senderName.split(' ').map(n => n[0]).join('')">
                         </div>
-                        <div class="space-y-1">
-                            @if (!isMe)
-                            {
-                                <p class="text-[10px] font-bold text-slate-400">@msg.Sender.FullName</p>
-                            }
-                            <div class="p-3.5 rounded-2xl text-sm leading-relaxed @(isMe ? "bg-indigo-600 text-white rounded-tr-none" : "bg-slate-100 text-slate-700 rounded-tl-none")">
-                                @msg.Content
+                        <div class="space-y-1 min-w-0">
+                            <template x-if="msg.senderId !== currentUserId">
+                                <p class="text-[10px] font-bold text-slate-400" x-text="msg.senderName"></p>
+                            </template>
+                            <div class="p-3.5 rounded-2xl text-sm leading-relaxed" 
+                                 :class="msg.senderId === currentUserId ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'">
+                                <div class="break-words" x-html="parseMessageContent(msg.content)"></div>
+                                
+                                <!-- Render Attachment Box if message has an attachment -->
+                                <template x-if="msg.attachment">
+                                    <div class="mt-2.5 p-3 border rounded-xl flex items-center justify-between gap-4 max-w-sm"
+                                         :class="msg.senderId === currentUserId ? 'bg-white/15 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-700'">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="h-9 w-9 rounded-lg flex items-center justify-center shrink-0"
+                                                 :class="msg.senderId === currentUserId ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-600'">
+                                                <i data-lucide="file-text" class="w-5 h-5"></i>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <p class="text-xs font-bold truncate" :class="msg.senderId === currentUserId ? 'text-white' : 'text-slate-800'" x-text="msg.attachment.fileName"></p>
+                                                <p class="text-[9px] font-bold uppercase" :class="msg.senderId === currentUserId ? 'text-white/70' : 'text-slate-400'" x-text="Math.round(msg.attachment.fileSize / 1024) + ' KB'"></p>
+                                            </div>
+                                        </div>
+                                        <a :href="'/' + msg.attachment.fileUrl" class="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors" 
+                                           :class="msg.senderId === currentUserId ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'" download>
+                                            <i data-lucide="download" class="w-4.5 h-4.5"></i>
+                                        </a>
+                                    </div>
+                                </template>
                             </div>
-                            <p class="text-[9px] text-slate-400 font-bold @(isMe ? "text-right" : "")">
-                                @msg.SentAt?.ToString("hh:mm tt")
-                            </p>
+                            <p class="text-[9px] text-slate-400 font-bold" :class="msg.senderId === currentUserId ? 'text-right' : ''" 
+                               x-text="formatTime(msg.sentAt)"></p>
                         </div>
                     </div>
-                }
+                </template>
+            </div>
+
+            <!-- Autocomplete Popover Box -->
+            <div x-show="showSuggestions" 
+                 class="mx-4 p-2 bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col gap-1.5 max-h-48 overflow-y-auto transition-all"
+                 x-transition>
+                <div class="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                    Gợi ý nhắc tên (Type <span x-text="showSuggestions?.type"></span>)
+                </div>
+                <div class="space-y-0.5">
+                    <!-- Member Suggestions -->
+                    <template x-if="showSuggestions?.type === '@@' || showSuggestions?.type === '@@'">
+                        <div>
+                            <template x-for="member in filteredMembers" :key="member.id">
+                                <button type="button" 
+                                        @@click="insertSuggestion('@@' + member.fullName)"
+                                        class="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl flex items-center gap-2 transition-all">
+                                    <i data-lucide="user" class="w-3.5 h-3.5 opacity-60"></i>
+                                    <span x-text="member.fullName"></span>
+                                </button>
+                            </template>
+                            <template x-if="filteredMembers.length === 0">
+                                <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">Không tìm thấy thành viên khớp.</div>
+                            </template>
+                        </div>
+                    </template>
+                    
+                    <!-- Task Suggestions -->
+                    <template x-if="showSuggestions?.type === '#'">
+                        <div>
+                            <template x-for="task in filteredTasks" :key="task.id">
+                                <button type="button" 
+                                        @@click="insertSuggestion('#' + task.title)"
+                                        class="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-600 rounded-xl flex items-center gap-2 transition-all">
+                                    <i data-lucide="hash" class="w-3.5 h-3.5 opacity-60"></i>
+                                    <span x-text="task.title"></span>
+                                </button>
+                            </template>
+                            <template x-if="filteredTasks.length === 0">
+                                <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">Không tìm thấy công việc khớp.</div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- File Attachments Selection Popover Panel -->
+            <div x-show="attachFileOpen" 
+                 class="mx-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-xl space-y-3 transition-all"
+                 x-transition>
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span class="text-xs font-black text-slate-800 uppercase tracking-widest">Đính kèm tài liệu Workspace</span>
+                    <button type="button" @@click="attachFileOpen = false" class="text-xs text-slate-400 hover:text-slate-600 font-black">Đóng</button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                    <template x-for="file in workspaceFiles" :key="file.id">
+                        <button type="button" 
+                                @@click="selectedAttachmentId = file.id; selectedAttachmentName = file.fileName; attachFileOpen = false;"
+                                :class="selectedAttachmentId === file.id ? 'border-indigo-600 bg-indigo-50/50 text-indigo-700' : 'border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-700'"
+                                class="p-2.5 border rounded-xl flex items-center gap-2 text-left text-xs font-bold transition-all">
+                            <i data-lucide="file" class="w-4 h-4 shrink-0"></i>
+                            <span class="truncate" x-text="file.fileName"></span>
+                        </button>
+                    </template>
+                    <template x-if="workspaceFiles.length === 0">
+                        <div class="col-span-2 text-center py-4 text-xs font-bold text-slate-400 italic">Không có tài liệu nào trong workspace. Hãy upload tài liệu trước!</div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Selected Attachment Status Indicator Box -->
+            <div x-show="selectedAttachmentId" 
+                 class="mx-4 p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-xs font-bold text-indigo-700 transition-all"
+                 x-transition>
+                <span class="flex items-center gap-1.5 truncate">
+                    <i data-lucide="file-check" class="w-4 h-4 text-indigo-600"></i>
+                    <span>Tệp đính kèm: </span>
+                    <strong class="truncate" x-text="selectedAttachmentName"></strong>
+                </span>
+                <button type="button" @@click="selectedAttachmentId = null; selectedAttachmentName = '';" class="text-indigo-400 hover:text-indigo-600 transition-colors">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
             </div>
 
             <!-- Message Input Area -->
             <div class="p-4 border-t border-slate-100">
                 <form method="post" asp-page-handler="SendChatMessage" class="flex gap-2">
-                    <input type="text" asp-for="ChatContent" placeholder="Type a message to general..." required
+                    <input type="hidden" name="activeChannel" :value="activeChannel">
+                    <input type="hidden" name="selectedFileId" :value="selectedAttachmentId">
+                    
+                    <!-- Paperclip Button -->
+                    <button type="button" 
+                            @@click="attachFileOpen = !attachFileOpen" 
+                            :class="attachFileOpen || selectedAttachmentId ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400 hover:text-slate-600 border border-slate-200'"
+                            class="p-3 rounded-xl flex items-center justify-center transition-all shrink-0">
+                        <i data-lucide="paperclip" class="w-4.5 h-4.5"></i>
+                    </button>
+                    
+                    <input type="text" id="chat-input-field" asp-for="ChatContent" x-model="chatInput" autocomplete="off"
+                           :placeholder="'Nhắn tin vào #' + activeChannel + '...'" required
                            class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    
                     <button type="submit" class="bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
                         <i data-lucide="send" class="w-4 h-4"></i>
                     </button>
@@ -1285,5 +1353,257 @@
         </div>
     </div>
 
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── CREATE VIRTUAL CHANNEL MODAL DIALOG ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="createChannelOpen" 
+         class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
+         style="display: none;"
+         x-transition>
+        
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-sm p-8 relative flex flex-col gap-6"
+             @@click.away="createChannelOpen = false">
+            
+            <button @@click="createChannelOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <div class="flex items-center gap-3">
+                <div class="h-10 w-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                    <i data-lucide="message-square" class="w-5 h-5"></i>
+                </div>
+                <h3 class="text-lg font-black text-slate-800">Tạo Kênh Chat Mới</h3>
+            </div>
+
+            <div class="space-y-4">
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Tên Kênh Mới</label>
+                    <input type="text" x-model="newChannelName" placeholder="Ví dụ: database-design, tasks"
+                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                </div>
+                <p class="text-[10px] font-bold text-slate-400 leading-normal">Kênh mới sẽ được khởi tạo trong bộ nhớ của Workspace. Khi bạn gửi tin nhắn đầu tiên, kênh sẽ được lưu trữ vĩnh viễn.</p>
+            </div>
+
+            <div class="flex gap-3">
+                <button type="button" 
+                        @@click="
+                            const clean = newChannelName.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+                            if (clean) {
+                                if (!channels.includes(clean)) {
+                                    channels.push(clean);
+                                }
+                                activeChannel = clean;
+                                createChannelOpen = false;
+                                newChannelName = '';
+                                scrollChatToBottom();
+                            }
+                        "
+                        class="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-md shadow-indigo-100 transition-all flex items-center justify-center gap-1.5">
+                    Tạo Kênh Mới
+                </button>
+                <button type="button" 
+                        @@click="createChannelOpen = false" 
+                        class="flex-1 py-3.5 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-2xl font-bold transition-all">
+                    Hủy Bỏ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function initAlpineWorkspaceDetail() {
+            Alpine.data('workspaceDetail', () => ({
+                activeTab: localStorage.getItem('unigrid_workspace_tab_' + '@Model.Workspace.JoinCode') || 'dashboard',
+                searchQuery: '',
+                filterPriority: '',
+                filterAssignee: '',
+                detailOpen: false,
+                isEditing: false,
+                createOpen: false,
+                inviteOpen: false,
+                previewFile: null,
+                renameOpen: false,
+                renameFileId: null,
+                renameFileName: '',
+                selectedTask: null,
+                createTaskStatus: 0,
+                activeFileSection: 'files',
+                viewMode: 'grid',
+                newCommentContent: '',
+                newChatContent: '',
+                draggedTaskId: null,
+                draggedTaskTitle: '',
+                confirmKanbanOpen: false,
+                pendingKanbanTaskId: null,
+                pendingKanbanStatus: null,
+                currentUserRole: '@Model.CurrentUserRole',
+                currentUserId: '@Model.CurrentUser.Id',
+                workspaceOwnerId: '@Model.Workspace.OwnerId',
+                pendingKanbanTaskTitle: '',
+
+                // Rich Discord-like chat state
+                activeChannel: localStorage.getItem('unigrid_active_channel_' + '@Model.Workspace.JoinCode') || 'general',
+                chatInput: '',
+                channels: [],
+                newChannelName: '',
+                createChannelOpen: false,
+                attachFileOpen: false,
+                selectedAttachmentId: null,
+                selectedAttachmentName: '',
+
+                // Bootstrap data sets serialized from C# models
+                chatMessages: JSON.parse(atob('@Model.SerializeChatMessagesBase64()')),
+                workspaceMembers: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Members.Select(m => new { id = m.UserId.ToString(), fullName = m.User.FullName }).ToList())),
+                workspaceTasks: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceTasks.Select(t => new { id = t.Id.ToString(), title = t.Title, status = t.Status }).ToList())),
+                workspaceFiles: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Files.Select(f => new { id = f.Id.ToString(), fileName = f.FileName, fileUrl = f.FileUrl, fileSize = f.FileSize, fileType = f.FileType }).ToList())),
+
+                statusLabel(status) {
+                    if (status === 0) return 'Phân việc (To Do)';
+                    if (status === 1) return 'Thực thi (In Progress)';
+                    if (status === 2) return 'Kiểm soát (Review/Assurance)';
+                    if (status === 3) return 'Hoàn thành (Done)';
+                    return 'Unknown';
+                },
+
+                updateTaskStatus(taskId, newStatus) {
+                    fetch(`/api/tasks/${taskId}/status`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: newStatus })
+                    })
+                    .then(async res => {
+                        if (res.ok) {
+                            window.location.reload();
+                        } else {
+                            const data = await res.json().catch(() => ({}));
+                            alert(data.message || 'Không thể cập nhật trạng thái công việc. Vui lòng kiểm tra quyền hạn của bạn.');
+                            window.location.reload();
+                        }
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        alert('Có lỗi xảy ra khi kết nối đến máy chủ.');
+                        window.location.reload();
+                    });
+                },
+
+                scrollChatToBottom() {
+                    this.$nextTick(() => {
+                        const el = document.getElementById('chat-messages-container');
+                        if (el) el.scrollTop = el.scrollHeight;
+                    });
+                },
+
+                get filteredMessages() {
+                    return this.chatMessages.filter(msg => msg.channel === this.activeChannel).map(msg => {
+                        let attachment = null;
+                        const fileRegex = /\[file:([a-f0-9-]{36})\]/i;
+                        const match = msg.rawContent.match(fileRegex);
+                        if (match) {
+                            const fileId = match[1];
+                            attachment = this.workspaceFiles.find(f => f.id === fileId);
+                        }
+                        return { ...msg, attachment };
+                    });
+                },
+
+                parseMessageContent(content) {
+                    let text = content.replace(/\[file:[a-f0-9-]{36}\]/gi, '').trim();
+                    if (!text) return '<span class="italic text-slate-400 text-xs inline-flex items-center gap-1"><i data-lucide="file-text" class="w-3.5 h-3.5"></i> Đã chia sẻ tài liệu</span>';
+
+                    let html = text
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+
+                    // 1. Parse Member Name mentions
+                    this.workspaceMembers.forEach(m => {
+                        const escapeName = m.fullName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                        const regex = new RegExp('@@' + escapeName, 'g');
+                        html = html.replace(regex, `<span class="px-1.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-extrabold text-[10px] inline-flex items-center gap-0.5 select-all"><i data-lucide="at-sign" class="w-3 h-3"></i>\${m.fullName}</span>`);
+                    });
+
+                    // 2. Parse #Task Title mentions
+                    this.workspaceTasks.forEach(t => {
+                        const escapeTitle = t.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                        const regex = new RegExp('#' + escapeTitle, 'g');
+                        html = html.replace(regex, `<span class="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 font-extrabold text-[10px] inline-flex items-center gap-0.5 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/20 transition-all select-all" onclick="window.dispatchEvent(new CustomEvent('open-task-detail', {detail: '\${t.id}'}))"><i data-lucide="hash" class="w-3 h-3"></i>\${t.title}</span>`);
+                    });
+
+                    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50);
+                    return html;
+                },
+
+                formatTime(dateStr) {
+                    if (!dateStr) return '';
+                    const d = new Date(dateStr);
+                    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                },
+
+                get showSuggestions() {
+                    if (!this.chatInput) return null;
+                    const words = this.chatInput.split(' ');
+                    const lastWord = words[words.length - 1];
+                    if (lastWord.startsWith('@@')) {
+                        return { type: '@@', query: lastWord.substring(1).toLowerCase() };
+                    }
+                    if (lastWord.startsWith('#')) {
+                        return { type: '#', query: lastWord.substring(1).toLowerCase() };
+                    }
+                    return null;
+                },
+
+                get filteredMembers() {
+                    const sug = this.showSuggestions;
+                    if (!sug || sug.type !== '@@') return [];
+                    return this.workspaceMembers.filter(m => m.fullName.toLowerCase().includes(sug.query));
+                },
+
+                get filteredTasks() {
+                    const sug = this.showSuggestions;
+                    if (!sug || sug.type !== '#') return [];
+                    return this.workspaceTasks.filter(t => t.title.toLowerCase().includes(sug.query));
+                },
+
+                insertSuggestion(suggestionText) {
+                    const words = this.chatInput.split(' ');
+                    words[words.length - 1] = suggestionText + ' ';
+                    this.chatInput = words.join(' ');
+                    this.$nextTick(() => {
+                        const el = document.getElementById('chat-input-field');
+                        if (el) el.focus();
+                    });
+                },
+
+                init() {
+                    this.scrollChatToBottom();
+                    this.$watch('activeTab', value => {
+                        localStorage.setItem('unigrid_workspace_tab_' + '@Model.Workspace.JoinCode', value);
+                        if (value === 'chat') this.scrollChatToBottom();
+                    });
+                    this.$watch('activeChannel', value => {
+                        localStorage.setItem('unigrid_active_channel_' + '@Model.Workspace.JoinCode', value);
+                        this.scrollChatToBottom();
+                    });
+                    // Bootstrap channels
+                    const extracted = ['general'];
+                    this.chatMessages.forEach(msg => {
+                        if (msg.channel && !extracted.includes(msg.channel)) {
+                            extracted.push(msg.channel);
+                        }
+                    });
+                    this.channels = extracted;
+                }
+            }));
+        }
+
+        if (window.Alpine) {
+            initAlpineWorkspaceDetail();
+        } else {
+            document.addEventListener('alpine:init', initAlpineWorkspaceDetail);
+        }
+    </script>
 </div>
 
