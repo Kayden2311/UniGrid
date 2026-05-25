@@ -32,8 +32,6 @@ public partial class UniGridDbContext : DbContext
 
     public virtual DbSet<PersonalSchedule> PersonalSchedules { get; set; }
 
-    public virtual DbSet<Subtask> Subtasks { get; set; }
-
     public virtual DbSet<unigrid.Models.Task> Tasks { get; set; }
 
     public virtual DbSet<TaskComment> TaskComments { get; set; }
@@ -159,19 +157,6 @@ public partial class UniGridDbContext : DbContext
             entity.HasOne(d => d.Account).WithMany(p => p.Moderators)
                 .HasForeignKey(d => d.AccountId)
                 .HasConstraintName("FK_Moderators_Accounts");
-        });
-
-        modelBuilder.Entity<Subtask>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__Subtasks__3214EC07AC55B75D");
-
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
-            entity.Property(e => e.IsDone).HasDefaultValue(false);
-
-            entity.HasOne(d => d.Task).WithMany(p => p.Subtasks)
-                .HasForeignKey(d => d.TaskId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("FK_Subtasks_Tasks");
         });
 
         modelBuilder.Entity<unigrid.Models.Task>(entity =>

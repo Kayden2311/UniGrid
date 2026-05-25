@@ -76,7 +76,6 @@ namespace unigrid.Data
                     context.AuditLogs.RemoveRange(context.AuditLogs);
                     context.WorkspaceFiles.RemoveRange(context.WorkspaceFiles);
                     context.TaskComments.RemoveRange(context.TaskComments);
-                    context.Subtasks.RemoveRange(context.Subtasks);
                     context.PersonalSchedules.RemoveRange(context.PersonalSchedules);
                     context.Tasks.RemoveRange(context.Tasks);
                     context.ChatMessages.RemoveRange(context.ChatMessages);

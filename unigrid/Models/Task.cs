@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace unigrid.Models;
@@ -24,8 +24,6 @@ public partial class Task
     public DateTime? CreatedAt { get; set; }
 
     public virtual User? Assignee { get; set; }
-
-    public virtual ICollection<Subtask> Subtasks { get; set; } = new List<Subtask>();
 
     public virtual ICollection<TaskComment> TaskComments { get; set; } = new List<TaskComment>();
 
