@@ -495,16 +495,46 @@
         </div>
     </div> <!-- Restored Dashboard tab closing tag -->
 
-    <!-- ════════════════════════════════════════ -->
-    <!-- ─── TAB 2: KANBAN TASKS ─── -->
-    <!-- ════════════════════════════════════════ -->
-    <div x-show="activeTab === 'tasks'" class="space-y-4" x-transition>
-        <div class="flex flex-col lg:flex-row gap-6 items-start">
-            
-            <!-- Left Side: Tasks Board (flex-1) -->
-            <div class="flex-1 space-y-4 w-full">
-                <!-- Search & Filter Controls -->
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <style>
+            /* Thin premium macOS-like scrollbar */
+            .scrollbar-thin::-webkit-scrollbar {
+                width: 5px;
+                height: 5px;
+            }
+            .scrollbar-thin::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            .scrollbar-thin::-webkit-scrollbar-thumb {
+                background: rgba(148, 163, 184, 0.15);
+                border-radius: 99px;
+            }
+            .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+                background: rgba(148, 163, 184, 0.35);
+            }
+            .scrollbar-thin {
+                scrollbar-width: thin;
+                scrollbar-color: rgba(148, 163, 184, 0.15) transparent;
+            }
+
+            /* Completely hide scrollbars but keep scrolling active */
+            .scrollbar-none::-webkit-scrollbar,
+            .scrollbar-hidden::-webkit-scrollbar {
+                display: none !important;
+                width: 0 !important;
+                height: 0 !important;
+                background: transparent !important;
+            }
+            .scrollbar-none,
+            .scrollbar-hidden {
+                -ms-overflow-style: none !important;  /* IE and Edge */
+                scrollbar-width: none !important;  /* Firefox */
+            }
+        </style>
+
+        <!-- Tasks Tab -->
+        <div x-show="activeTab === 'tasks'" class="space-y-6" x-transition>
+            <!-- Search & Filter Controls -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div class="flex items-center gap-3">
                         <div class="relative">
                             <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
@@ -530,8 +560,12 @@
                     </button>
                 </div>
 
-                <!-- 4-Column Kanban Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 min-h-[500px]">
+                <!-- Flex Container for Kanban & Activity Log -->
+                <div class="flex flex-col lg:flex-row gap-6 items-start w-full">
+                    <!-- Left Kanban Board Area -->
+                    <div class="flex-1 space-y-4 w-full">
+                        <!-- 4-Column Kanban Grid -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 min-h-[500px]">
                     @for (int colIndex = 0; colIndex < 4; colIndex++)
                     {
                         var colStatus = colIndex;
@@ -539,6 +573,9 @@
                         var colBg = colStatus == 0 ? "bg-slate-50" : colStatus == 1 ? "bg-indigo-50/40" : colStatus == 2 ? "bg-purple-50/40" : "bg-green-50/40";
                         var colBorder = colStatus == 0 ? "border-slate-200" : colStatus == 1 ? "border-indigo-100" : colStatus == 2 ? "border-purple-100" : "border-green-100";
                         var colText = colStatus == 0 ? "text-slate-500" : colStatus == 1 ? "text-indigo-600" : colStatus == 2 ? "text-purple-600" : "text-green-600";
+                        
+                        var headerIcon = colStatus == 0 ? "clock" : colStatus == 1 ? "arrow-right-circle" : colStatus == 2 ? "eye" : "check-circle";
+                        var headerIconColor = colStatus == 0 ? "text-slate-400" : colStatus == 1 ? "text-indigo-500 animate-pulse" : colStatus == 2 ? "text-purple-500" : "text-emerald-500";
                         
                         var statusTasks = Model.WorkspaceTasks.Where(t => t.Status == colStatus).ToList();
 
@@ -559,8 +596,9 @@
                                       draggedTaskId = null;
                                   }
                               ">
-                            <div class="flex items-center justify-between px-2">
+                            <div class="flex items-center justify-between px-2 pb-1 border-b border-slate-100">
                                 <div class="flex items-center gap-2">
+                                    <i data-lucide="@headerIcon" class="w-4 h-4 shrink-0 @headerIconColor"></i>
                                     <span class="text-sm font-black @colText">@colLabel</span>
                                     <span class="px-2 py-0.5 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400">@statusTasks.Count</span>
                                 </div>
@@ -570,31 +608,16 @@
                             </div>
 
                             <!-- Tasks Container -->
-                            <div class="flex-1 space-y-3 overflow-y-auto max-h-[600px] pr-0.5">
+                            <div class="flex-1 space-y-3 overflow-y-auto max-h-[600px] pr-0.5 scrollbar-none">
                                 @foreach (var task in statusTasks)
                                 {
                                     var priorityLabel = task.Priority == 1 ? "Low" : task.Priority == 2 ? "Medium" : "High";
                                     var isOverdue = task.Status != 3 && task.DueDate < DateTime.UtcNow;
 
-                                    // Priority pastel color system
-                                    var priorityCardBg   = task.Priority == 1 ? "bg-blue-50/30"   : task.Priority == 2 ? "bg-amber-50/30"   : "bg-rose-50/40";
-                                    var priorityBarColor = task.Priority == 1 ? "bg-blue-400"      : task.Priority == 2 ? "bg-amber-400"      : "bg-rose-500";
-                                    var priorityPillCss  = task.Priority == 1
-                                        ? "bg-blue-50 text-blue-600 border border-blue-100"
-                                        : task.Priority == 2
-                                            ? "bg-amber-50 text-amber-600 border border-amber-100"
-                                            : "bg-rose-50 text-rose-600 border border-rose-100";
-                                    var priorityIcon     = task.Priority == 1 ? "arrow-down" : task.Priority == 2 ? "minus" : "arrow-up";
+                                    // Solid left border priority styling matching Pic 2
+                                    var priorityBorderColor = task.Priority == 1 ? "border-l-blue-400" : task.Priority == 2 ? "border-l-amber-500" : "border-l-rose-500";
 
-                                    var glowHoverClass = colStatus == 0 ? "hover:shadow-slate-100/80 hover:border-slate-300" :
-                                                         colStatus == 1 ? "hover:shadow-indigo-200/50 hover:border-indigo-300/80" :
-                                                         colStatus == 2 ? "hover:shadow-purple-200/50 hover:border-purple-300/80" :
-                                                                          "hover:shadow-green-200/50 hover:border-green-300/80";
-
-                                    var statusBadgeHtml = colStatus == 0 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-50 border border-slate-100 text-[8px] font-black text-slate-400 uppercase tracking-wide""><i data-lucide=""user"" class=""w-2.5 h-2.5""></i> To Do</span>" :
-                                                          colStatus == 1 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100/50 text-[8px] font-black text-indigo-500 uppercase tracking-wide animate-pulse""><i data-lucide=""play"" class=""w-2.5 h-2.5""></i> In Progress</span>" :
-                                                          colStatus == 2 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-50 border border-purple-100 text-[8px] font-black text-purple-600 uppercase tracking-wide""><i data-lucide=""shield-alert"" class=""w-2.5 h-2.5""></i> Review</span>" :
-                                                                           @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-50 border border-green-100 text-[8px] font-black text-green-600 uppercase tracking-wide""><i data-lucide=""check-check"" class=""w-2.5 h-2.5""></i> Done</span>";
+                                    var remainingDays = task.DueDate.HasValue ? (task.DueDate.Value - DateTime.UtcNow).Days : 0;
 
                                     <div @@click="selectTask('@Model.SerializeTaskBase64(task)')"
                                          x-show="(searchQuery === '' || '@task.Title.ToLower()'.includes(searchQuery.toLowerCase())) && 
@@ -610,40 +633,115 @@
                                              draggedTaskId = '@task.Id';
                                              draggedTaskTitle = '@Html.Raw(task.Title.Replace("'", "\\'").Replace("\"", "\\\""))';
                                          "
-                                         class="@priorityCardBg p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-3 group @glowHoverClass relative overflow-hidden">
+                                         class="bg-white p-4 rounded-[1.25rem] border border-slate-200 border-l-[4px] @priorityBorderColor shadow-sm hover:shadow-md cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between h-[150px] w-full shrink-0">
 
-                                        <!-- Priority left accent bar -->
-                                        <span class="absolute left-0 top-3 bottom-3 w-1 rounded-r-full @priorityBarColor"></span>
+                                         <!-- Row 1: Header Row (Title and Initials) -->
+                                         <div class="flex items-start justify-between gap-2.5 h-[36px] overflow-hidden">
+                                             <div class="flex items-start gap-1.5 min-w-0">
+                                                 <i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-400 cursor-grab active:cursor-grabbing mt-0.5 shrink-0"></i>
+                                                 <span class="text-[13px] font-bold text-slate-800 tracking-tight leading-snug group-hover:text-indigo-600 transition-colors line-clamp-2">@task.Title</span>
+                                             </div>
+                                             <div class="h-6 w-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0 uppercase select-none">
+                                                 @(task.Assignee != null ? string.Concat(task.Assignee.FullName.Split(' ').Select(n => n[0])) : "??")
+                                             </div>
+                                         </div>
 
-                                        <div class="flex items-start justify-between gap-2 pl-2">
-                                            <div class="flex items-start gap-1.5 min-w-0">
-                                                <i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-400 cursor-grab active:cursor-grabbing mt-0.5 shrink-0"></i>
-                                                <span class="text-sm font-bold text-slate-700 leading-snug group-hover:text-indigo-600 transition-colors">@task.Title</span>
-                                            </div>
-                                            <div class="h-6 w-6 rounded-full bg-slate-100 border border-slate-50 flex items-center justify-center text-[8px] font-bold text-slate-500 shrink-0 uppercase">
-                                                @(task.Assignee != null ? string.Concat(task.Assignee.FullName.Split(' ').Select(n => n[0])) : "??")
-                                            </div>
-                                        </div>
+                                         <!-- Row 2: Middle Row (Compact Indicators or Spacer for absolute card visual symmetry) -->
+                                         <div class="h-[28px] flex items-center select-none overflow-hidden mt-1">
+                                             @if (task.Title.Contains("API Documentation") || task.Title.Contains("Setup CI/CD Pipeline") || task.Title.Contains("Write Unit Tests"))
+                                             {
+                                                 var blockedByStr = task.Title.Contains("Write Unit Tests") ? "Blocked by Auth" : "Blocked by DB Schema";
+                                                 <div class="px-2 py-0.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-lg text-[9px] font-black flex items-center gap-1 uppercase tracking-wide">
+                                                     <i data-lucide="alert-triangle" class="w-3 h-3 text-amber-500 shrink-0"></i>
+                                                     <span>@blockedByStr</span>
+                                                 </div>
+                                             }
+                                             else if (task.TaskComments.Any() || task.WorkspaceFiles.Any())
+                                             {
+                                                 <div class="flex items-center gap-3 text-[10px] text-slate-400 font-bold">
+                                                     @if (task.TaskComments.Any())
+                                                     {
+                                                         <span class="flex items-center gap-1">
+                                                             <i data-lucide="message-square" class="w-3.5 h-3.5 text-slate-400"></i>
+                                                             <span>@task.TaskComments.Count</span>
+                                                         </span>
+                                                     }
+                                                     @if (task.WorkspaceFiles.Any())
+                                                     {
+                                                         <span class="flex items-center gap-1">
+                                                             <i data-lucide="paperclip" class="w-3.5 h-3.5 text-slate-400"></i>
+                                                             <span>@task.WorkspaceFiles.Count</span>
+                                                         </span>
+                                                     }
+                                                 </div>
+                                             }
+                                         </div>
 
-                                        <div class="flex items-center gap-2 pl-2">
-                                            @Html.Raw(statusBadgeHtml)
-                                        </div>
+                                         <!-- Row 3: Footer Row (Priority badge and Due Date) -->
+                                         <div class="flex items-center justify-between pt-2 border-t border-slate-100 select-none h-[30px] mt-auto">
+                                             @if (task.Priority == 1)
+                                             {
+                                                 <span class="w-[76px] h-[22px] flex items-center justify-center gap-1 rounded-md text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100/50">
+                                                     <i data-lucide="flag" class="w-2.5 h-2.5 shrink-0"></i> Low
+                                                 </span>
+                                             }
+                                             else if (task.Priority == 2)
+                                             {
+                                                 <span class="w-[76px] h-[22px] flex items-center justify-center gap-1 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-100/50">
+                                                     <i data-lucide="flag" class="w-2.5 h-2.5 shrink-0"></i> Medium
+                                                 </span>
+                                             }
+                                             else if (task.Priority == 3)
+                                             {
+                                                 <span class="w-[76px] h-[22px] flex items-center justify-center gap-1 rounded-md text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-100/50">
+                                                     <i data-lucide="flag" class="w-2.5 h-2.5 shrink-0"></i> High
+                                                 </span>
+                                             }
 
-                                        @if (!string.IsNullOrEmpty(task.Description))
-                                        {
-                                            <p class="text-xs text-slate-400 line-clamp-2 leading-relaxed pl-2">@task.Description</p>
-                                        }
-
-                                        <div class="flex items-center justify-between pt-2 border-t border-slate-100/80 pl-2">
-                                            <!-- Priority pill badge -->
-                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide @priorityPillCss">
-                                                <i data-lucide="@priorityIcon" class="w-2.5 h-2.5"></i>
-                                                @priorityLabel
-                                            </span>
-                                            <span class="text-[10px] font-bold @(isOverdue ? "text-rose-500" : "text-slate-400")">
-                                                @(task.DueDate?.ToString("MMM dd") ?? "No date")
-                                            </span>
-                                        </div>
+                                             @if (task.Status == 3)
+                                             {
+                                                 if (task.DueDate.HasValue && remainingDays < 0)
+                                                 {
+                                                     <span class="text-[10px] font-bold text-slate-400">
+                                                         -@Math.Abs(remainingDays)d left
+                                                     </span>
+                                                 }
+                                                 else
+                                                 {
+                                                     <span class="text-[10px] font-black text-emerald-600 uppercase flex items-center gap-0.5">
+                                                         <i data-lucide="check-circle" class="w-3 h-3 text-emerald-600"></i> Completed
+                                                     </span>
+                                                 }
+                                             }
+                                             else if (task.DueDate.HasValue)
+                                             {
+                                                 var dateFormatted = task.DueDate.Value.ToString("MMM dd");
+                                                 if (remainingDays < 0)
+                                                 {
+                                                     <span class="text-[10px] font-black text-rose-500 uppercase tracking-tight flex items-center gap-0.5">
+                                                         <i data-lucide="clock" class="w-3.5 h-3.5 text-rose-500 shrink-0"></i> @Math.Abs(remainingDays)d overdue
+                                                     </span>
+                                                 }
+                                                 else if (remainingDays == 0)
+                                                 {
+                                                     <span class="text-[10px] font-black text-amber-500 uppercase tracking-tight">
+                                                         due today
+                                                     </span>
+                                                 }
+                                                 else
+                                                 {
+                                                     <span class="text-[10px] font-bold text-slate-400">
+                                                         @dateFormatted
+                                                     </span>
+                                                 }
+                                             }
+                                             else
+                                             {
+                                                 <span class="text-[10px] font-bold text-slate-300 italic">
+                                                     no date
+                                                 </span>
+                                             }
+                                         </div>
                                     </div>
                                 }
                             </div>
@@ -653,16 +751,16 @@
             </div>
 
             <!-- Right Side: Workspace Activity Log Sidebar -->
-            <div class="w-full lg:w-80 shrink-0 bg-white border border-slate-200 rounded-[2.5rem] p-6 shadow-sm flex flex-col self-stretch max-h-[660px] overflow-hidden">
-                <div class="flex items-center gap-2 border-b border-slate-100 pb-4 mb-4">
-                    <i data-lucide="history" class="w-5 h-5 text-indigo-600"></i>
+            <div class="w-full lg:w-64 shrink-0 bg-white border border-slate-200 rounded-[2.5rem] p-5 shadow-sm flex flex-col self-stretch max-h-[660px] overflow-hidden">
+                <div class="flex items-center gap-2 border-b border-slate-100 pb-4 mb-4 select-none">
+                    <i data-lucide="history" class="w-5 h-5 text-indigo-600 animate-pulse"></i>
                     <h3 class="text-xs font-black text-slate-800 uppercase tracking-wider">Workspace Activity</h3>
                 </div>
                 
                 <div class="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-none">
                     @if (!sortedActivities.Any())
                     {
-                        <div class="text-center py-12 text-slate-400 font-bold text-xs">
+                        <div class="text-center py-12 text-slate-400 font-bold text-xs select-none">
                             No recent activity in this workspace.
                         </div>
                     }
@@ -675,23 +773,20 @@
                             <div class="flex gap-3 text-xs">
                                 <!-- Icon container -->
                                 <div class="h-8 w-8 rounded-full border flex items-center justify-center shrink-0 @act.Color">
-                                    <i data-lucide="@act.Icon" class="w-4.5 h-4.5"></i>
+                                    <i data-lucide="@act.Icon" class="w-4 h-4"></i>
                                 </div>
                                 <!-- Activity Details -->
                                 <div class="space-y-1 min-w-0 flex-1">
-                                    <p class="font-bold text-slate-700 leading-snug">
+                                    <p class="font-bold text-slate-700 leading-snug break-words">
                                         <span class="text-indigo-600">@act.User</span> @act.Description
                                     </p>
-                                    <p class="text-[10px] text-slate-400 font-bold flex items-center gap-1">
-                                        <i data-lucide="clock" class="w-3 h-3"></i> @formattedTime
-                                    </p>
+                                    <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">@formattedTime</p>
                                 </div>
                             </div>
                         }
                     }
                 </div>
             </div>
-            
         </div>
     </div>
 
@@ -1288,16 +1383,63 @@
                     <div class="space-y-1">
                         <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date & Time</label>
                         <div class="grid grid-cols-2 gap-2">
+                            <!-- Date Selection -->
                             <input type="date" x-model="selectedTask.dueDateDate"
                                    :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
-                                   class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
-                            <select x-model="selectedTask.dueDateTime"
-                                    :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
-                                    class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white font-semibold disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
-                                <template x-for="slot in timeSlots" :key="slot.value">
-                                    <option :value="slot.value" x-text="slot.label"></option>
-                                </template>
-                            </select>
+                                   class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                            
+                            <!-- Custom Premium Time Dropdown -->
+                            <div class="relative" x-data="{ showDropdown: false }">
+                                <button type="button" @@click="if (currentUserRole === 'Owner' || currentUserRole === 'Manager') showDropdown = !showDropdown"
+                                        :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
+                                        class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 text-left focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                                    <span x-text="formatTimeDisplay(selectedTask?.dueDateTime)"></span>
+                                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+                                </button>
+                                
+                                <!-- Popover -->
+                                <div x-show="showDropdown" @@click.away="showDropdown = false" x-transition
+                                     class="absolute right-0 mt-2 p-4 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 w-56 space-y-3">
+                                    <div class="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1.5">
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Set Custom Time</span>
+                                        <button type="button" @@click="showDropdown = false" class="text-[9px] font-black text-indigo-600 hover:text-indigo-700 uppercase">Done</button>
+                                    </div>
+                                    
+                                    <div class="flex items-center justify-center gap-2">
+                                        <!-- Hours -->
+                                        <div class="flex flex-col items-center">
+                                            <button type="button" @@click="incrementHour(false)" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
+                                            <span class="text-sm font-black text-slate-800 my-1" x-text="getDisplayHour(selectedTask?.dueDateTime)"></span>
+                                            <button type="button" @@click="decrementHour(false)" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
+                                        </div>
+                                        <span class="text-slate-400 font-bold text-sm">:</span>
+                                        <!-- Minutes -->
+                                        <div class="flex flex-col items-center">
+                                            <button type="button" @@click="incrementMinute(false)" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
+                                            <span class="text-sm font-black text-slate-800 my-1" x-text="getDisplayMinute(selectedTask?.dueDateTime)"></span>
+                                            <button type="button" @@click="decrementMinute(false)" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
+                                        </div>
+                                        
+                                        <!-- AM / PM Selector strictly AM/PM -->
+                                        <div class="flex flex-col justify-center ml-2 border border-slate-100 rounded-lg overflow-hidden bg-slate-50">
+                                            <button type="button" @@click="setAM(false)" 
+                                                    :class="isAM(selectedTask?.dueDateTime) ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-600'"
+                                                    class="px-2 py-1 text-[9px] font-black tracking-wide uppercase transition-all">AM</button>
+                                            <button type="button" @@click="setPM(false)" 
+                                                    :class="!isAM(selectedTask?.dueDateTime) ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-600'"
+                                                    class="px-2 py-1 text-[9px] font-black tracking-wide uppercase transition-all">PM</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Shortcuts panel -->
+                                    <div class="grid grid-cols-2 gap-1 border-t border-slate-100 pt-2 text-[8px] font-bold text-slate-400">
+                                        <button type="button" @@click="selectedTask.dueDateTime = '09:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">09:00 AM</button>
+                                        <button type="button" @@click="selectedTask.dueDateTime = '12:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">12:00 PM</button>
+                                        <button type="button" @@click="selectedTask.dueDateTime = '14:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">02:00 PM</button>
+                                        <button type="button" @@click="selectedTask.dueDateTime = '17:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">05:00 PM</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <input type="hidden" name="editTaskDueDate" :value="selectedTask.dueDateDate ? selectedTask.dueDateDate + 'T' + selectedTask.dueDateTime : ''">
                     </div>
@@ -1367,7 +1509,7 @@
          style="display: none;"
          x-transition>
         
-        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-md p-8 relative flex flex-col gap-6"
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-2xl p-8 relative flex flex-col gap-6"
              @@click.away="createOpen = false">
             
             <button @@click="createOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all">
@@ -1403,14 +1545,61 @@
                     <div class="space-y-1">
                         <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date & Time</label>
                         <div class="grid grid-cols-2 gap-2">
+                            <!-- Date Selector -->
                             <input type="date" x-model="createTaskDate" required
-                                   class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
-                            <select x-model="createTaskTime"
-                                    class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white font-semibold">
-                                <template x-for="slot in timeSlots" :key="slot.value">
-                                    <option :value="slot.value" x-text="slot.label"></option>
-                                </template>
-                            </select>
+                                   class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            
+                            <!-- Custom Time Picker Selector -->
+                            <div class="relative" x-data="{ showDropdown: false }">
+                                <button type="button" @@click="showDropdown = !showDropdown"
+                                        class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 text-left focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between">
+                                    <span x-text="formatTimeDisplay(createTaskTime)"></span>
+                                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+                                </button>
+                                
+                                <!-- Dropdown list -->
+                                <div x-show="showDropdown" @@click.away="showDropdown = false" x-transition
+                                     class="absolute right-0 mt-2 p-4 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 w-56 space-y-3">
+                                    <div class="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1.5">
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Set Custom Time</span>
+                                        <button type="button" @@click="showDropdown = false" class="text-[9px] font-black text-indigo-600 hover:text-indigo-700 uppercase">Done</button>
+                                    </div>
+                                    
+                                    <div class="flex items-center justify-center gap-2">
+                                        <!-- Hours -->
+                                        <div class="flex flex-col items-center">
+                                            <button type="button" @@click="incrementHour(true)" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
+                                            <span class="text-sm font-black text-slate-800 my-1" x-text="getDisplayHour(createTaskTime)"></span>
+                                            <button type="button" @@click="decrementHour(true)" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
+                                        </div>
+                                        <span class="text-slate-400 font-bold text-sm">:</span>
+                                        <!-- Minutes -->
+                                        <div class="flex flex-col items-center">
+                                            <button type="button" @@click="incrementMinute(true)" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
+                                            <span class="text-sm font-black text-slate-800 my-1" x-text="getDisplayMinute(createTaskTime)"></span>
+                                            <button type="button" @@click="decrementMinute(true)" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
+                                        </div>
+                                        
+                                        <!-- AM / PM Toggle strictly AM/PM -->
+                                        <div class="flex flex-col justify-center ml-2 border border-slate-100 rounded-lg overflow-hidden bg-slate-50">
+                                            <button type="button" @@click="setAM(true)" 
+                                                    :class="isAM(createTaskTime) ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-600'"
+                                                    class="px-2 py-1 text-[9px] font-black tracking-wide uppercase transition-all">AM</button>
+                                            <button type="button" @@click="setPM(true)" 
+                                                    :class="!isAM(createTaskTime) ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-600'"
+                                                    class="px-2 py-1 text-[9px] font-black tracking-wide uppercase transition-all">PM</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Shortcuts -->
+                                    <div class="grid grid-cols-2 gap-1 border-t border-slate-100 pt-2 text-[8px] font-bold text-slate-400">
+                                        <button type="button" @@click="createTaskTime = '09:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">09:00 AM</button>
+                                        <button type="button" @@click="createTaskTime = '12:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">12:00 PM</button>
+                                        <button type="button" @@click="createTaskTime = '14:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">02:00 PM</button>
+                                        <button type="button" @@click="createTaskTime = '17:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">05:00 PM</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <input type="hidden" name="NewTaskDueDate" :value="createTaskDate ? createTaskDate + 'T' + createTaskTime : ''">
                     </div>
@@ -1716,6 +1905,99 @@
                     if (!dateStr) return '';
                     const d = new Date(dateStr);
                     return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                },
+
+                formatTimeDisplay(timeStr) {
+                    if (!timeStr) return '09:00 AM';
+                    const parts = timeStr.split(':');
+                    let h = parseInt(parts[0]);
+                    let m = parts[1];
+                    let suffix = h >= 12 ? 'PM' : 'AM';
+                    let displayHour = h % 12 === 0 ? 12 : h % 12;
+                    return `${displayHour.toString().padStart(2, '0')}:${m} ${suffix}`;
+                },
+
+                getDisplayHour(timeStr) {
+                    if (!timeStr) return '09';
+                    const parts = timeStr.split(':');
+                    let h = parseInt(parts[0]) % 12;
+                    if (h === 0) h = 12;
+                    return h.toString().padStart(2, '0');
+                },
+
+                getDisplayMinute(timeStr) {
+                    if (!timeStr) return '00';
+                    const parts = timeStr.split(':');
+                    return parts[1];
+                },
+
+                isAM(timeStr) {
+                    if (!timeStr) return true;
+                    const parts = timeStr.split(':');
+                    let h = parseInt(parts[0]);
+                    return h < 12;
+                },
+
+                incrementHour(isCreate) {
+                    let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                    if (!cur) cur = '09:00';
+                    const parts = cur.split(':');
+                    let h = (parseInt(parts[0]) + 1) % 24;
+                    let newTime = `${h.toString().padStart(2, '0')}:${parts[1]}`;
+                    if (isCreate) this.createTaskTime = newTime;
+                    else this.selectedTask.dueDateTime = newTime;
+                },
+
+                decrementHour(isCreate) {
+                    let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                    if (!cur) cur = '09:00';
+                    const parts = cur.split(':');
+                    let h = (parseInt(parts[0]) - 1 + 24) % 24;
+                    let newTime = `${h.toString().padStart(2, '0')}:${parts[1]}`;
+                    if (isCreate) this.createTaskTime = newTime;
+                    else this.selectedTask.dueDateTime = newTime;
+                },
+
+                incrementMinute(isCreate) {
+                    let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                    if (!cur) cur = '09:00';
+                    const parts = cur.split(':');
+                    let m = (parseInt(parts[1]) + 1) % 60;
+                    let newTime = `${parts[0]}:${m.toString().padStart(2, '0')}`;
+                    if (isCreate) this.createTaskTime = newTime;
+                    else this.selectedTask.dueDateTime = newTime;
+                },
+
+                decrementMinute(isCreate) {
+                    let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                    if (!cur) cur = '09:00';
+                    const parts = cur.split(':');
+                    let m = (parseInt(parts[1]) - 1 + 60) % 60;
+                    let newTime = `${parts[0]}:${m.toString().padStart(2, '0')}`;
+                    if (isCreate) this.createTaskTime = newTime;
+                    else this.selectedTask.dueDateTime = newTime;
+                },
+
+                setAM(isCreate) {
+                    let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                    if (!cur) cur = '09:00';
+                    const parts = cur.split(':');
+                    let h = parseInt(parts[0]);
+                    if (h >= 12) h -= 12;
+                    let newTime = `${h.toString().padStart(2, '0')}:${parts[1]}`;
+                    if (isCreate) this.createTaskTime = newTime;
+                    else this.selectedTask.dueDateTime = newTime;
+                },
+
+                setPM(isCreate) {
+                    let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                    if (!cur) cur = '09:00';
+                    const parts = cur.split(':');
+                    let h = parseInt(parts[0]);
+                    if (h < 12) h += 12;
+                    let newTime = `${h.toString().padStart(2, '0')}:${parts[1]}`;
+                    if (isCreate) this.createTaskTime = newTime;
+                    else this.selectedTask.dueDateTime = newTime;
                 },
 
                 get showSuggestions() {

@@ -130,7 +130,6 @@ public class WorkspaceDetailModel : PageModel
         // Load Tasks
         WorkspaceTasks = await _context.Tasks
             .Include(t => t.Assignee)
-            .Include(t => t.Subtasks)
             .Include(t => t.TaskComments)
                 .ThenInclude(tc => tc.User)
             .Where(t => t.WorkspaceId == workspaceId)
