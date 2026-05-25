@@ -62,6 +62,8 @@ public class WorkspaceDetailModel : PageModel
     public string NewFileType { get; set; } = "pdf";
     [BindProperty]
     public long NewFileSize { get; set; } = 1024;
+    [BindProperty]
+    public Microsoft.AspNetCore.Http.IFormFile? UploadedFile { get; set; }
 
     // Direct binding for invites
     [BindProperty]
@@ -298,24 +300,71 @@ public class WorkspaceDetailModel : PageModel
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
 
-        if (!string.IsNullOrEmpty(NewFileName))
+        if (UploadedFile == null || UploadedFile.Length == 0)
         {
-            var file = new WorkspaceFile
-            {
-                Id = Guid.NewGuid(),
-                WorkspaceId = Workspace.Id,
-                UserId = CurrentUser.Id,
-                FileName = NewFileName,
-                FileUrl = "files/" + NewFileName.ToLower().Replace(" ", "_"),
-                FileType = NewFileType,
-                FileSize = NewFileSize > 0 ? NewFileSize : 1024 * 1024 * 2, // 2MB default mock
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await _context.WorkspaceFiles.AddAsync(file);
-            await _context.SaveChangesAsync();
-            _logger.LogInformation("File uploaded in workspace {WorkspaceId} by {UserId}", Workspace.Id, CurrentUser.Id);
+            TempData["UploadError"] = "No file was selected for upload.";
+            return RedirectToPage(new { joinCode });
         }
+
+        string originalFileName = UploadedFile.FileName;
+        string baseName = System.IO.Path.GetFileNameWithoutExtension(originalFileName);
+        string extension = System.IO.Path.GetExtension(originalFileName).TrimStart('.').ToLower();
+
+        // Validate filename: Not allow regex or . characters in base filename
+        if (string.IsNullOrEmpty(baseName))
+        {
+            TempData["UploadError"] = "Invalid file name.";
+            return RedirectToPage(new { joinCode });
+        }
+
+        // Check for any dot in the base name
+        if (baseName.Contains('.'))
+        {
+            TempData["UploadError"] = "File name contains invalid characters. Multiple dots ('.') are not allowed in the file name.";
+            return RedirectToPage(new { joinCode });
+        }
+
+        // Check for special/regex characters (allow only letters, digits, spaces, hyphens, underscores)
+        foreach (char c in baseName)
+        {
+            if (!char.IsLetterOrDigit(c) && c != ' ' && c != '-' && c != '_')
+            {
+                TempData["UploadError"] = "File name contains invalid characters. Only alphanumeric characters, spaces, hyphens, and underscores are allowed.";
+                return RedirectToPage(new { joinCode });
+            }
+        }
+
+        // Map extension to our app's predefined categories
+        string fileType = "doc";
+        if (extension == "pdf")
+        {
+            fileType = "pdf";
+        }
+        else if (extension == "xls" || extension == "xlsx" || extension == "csv")
+        {
+            fileType = "spreadsheet";
+        }
+        else if (extension == "png" || extension == "jpg" || extension == "jpeg" || extension == "gif" || extension == "svg")
+        {
+            fileType = "image";
+        }
+
+        var file = new WorkspaceFile
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = Workspace.Id,
+            UserId = CurrentUser.Id,
+            FileName = originalFileName,
+            FileUrl = "files/" + originalFileName.ToLower().Replace(" ", "_"),
+            FileType = fileType,
+            FileSize = UploadedFile.Length,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _context.WorkspaceFiles.AddAsync(file);
+        await _context.SaveChangesAsync();
+        TempData["UploadSuccess"] = $"Successfully uploaded file: {originalFileName}";
+        _logger.LogInformation("File uploaded in workspace {WorkspaceId} by {UserId}", Workspace.Id, CurrentUser.Id);
 
         return RedirectToPage(new { joinCode });
     }
