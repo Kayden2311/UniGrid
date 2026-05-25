@@ -530,8 +530,17 @@
                         @foreach (var task in statusTasks)
                         {
                             var priorityLabel = task.Priority == 1 ? "Low" : task.Priority == 2 ? "Medium" : "High";
-                            var priorityDot = task.Priority == 1 ? "bg-blue-500" : task.Priority == 2 ? "bg-amber-500" : "bg-rose-500";
                             var isOverdue = task.Status != 3 && task.DueDate < DateTime.UtcNow;
+
+                            // Priority pastel color system
+                            var priorityCardBg   = task.Priority == 1 ? "bg-blue-50/30"   : task.Priority == 2 ? "bg-amber-50/30"   : "bg-rose-50/40";
+                            var priorityBarColor = task.Priority == 1 ? "bg-blue-400"      : task.Priority == 2 ? "bg-amber-400"      : "bg-rose-500";
+                            var priorityPillCss  = task.Priority == 1
+                                ? "bg-blue-50 text-blue-600 border border-blue-100"
+                                : task.Priority == 2
+                                    ? "bg-amber-50 text-amber-600 border border-amber-100"
+                                    : "bg-rose-50 text-rose-600 border border-rose-100";
+                            var priorityIcon     = task.Priority == 1 ? "arrow-down" : task.Priority == 2 ? "minus" : "arrow-up";
 
                             var glowHoverClass = colStatus == 0 ? "hover:shadow-slate-100/80 hover:border-slate-300" :
                                                  colStatus == 1 ? "hover:shadow-indigo-200/50 hover:border-indigo-300/80" :
@@ -557,9 +566,12 @@
                                      draggedTaskId = '@task.Id';
                                      draggedTaskTitle = '@Html.Raw(task.Title.Replace("'", "\\'").Replace("\"", "\\\""))';
                                  "
-                                 class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-3 group @glowHoverClass">
-                                
-                                <div class="flex items-start justify-between gap-2">
+                                 class="@priorityCardBg p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md cursor-pointer transition-all space-y-3 group @glowHoverClass relative overflow-hidden">
+
+                                <!-- Priority left accent bar -->
+                                <span class="absolute left-0 top-3 bottom-3 w-1 rounded-r-full @priorityBarColor"></span>
+
+                                <div class="flex items-start justify-between gap-2 pl-2">
                                     <div class="flex items-start gap-1.5 min-w-0">
                                         <i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-400 cursor-grab active:cursor-grabbing mt-0.5 shrink-0"></i>
                                         <span class="text-sm font-bold text-slate-700 leading-snug group-hover:text-indigo-600 transition-colors">@task.Title</span>
@@ -569,20 +581,21 @@
                                     </div>
                                 </div>
 
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-2 pl-2">
                                     @Html.Raw(statusBadgeHtml)
                                 </div>
 
                                 @if (!string.IsNullOrEmpty(task.Description))
                                 {
-                                    <p class="text-xs text-slate-400 line-clamp-2 leading-relaxed">@task.Description</p>
+                                    <p class="text-xs text-slate-400 line-clamp-2 leading-relaxed pl-2">@task.Description</p>
                                 }
 
-                                <div class="flex items-center justify-between pt-2 border-t border-slate-50">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="w-2 h-2 rounded-full @priorityDot"></span>
-                                        <span class="text-[10px] font-bold text-slate-400">@priorityLabel</span>
-                                    </div>
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-100/80 pl-2">
+                                    <!-- Priority pill badge -->
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide @priorityPillCss">
+                                        <i data-lucide="@priorityIcon" class="w-2.5 h-2.5"></i>
+                                        @priorityLabel
+                                    </span>
                                     <span class="text-[10px] font-bold @(isOverdue ? "text-rose-500" : "text-slate-400")">
                                         @(task.DueDate?.ToString("MMM dd") ?? "No date")
                                     </span>
