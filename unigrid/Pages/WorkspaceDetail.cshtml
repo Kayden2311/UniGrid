@@ -44,7 +44,7 @@
             if (card) {
                 card.click();
             } else {
-                alert('Mở chi tiết công việc: ' + matchedTask.title);
+                alert('Open task detail: ' + matchedTask.title);
             }
         }
      ">
@@ -388,7 +388,7 @@
                     }
                     @foreach (var task in highPriority)
                     {
-                        <div @@click="selectedTask = JSON.parse(atob('@Model.SerializeTaskBase64(task)')); if (selectedTask) { selectedTask.dueDateFormatted = selectedTask.dueDate ? selectedTask.dueDate.substring(0, 16) : ''; selectedTask.assigneeId = selectedTask.assignee ? selectedTask.assignee.id : ''; } isEditing = false; detailOpen = true;"
+                        <div @@click="selectTask('@Model.SerializeTaskBase64(task)')"
                              class="p-4 bg-white/60 hover:bg-white border border-slate-100 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer hover:shadow transition-all group">
                             <div class="flex items-center gap-3 min-w-0">
                                 <div class="h-9 w-9 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
@@ -428,7 +428,7 @@
                     @foreach (var task in upcoming)
                     {
                         var remainingDays = (task.DueDate.Value - DateTime.UtcNow).Days;
-                        <div @@click="selectedTask = JSON.parse(atob('@Model.SerializeTaskBase64(task)')); if (selectedTask) { selectedTask.dueDateFormatted = selectedTask.dueDate ? selectedTask.dueDate.substring(0, 16) : ''; selectedTask.assigneeId = selectedTask.assignee ? selectedTask.assignee.id : ''; } isEditing = false; detailOpen = true;"
+                        <div @@click="selectTask('@Model.SerializeTaskBase64(task)')"
                              class="p-4 bg-white/60 hover:bg-white border border-slate-100 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer hover:shadow transition-all group">
                             <div class="min-w-0">
                                 <p class="text-sm font-bold text-slate-700 truncate group-hover:text-indigo-600 transition-colors">@task.Title</p>
@@ -491,7 +491,7 @@
             @for (int colIndex = 0; colIndex < 4; colIndex++)
             {
                 var colStatus = colIndex;
-                var colLabel = colStatus == 0 ? "Phân việc (To Do)" : colStatus == 1 ? "Thực thi (In Progress)" : colStatus == 2 ? "Kiểm soát (Review/Assurance)" : "Hoàn thành (Done)";
+                var colLabel = colStatus == 0 ? "To Do" : colStatus == 1 ? "In Progress" : colStatus == 2 ? "Review" : "Done";
                 var colBg = colStatus == 0 ? "bg-slate-50" : colStatus == 1 ? "bg-indigo-50/40" : colStatus == 2 ? "bg-purple-50/40" : "bg-green-50/40";
                 var colBorder = colStatus == 0 ? "border-slate-200" : colStatus == 1 ? "border-indigo-100" : colStatus == 2 ? "border-purple-100" : "border-green-100";
                 var colText = colStatus == 0 ? "text-slate-500" : colStatus == 1 ? "text-indigo-600" : colStatus == 2 ? "text-purple-600" : "text-green-600";
@@ -504,7 +504,7 @@
                           const taskId = draggedTaskId;
                           if (taskId) {
                               if (currentUserRole !== 'Owner' && currentUserRole !== 'Manager' && @colStatus === 3) {
-                                  alert('Chỉ Quản lý hoặc Chủ sở hữu mới có quyền duyệt (Approve) và hoàn thành công việc!');
+                                  alert('Only Managers or Owners have permission to approve and complete tasks!');
                                   draggedTaskId = null;
                                   return;
                               }
@@ -538,19 +538,19 @@
                                                  colStatus == 2 ? "hover:shadow-purple-200/50 hover:border-purple-300/80" :
                                                                   "hover:shadow-green-200/50 hover:border-green-300/80";
 
-                            var statusBadgeHtml = colStatus == 0 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-50 border border-slate-100 text-[8px] font-black text-slate-400 uppercase tracking-wide""><i data-lucide=""user"" class=""w-2.5 h-2.5""></i> Phân việc</span>" :
-                                                  colStatus == 1 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100/50 text-[8px] font-black text-indigo-500 uppercase tracking-wide animate-pulse""><i data-lucide=""play"" class=""w-2.5 h-2.5""></i> Thực thi</span>" :
-                                                  colStatus == 2 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-50 border border-purple-100 text-[8px] font-black text-purple-600 uppercase tracking-wide""><i data-lucide=""shield-alert"" class=""w-2.5 h-2.5""></i> Kiểm soát</span>" :
-                                                                   @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-50 border border-green-100 text-[8px] font-black text-green-600 uppercase tracking-wide""><i data-lucide=""check-check"" class=""w-2.5 h-2.5""></i> Đã Duyệt</span>";
+                            var statusBadgeHtml = colStatus == 0 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-50 border border-slate-100 text-[8px] font-black text-slate-400 uppercase tracking-wide""><i data-lucide=""user"" class=""w-2.5 h-2.5""></i> To Do</span>" :
+                                                  colStatus == 1 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100/50 text-[8px] font-black text-indigo-500 uppercase tracking-wide animate-pulse""><i data-lucide=""play"" class=""w-2.5 h-2.5""></i> In Progress</span>" :
+                                                  colStatus == 2 ? @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-50 border border-purple-100 text-[8px] font-black text-purple-600 uppercase tracking-wide""><i data-lucide=""shield-alert"" class=""w-2.5 h-2.5""></i> Review</span>" :
+                                                                   @"<span class=""inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-50 border border-green-100 text-[8px] font-black text-green-600 uppercase tracking-wide""><i data-lucide=""check-check"" class=""w-2.5 h-2.5""></i> Done</span>";
 
-                            <div @@click="selectedTask = JSON.parse(atob('@Model.SerializeTaskBase64(task)')); if (selectedTask) { selectedTask.dueDateFormatted = selectedTask.dueDate ? selectedTask.dueDate.substring(0, 16) : ''; selectedTask.assigneeId = selectedTask.assignee ? selectedTask.assignee.id : ''; } isEditing = false; detailOpen = true;"
+                            <div @@click="selectTask('@Model.SerializeTaskBase64(task)')"
                                  x-show="(searchQuery === '' || '@task.Title.ToLower()'.includes(searchQuery.toLowerCase())) && 
                                          (filterPriority === '' || '@task.Priority' === filterPriority) && 
                                          (filterAssignee === '' || '@task.AssigneeId' === filterAssignee)"
                                  draggable="true"
                                  @@dragstart="
                                      if (currentUserRole !== 'Owner' && currentUserRole !== 'Manager' && '@task.AssigneeId' !== currentUserId) {
-                                         alert('Bạn chỉ có thể di chuyển công việc được giao cho chính bạn!');
+                                         alert('You can only move tasks assigned to yourself!');
                                          $event.preventDefault();
                                          return;
                                      }
@@ -645,8 +645,8 @@
                 <!-- Empty state -->
                 <div x-show="filteredMessages.length === 0" class="text-center py-20 text-slate-400 transition-all">
                     <i data-lucide="messages-square" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
-                    <p class="font-bold" x-text="'Không có tin nhắn nào trong kênh #' + activeChannel + '...'"></p>
-                    <p class="text-xs text-slate-400 mt-1">Hãy bắt đầu câu chuyện đầu tiên trong kênh này!</p>
+                    <p class="font-bold" x-text="'No messages in channel #' + activeChannel + '...'"></p>
+                    <p class="text-xs text-slate-400 mt-1">Start the first conversation in this channel!</p>
                 </div>
 
                 <template x-for="msg in filteredMessages" :key="msg.id">
@@ -695,7 +695,7 @@
                  class="mx-4 p-2 bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col gap-1.5 max-h-48 overflow-y-auto transition-all"
                  x-transition>
                 <div class="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                    Gợi ý nhắc tên (Type <span x-text="showSuggestions?.type"></span>)
+                    Mentions suggestions (Type <span x-text="showSuggestions?.type"></span>)
                 </div>
                 <div class="space-y-0.5">
                     <!-- Member Suggestions -->
@@ -710,7 +710,7 @@
                                 </button>
                             </template>
                             <template x-if="filteredMembers.length === 0">
-                                <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">Không tìm thấy thành viên khớp.</div>
+                                <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">No matching members found.</div>
                             </template>
                         </div>
                     </template>
@@ -727,7 +727,7 @@
                                 </button>
                             </template>
                             <template x-if="filteredTasks.length === 0">
-                                <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">Không tìm thấy công việc khớp.</div>
+                                <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">No matching tasks found.</div>
                             </template>
                         </div>
                     </template>
@@ -739,8 +739,8 @@
                  class="mx-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-xl space-y-3 transition-all"
                  x-transition>
                 <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <span class="text-xs font-black text-slate-800 uppercase tracking-widest">Đính kèm tài liệu Workspace</span>
-                    <button type="button" @@click="attachFileOpen = false" class="text-xs text-slate-400 hover:text-slate-600 font-black">Đóng</button>
+                    <span class="text-xs font-black text-slate-800 uppercase tracking-widest">Attach Workspace document</span>
+                    <button type="button" @@click="attachFileOpen = false" class="text-xs text-slate-400 hover:text-slate-600 font-black">Close</button>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
                     <template x-for="file in workspaceFiles" :key="file.id">
@@ -753,7 +753,7 @@
                         </button>
                     </template>
                     <template x-if="workspaceFiles.length === 0">
-                        <div class="col-span-2 text-center py-4 text-xs font-bold text-slate-400 italic">Không có tài liệu nào trong workspace. Hãy upload tài liệu trước!</div>
+                        <div class="col-span-2 text-center py-4 text-xs font-bold text-slate-400 italic">No documents in workspace. Please upload documents first!</div>
                     </template>
                 </div>
             </div>
@@ -764,7 +764,7 @@
                  x-transition>
                 <span class="flex items-center gap-1.5 truncate">
                     <i data-lucide="file-check" class="w-4 h-4 text-indigo-600"></i>
-                    <span>Tệp đính kèm: </span>
+                    <span>Attachment: </span>
                     <strong class="truncate" x-text="selectedAttachmentName"></strong>
                 </span>
                 <button type="button" @@click="selectedAttachmentId = null; selectedAttachmentName = '';" class="text-indigo-400 hover:text-indigo-600 transition-colors">
@@ -787,7 +787,7 @@
                     </button>
                     
                     <input type="text" id="chat-input-field" asp-for="ChatContent" x-model="chatInput" autocomplete="off"
-                           :placeholder="'Nhắn tin vào #' + activeChannel + '...'" required
+                           :placeholder="'Message in #' + activeChannel + '...'" required
                            class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                     
                     <button type="submit" class="bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
@@ -1001,7 +1001,7 @@
                     </div>
                     <div class="flex justify-between">
                         <span class="text-slate-400 uppercase tracking-wider">Uploaded</span>
-                        <span class="text-slate-700" x-text="previewFile?.createdAt ? new Date(previewFile.createdAt).toLocaleDateString() : 'Just now'"></span>
+                        <span class="text-slate-700" x-text="previewFile?.createdAt ? new Date(previewFile.createdAt).toLocaleDateString('en-US') : 'Just now'"></span>
                     </div>
                 </div>
                 <a :href="'/' + previewFile?.fileUrl" class="w-full py-3 mt-8 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center gap-2 transition-all" download>
@@ -1060,7 +1060,7 @@
                     </div>
                     <div>
                         <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date</h4>
-                        <p class="text-sm font-bold text-slate-700 mt-1" x-text="selectedTask?.dueDate ? new Date(selectedTask.dueDate).toLocaleDateString(undefined, {month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'No date set'"></p>
+                        <p class="text-sm font-bold text-slate-700 mt-1" x-text="selectedTask?.dueDate ? new Date(selectedTask.dueDate).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'No date set'"></p>
                     </div>
                 </div>
 
@@ -1069,21 +1069,21 @@
                     <template x-if="currentUserRole === 'Owner' || currentUserRole === 'Manager'">
                         <div class="p-4 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-3">
                             <p class="text-xs font-black text-purple-700 flex items-center gap-1.5">
-                                <i data-lucide="eye" class="w-4 h-4"></i> Phê Duyệt Hoàn Thành (Quy trình Assurance)
+                                <i data-lucide="eye" class="w-4 h-4"></i> Approve Completion (Assurance Process)
                             </p>
                             <div class="flex gap-2">
                                 <form method="post" asp-page-handler="UpdateTaskStatus" class="inline-block">
                                     <input type="hidden" name="taskId" :value="selectedTask?.id">
                                     <input type="hidden" name="status" value="3">
                                     <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow shadow-green-100 transition-all flex items-center gap-1.5 cursor-pointer">
-                                        <i data-lucide="check" class="w-4 h-4"></i> Duyệt & Hoàn Thành (Approve)
+                                        <i data-lucide="check" class="w-4 h-4"></i> Approve & Complete
                                     </button>
                                 </form>
                                 <form method="post" asp-page-handler="UpdateTaskStatus" class="inline-block">
                                     <input type="hidden" name="taskId" :value="selectedTask?.id">
                                     <input type="hidden" name="status" value="1">
                                     <button type="submit" class="border border-purple-300 text-purple-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-purple-100 transition-all flex items-center gap-1.5 cursor-pointer">
-                                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Yêu Cầu Sửa Lại (Rework)
+                                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Request Rework
                                     </button>
                                 </form>
                             </div>
@@ -1093,8 +1093,8 @@
                         <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-2.5">
                             <i data-lucide="shield-alert" class="w-4.5 h-4.5 text-indigo-500 shrink-0 mt-0.5 animate-pulse"></i>
                             <div>
-                                <p class="text-xs font-black text-slate-700">Đang Chờ Quản Lý Phê Duyệt</p>
-                                <p class="mt-0.5 text-[10px] text-slate-500 leading-normal font-semibold">Công việc đã được nộp lên cột Review và đang chờ chủ sở hữu hoặc quản lý đánh giá chất lượng (Assurance) duyệt hoàn thành.</p>
+                                <p class="text-xs font-black text-slate-700">Waiting for Management Approval</p>
+                                <p class="mt-0.5 text-[10px] text-slate-500 leading-normal font-semibold">This task has been submitted to the Review column and is waiting for the owner or manager to review quality (Assurance) and approve completion.</p>
                             </div>
                         </div>
                     </template>
@@ -1133,9 +1133,19 @@
                     </div>
                     <div class="space-y-1">
                         <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date & Time</label>
-                        <input type="datetime-local" name="editTaskDueDate" x-model="selectedTask.dueDateFormatted"
-                               :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
-                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="date" x-model="selectedTask.dueDateDate"
+                                   :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
+                                   class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                            <select x-model="selectedTask.dueDateTime"
+                                    :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
+                                    class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white font-semibold disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                                <template x-for="slot in timeSlots" :key="slot.value">
+                                    <option :value="slot.value" x-text="slot.label"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <input type="hidden" name="editTaskDueDate" :value="selectedTask.dueDateDate ? selectedTask.dueDateDate + 'T' + selectedTask.dueDateTime : ''">
                     </div>
                 </div>
 
@@ -1237,9 +1247,18 @@
                         </select>
                     </div>
                     <div class="space-y-1">
-                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date</label>
-                        <input type="datetime-local" asp-for="NewTaskDueDate"
-                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date & Time</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="date" x-model="createTaskDate" required
+                                   class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            <select x-model="createTaskTime"
+                                    class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white font-semibold">
+                                <template x-for="slot in timeSlots" :key="slot.value">
+                                    <option :value="slot.value" x-text="slot.label"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <input type="hidden" name="NewTaskDueDate" :value="createTaskDate ? createTaskDate + 'T' + createTaskTime : ''">
                     </div>
                 </div>
 
@@ -1372,16 +1391,16 @@
                 <div class="h-10 w-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
                     <i data-lucide="message-square" class="w-5 h-5"></i>
                 </div>
-                <h3 class="text-lg font-black text-slate-800">Tạo Kênh Chat Mới</h3>
+                <h3 class="text-lg font-black text-slate-800">Create New Chat Channel</h3>
             </div>
 
             <div class="space-y-4">
                 <div class="space-y-1">
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Tên Kênh Mới</label>
-                    <input type="text" x-model="newChannelName" placeholder="Ví dụ: database-design, tasks"
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">New Channel Name</label>
+                    <input type="text" x-model="newChannelName" placeholder="e.g. database-design, tasks"
                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                 </div>
-                <p class="text-[10px] font-bold text-slate-400 leading-normal">Kênh mới sẽ được khởi tạo trong bộ nhớ của Workspace. Khi bạn gửi tin nhắn đầu tiên, kênh sẽ được lưu trữ vĩnh viễn.</p>
+                <p class="text-[10px] font-bold text-slate-400 leading-normal">New channel will be initialized in Workspace memory. Once you send the first message, the channel will be saved permanently.</p>
             </div>
 
             <div class="flex gap-3">
@@ -1399,12 +1418,12 @@
                             }
                         "
                         class="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-md shadow-indigo-100 transition-all flex items-center justify-center gap-1.5">
-                    Tạo Kênh Mới
+                    Create New Channel
                 </button>
                 <button type="button" 
                         @@click="createChannelOpen = false" 
                         class="flex-1 py-3.5 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-2xl font-bold transition-all">
-                    Hủy Bỏ
+                    Cancel
                 </button>
             </div>
         </div>
@@ -1426,6 +1445,9 @@
                 renameFileId: null,
                 renameFileName: '',
                 selectedTask: null,
+                createTaskDate: '',
+                createTaskTime: '09:00',
+                timeSlots: [],
                 createTaskStatus: 0,
                 activeFileSection: 'files',
                 viewMode: 'grid',
@@ -1458,10 +1480,10 @@
                 workspaceFiles: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Files.Select(f => new { id = f.Id.ToString(), fileName = f.FileName, fileUrl = f.FileUrl, fileSize = f.FileSize, fileType = f.FileType }).ToList())),
 
                 statusLabel(status) {
-                    if (status === 0) return 'Phân việc (To Do)';
-                    if (status === 1) return 'Thực thi (In Progress)';
-                    if (status === 2) return 'Kiểm soát (Review/Assurance)';
-                    if (status === 3) return 'Hoàn thành (Done)';
+                    if (status === 0) return 'To Do';
+                    if (status === 1) return 'In Progress';
+                    if (status === 2) return 'Review';
+                    if (status === 3) return 'Done';
                     return 'Unknown';
                 },
 
@@ -1476,13 +1498,13 @@
                             window.location.reload();
                         } else {
                             const data = await res.json().catch(() => ({}));
-                            alert(data.message || 'Không thể cập nhật trạng thái công việc. Vui lòng kiểm tra quyền hạn của bạn.');
+                            alert(data.message || 'Could not update task status. Please check your permissions.');
                             window.location.reload();
                         }
                     })
                     .catch(err => {
                         console.error(err);
-                        alert('Có lỗi xảy ra khi kết nối đến máy chủ.');
+                        alert('An error occurred while connecting to the server.');
                         window.location.reload();
                     });
                 },
@@ -1509,7 +1531,7 @@
 
                 parseMessageContent(content) {
                     let text = content.replace(/\[file:[a-f0-9-]{36}\]/gi, '').trim();
-                    if (!text) return '<span class="italic text-slate-400 text-xs inline-flex items-center gap-1"><i data-lucide="file-text" class="w-3.5 h-3.5"></i> Đã chia sẻ tài liệu</span>';
+                    if (!text) return '<span class="italic text-slate-400 text-xs inline-flex items-center gap-1"><i data-lucide="file-text" class="w-3.5 h-3.5"></i> Shared document</span>';
 
                     let html = text
                         .replace(/&/g, '&amp;')
@@ -1539,7 +1561,7 @@
                 formatTime(dateStr) {
                     if (!dateStr) return '';
                     const d = new Date(dateStr);
-                    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
                 },
 
                 get showSuggestions() {
@@ -1577,7 +1599,56 @@
                     });
                 },
 
+                generateTimeSlots() {
+                    let slots = [];
+                    for (let slot = 0; slot < 34; slot++) {
+                        let h = 7 + Math.floor(slot / 2);
+                        let m = slot % 2 === 0 ? '00' : '30';
+                        let suffix = h >= 12 ? 'PM' : 'AM';
+                        let displayHour = h % 12 === 0 ? 12 : h % 12;
+                        let label = displayHour.toString().padStart(2, '0') + ':' + m + ' ' + suffix;
+                        let value = h.toString().padStart(2, '0') + ':' + m;
+                        slots.push({ value: value, label: label });
+                    }
+                    return slots;
+                },
+
+                selectTask(taskJsonBase64) {
+                    let task = JSON.parse(atob(taskJsonBase64));
+                    this.selectedTask = task;
+                    if (task) {
+                        task.assigneeId = task.assignee ? task.assignee.id : '';
+                        if (task.dueDate) {
+                            let d = new Date(task.dueDate);
+                            let year = d.getFullYear();
+                            let month = (d.getMonth() + 1).toString().padStart(2, '0');
+                            let date = d.getDate().toString().padStart(2, '0');
+                            task.dueDateDate = `${year}-${month}-${date}`;
+                            
+                            let hours = d.getHours().toString().padStart(2, '0');
+                            let minutes = d.getMinutes().toString().padStart(2, '0');
+                            let minNum = parseInt(minutes);
+                            if (minNum >= 45) {
+                                let hNum = parseInt(hours) + 1;
+                                hours = hNum.toString().padStart(2, '0');
+                                minutes = '00';
+                            } else if (minNum >= 15) {
+                                minutes = '30';
+                            } else {
+                                minutes = '00';
+                            }
+                            task.dueDateTime = `${hours}:${minutes}`;
+                        } else {
+                            task.dueDateDate = '';
+                            task.dueDateTime = '09:00';
+                        }
+                    }
+                    this.isEditing = false;
+                    this.detailOpen = true;
+                },
+
                 init() {
+                    this.timeSlots = this.generateTimeSlots();
                     this.scrollChatToBottom();
                     this.$watch('activeTab', value => {
                         localStorage.setItem('unigrid_workspace_tab_' + '@Model.Workspace.JoinCode', value);

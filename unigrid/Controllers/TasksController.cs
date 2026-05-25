@@ -40,20 +40,20 @@ namespace unigrid.Controllers
             var accountIdClaim = User.FindFirst("AccountId")?.Value;
             if (string.IsNullOrEmpty(accountIdClaim))
             {
-                return Unauthorized(new { message = "Bạn cần đăng nhập để thực hiện tác vụ này." });
+                return Unauthorized(new { message = "You must be logged in to perform this action." });
             }
 
             var accountId = Guid.Parse(accountIdClaim);
             var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
             if (userProfile == null)
             {
-                return Unauthorized(new { message = "Không tìm thấy thông tin tài khoản." });
+                return Unauthorized(new { message = "Account information not found." });
             }
 
             var workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.Id == task.WorkspaceId);
             if (workspace == null)
             {
-                return BadRequest(new { message = "Workspace không tồn tại." });
+                return BadRequest(new { message = "Workspace does not exist." });
             }
 
             var memberRecord = await _context.WorkspaceMembers
@@ -70,12 +70,12 @@ namespace unigrid.Controllers
                 if (task.AssigneeId != userProfile.Id)
                 {
                     _logger.LogWarning("REST API: Member {UserId} attempted to move unassigned task {TaskId}.", userProfile.Id, id);
-                    return StatusCode(403, new { message = "Bạn chỉ có thể di chuyển công việc được giao cho chính bạn!" });
+                    return StatusCode(403, new { message = "You can only move tasks assigned to yourself!" });
                 }
                 if (request.Status == 3)
                 {
                     _logger.LogWarning("REST API: Member {UserId} attempted to complete task {TaskId} without management approval.", userProfile.Id, id);
-                    return StatusCode(403, new { message = "Chỉ Quản lý hoặc Chủ sở hữu mới có quyền duyệt (Approve) và hoàn thành công việc!" });
+                    return StatusCode(403, new { message = "Only Managers or Owners have permission to approve and complete tasks!" });
                 }
             }
 
