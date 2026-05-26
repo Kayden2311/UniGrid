@@ -5,6 +5,7 @@ using unigrid.Data;
 using unigrid.Models;
 using System.Security.Claims;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.SignalR;
 
 namespace unigrid.Pages;
 
@@ -13,11 +14,13 @@ public class WorkspaceDetailModel : PageModel
 {
     private readonly UniGridDbContext _context;
     private readonly ILogger<WorkspaceDetailModel> _logger;
+    private readonly IHubContext<unigrid.Hubs.ChatHub> _hubContext;
 
-    public WorkspaceDetailModel(UniGridDbContext context, ILogger<WorkspaceDetailModel> logger)
+    public WorkspaceDetailModel(UniGridDbContext context, ILogger<WorkspaceDetailModel> logger, IHubContext<unigrid.Hubs.ChatHub> hubContext)
     {
         _context = context;
         _logger = logger;
+        _hubContext = hubContext;
     }
 
     public Workspace Workspace { get; set; } = null!;
@@ -331,7 +334,14 @@ public class WorkspaceDetailModel : PageModel
 
     public async System.Threading.Tasks.Task<IActionResult> OnPostAddTaskCommentAsync(string joinCode)
     {
-        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+        if (!await LoadWorkspaceDataAsync(joinCode))
+        {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "Workspace not found or unauthorized." });
+            }
+            return RedirectToPage("/Dashboard");
+        }
 
         if (!string.IsNullOrEmpty(CommentContent) && CommentTaskId != Guid.Empty)
         {
@@ -347,6 +357,23 @@ public class WorkspaceDetailModel : PageModel
             await _context.TaskComments.AddAsync(comment);
             await _context.SaveChangesAsync();
             _logger.LogInformation("Comment added to task {TaskId} by {UserId}", CommentTaskId, CurrentUser.Id);
+
+            var payload = new
+            {
+                id = comment.Id,
+                taskId = comment.TaskId,
+                userId = comment.UserId,
+                userName = CurrentUser.FullName,
+                content = comment.Content,
+                createdAt = comment.CreatedAt
+            };
+
+            await _hubContext.Clients.Group(Workspace.Id.ToString()).SendAsync("ReceiveTaskComment", payload);
+
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new JsonResult(payload);
+            }
         }
 
         return RedirectToPage(new { joinCode });
@@ -354,7 +381,14 @@ public class WorkspaceDetailModel : PageModel
 
     public async System.Threading.Tasks.Task<IActionResult> OnPostSendChatMessageAsync(string joinCode, string activeChannel, Guid? selectedFileId)
     {
-        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+        if (!await LoadWorkspaceDataAsync(joinCode))
+        {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "Workspace not found or unauthorized." });
+            }
+            return RedirectToPage("/Dashboard");
+        }
 
         if (!string.IsNullOrEmpty(ChatContent) && ChatRoom != null)
         {
@@ -382,6 +416,26 @@ public class WorkspaceDetailModel : PageModel
             await _context.ChatMessages.AddAsync(message);
             await _context.SaveChangesAsync();
             _logger.LogInformation("Chat message sent in room {RoomId} in channel {Channel} by {UserId}", ChatRoom.Id, activeChannel, CurrentUser.Id);
+
+            string cleanContent = ChatContent;
+            var payload = new
+            {
+                id = message.Id,
+                roomId = message.RoomId,
+                senderId = message.SenderId,
+                senderName = CurrentUser.FullName,
+                content = cleanContent,
+                rawContent = message.Content,
+                sentAt = message.SentAt,
+                channel = string.IsNullOrEmpty(activeChannel) ? "general" : activeChannel
+            };
+
+            await _hubContext.Clients.Group(Workspace.Id.ToString()).SendAsync("ReceiveChatMessage", payload);
+
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new JsonResult(payload);
+            }
         }
 
         return RedirectToPage(new { joinCode });
