@@ -348,13 +348,67 @@ public class WorkspaceDetailModel : PageModel
             fileType = "image";
         }
 
+        // 1. Get workspace plan and maximum allowed storage limit
+        long maxStorageLimit = 0;
+        string packageTier = Workspace.PackageTier ?? "Free";
+        if (packageTier == "Pro")
+        {
+            maxStorageLimit = 20L * 1024 * 1024 * 1024; // 20 GB
+        }
+        else if (packageTier == "ProPlus")
+        {
+            maxStorageLimit = 40L * 1024 * 1024 * 1024; // 40 GB
+        }
+        else if (packageTier == "Business")
+        {
+            maxStorageLimit = 80L * 1024 * 1024 * 1024; // 80 GB
+        }
+
+        // 2. Perform limit validation
+        if (packageTier == "Free")
+        {
+            TempData["UploadError"] = "File uploads are not allowed on the Free plan. Please upgrade your workspace package to upload files.";
+            return RedirectToPage(new { joinCode });
+        }
+
+        // 3. Sum up existing file sizes in the database for this workspace
+        long totalStorageUsed = await _context.WorkspaceFiles
+            .Where(f => f.WorkspaceId == Workspace.Id)
+            .SumAsync(f => f.FileSize);
+
+        if (totalStorageUsed + UploadedFile.Length > maxStorageLimit)
+        {
+            string limitStr = maxStorageLimit >= 1024L * 1024 * 1024 
+                ? $"{(maxStorageLimit / (1024L * 1024 * 1024))} GB" 
+                : "0 GB";
+            TempData["UploadError"] = $"Upload failed. This workspace has exceeded its storage limit of {limitStr} for the {packageTier} plan.";
+            return RedirectToPage(new { joinCode });
+        }
+
+        // 4. Save file uniquely and isolate it under the workspace directory
+        string uploadDir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "files", Workspace.Id.ToString());
+        if (!System.IO.Directory.Exists(uploadDir))
+        {
+            System.IO.Directory.CreateDirectory(uploadDir);
+        }
+
+        string safeFileName = originalFileName.ToLower().Replace(" ", "_");
+        string physicalPath = System.IO.Path.Combine(uploadDir, safeFileName);
+
+        // Copy file to local storage path
+        using (var stream = new System.IO.FileStream(physicalPath, System.IO.FileMode.Create))
+        {
+            await UploadedFile.CopyToAsync(stream);
+        }
+
+        // 5. Create database record with isolated file URL
         var file = new WorkspaceFile
         {
             Id = Guid.NewGuid(),
             WorkspaceId = Workspace.Id,
             UserId = CurrentUser.Id,
             FileName = originalFileName,
-            FileUrl = "files/" + originalFileName.ToLower().Replace(" ", "_"),
+            FileUrl = $"files/{Workspace.Id}/{safeFileName}",
             FileType = fileType,
             FileSize = UploadedFile.Length,
             CreatedAt = DateTime.UtcNow
