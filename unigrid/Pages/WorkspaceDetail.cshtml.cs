@@ -44,6 +44,10 @@ public class WorkspaceDetailModel : PageModel
     public DateTime? NewTaskDueDate { get; set; }
     [BindProperty]
     public int NewTaskStatus { get; set; } = 0; // Todo default
+    [BindProperty]
+    public Microsoft.AspNetCore.Http.IFormFile? NewTaskFile { get; set; }
+    [BindProperty]
+    public Microsoft.AspNetCore.Http.IFormFile? EditTaskFile { get; set; }
 
     // Direct binding for comments
     [BindProperty]
@@ -177,6 +181,18 @@ public class WorkspaceDetailModel : PageModel
 
             await _context.Tasks.AddAsync(task);
             await _context.SaveChangesAsync();
+
+            // Handle file attachment if any
+            if (NewTaskFile != null && NewTaskFile.Length > 0)
+            {
+                var file = await ProcessFileUploadAsync(NewTaskFile, task.Id);
+                if (file != null)
+                {
+                    await _context.WorkspaceFiles.AddAsync(file);
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             _logger.LogInformation("Task created: {Title} in Workspace {WorkspaceId}", NewTaskTitle, Workspace.Id);
         }
 
@@ -200,6 +216,10 @@ public class WorkspaceDetailModel : PageModel
                 if (status == 3)
                 {
                     return Forbid(); // Normal members cannot move tasks directly to Done
+                }
+                if (task.Status == 3)
+                {
+                    return Forbid(); // Normal members cannot move completed tasks out of Done (rework)
                 }
             }
 
@@ -230,11 +250,83 @@ public class WorkspaceDetailModel : PageModel
             
             task.Description = editTaskDescription;
 
+            // Handle file attachment if any
+            if (EditTaskFile != null && EditTaskFile.Length > 0)
+            {
+                var file = await ProcessFileUploadAsync(EditTaskFile, task.Id);
+                if (file != null)
+                {
+                    await _context.WorkspaceFiles.AddAsync(file);
+                }
+            }
+
             await _context.SaveChangesAsync();
             _logger.LogInformation("Task edited. TaskId: {TaskId}", editTaskId);
         }
 
         return RedirectToPage(new { joinCode });
+    }
+
+    private async System.Threading.Tasks.Task<WorkspaceFile?> ProcessFileUploadAsync(Microsoft.AspNetCore.Http.IFormFile uploadedFile, Guid taskId)
+    {
+        if (uploadedFile == null || uploadedFile.Length == 0) return null;
+
+        string originalFileName = uploadedFile.FileName;
+        string baseName = System.IO.Path.GetFileNameWithoutExtension(originalFileName);
+        string extension = System.IO.Path.GetExtension(originalFileName).TrimStart('.').ToLower();
+
+        if (string.IsNullOrEmpty(baseName) || baseName.Contains('.')) return null;
+
+        foreach (char c in baseName)
+        {
+            if (!char.IsLetterOrDigit(c) && c != ' ' && c != '-' && c != '_') return null;
+        }
+
+        string fileType = "doc";
+        if (extension == "pdf") fileType = "pdf";
+        else if (extension == "xls" || extension == "xlsx" || extension == "csv") fileType = "spreadsheet";
+        else if (extension == "png" || extension == "jpg" || extension == "jpeg" || extension == "gif" || extension == "svg") fileType = "image";
+
+        long maxStorageLimit = 0;
+        string packageTier = Workspace.PackageTier ?? "Free";
+        if (packageTier == "Pro") maxStorageLimit = 20L * 1024 * 1024 * 1024;
+        else if (packageTier == "ProPlus") maxStorageLimit = 40L * 1024 * 1024 * 1024;
+        else if (packageTier == "Business") maxStorageLimit = 80L * 1024 * 1024 * 1024;
+
+        if (packageTier == "Free") return null;
+
+        long totalStorageUsed = await _context.WorkspaceFiles
+            .Where(f => f.WorkspaceId == Workspace.Id)
+            .SumAsync(f => f.FileSize);
+
+        if (totalStorageUsed + uploadedFile.Length > maxStorageLimit) return null;
+
+        string uploadDir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", "files", Workspace.Id.ToString());
+        if (!System.IO.Directory.Exists(uploadDir))
+        {
+            System.IO.Directory.CreateDirectory(uploadDir);
+        }
+
+        string safeFileName = originalFileName.ToLower().Replace(" ", "_");
+        string physicalPath = System.IO.Path.Combine(uploadDir, safeFileName);
+
+        using (var stream = new System.IO.FileStream(physicalPath, System.IO.FileMode.Create))
+        {
+            await uploadedFile.CopyToAsync(stream);
+        }
+
+        return new WorkspaceFile
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = Workspace.Id,
+            TaskId = taskId,
+            UserId = CurrentUser.Id,
+            FileName = originalFileName,
+            FileUrl = $"files/{Workspace.Id}/{safeFileName}",
+            FileType = fileType,
+            FileSize = uploadedFile.Length,
+            CreatedAt = DateTime.UtcNow
+        };
     }
 
     public async System.Threading.Tasks.Task<IActionResult> OnPostAddTaskCommentAsync(string joinCode)
