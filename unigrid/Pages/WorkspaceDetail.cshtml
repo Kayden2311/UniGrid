@@ -80,6 +80,36 @@
         .OrderByDescending(a => a.Time)
         .Take(10)
         .ToList();
+
+    // Storage Calculations
+    long totalStorageUsed = Model.Files.Sum(f => f.FileSize);
+    long maxStorageLimit = 0;
+    string packageTier = Model.Workspace.PackageTier ?? "Free";
+    if (packageTier == "Pro")
+    {
+        maxStorageLimit = 20L * 1024 * 1024 * 1024; // 20 GB
+    }
+    else if (packageTier == "ProPlus")
+    {
+        maxStorageLimit = 40L * 1024 * 1024 * 1024; // 40 GB
+    }
+    else if (packageTier == "Business")
+    {
+        maxStorageLimit = 80L * 1024 * 1024 * 1024; // 80 GB
+    }
+
+    double storagePercent = maxStorageLimit > 0 ? ((double)totalStorageUsed / maxStorageLimit) * 100 : (packageTier == "Free" ? 100.0 : 0.0);
+
+    string usedStorageStr = "";
+    if (totalStorageUsed >= 1024L * 1024 * 1024) {
+        usedStorageStr = $"{(totalStorageUsed / (1024.0 * 1024 * 1024)):F1} GB";
+    } else {
+        usedStorageStr = $"{(totalStorageUsed / (1024.0 * 1024)):F1} MB";
+    }
+
+    string limitStr = maxStorageLimit >= 1024L * 1024 * 1024 
+        ? $"{(maxStorageLimit / (1024L * 1024 * 1024))} GB" 
+        : "0 GB";
 }
 
 <div class="space-y-6" 
@@ -1078,10 +1108,10 @@
             <div class="p-4 border-t border-slate-100 text-xs font-bold text-slate-400">
                 <div class="flex justify-between mb-1.5">
                     <span>Usage</span>
-                    <span class="text-slate-600">8.9 MB / 100 MB</span>
+                    <span class="text-slate-600">@usedStorageStr / @limitStr</span>
                 </div>
                 <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div class="h-full bg-indigo-600 rounded-full" style="width: 8.9%"></div>
+                    <div class="h-full bg-indigo-600 rounded-full" style="width: @(storagePercent > 100 ? "100" : storagePercent.ToString("F1"))%"></div>
                 </div>
             </div>
         </div>
