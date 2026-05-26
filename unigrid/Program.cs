@@ -176,5 +176,6 @@ app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();
 app.MapControllers();
+app.MapHub<unigrid.Hubs.ChatHub>("/chatHub");
 
 app.Run();
