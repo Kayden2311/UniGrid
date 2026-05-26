@@ -319,11 +319,11 @@ INSERT INTO TaskComments (TaskId, UserId, Content, CreatedAt) VALUES
 
 -- 9. Add Workspace Files (matching the frontend files tab)
 INSERT INTO WorkspaceFiles (WorkspaceId, TaskId, UserId, FileName, FileUrl, FileType, FileSize) VALUES 
-(@W_SE, @T1, @P_Alice, 'Transformer_Comparison.pdf', 'files/transformer_comparison.pdf', 'pdf', 2516582), -- 2.4 MB
-(@W_SE, @T3, @P_Bob, 'Database_Schema_Draft.docx', 'files/db_schema.docx', 'doc', 1153433), -- 1.1 MB
-(@W_SE, NULL, @P_Diana, 'Budget.xlsx', 'files/budget.xlsx', 'spreadsheet', 348160), -- 340 KB
-(@W_SE, @T10, @P_Charlie, 'Wireframe.png', 'files/wireframe.png', 'image', 4404019), -- 4.2 MB
-(@W_SE, @T4, @P_Eve, 'Lab_Procedure_3.pdf', 'files/lab_procedure_3.pdf', 'pdf', 911360); -- 890 KB
+(@W_SE, @T1, @P_Alice, 'Transformer_Comparison.pdf', 'files/99999999-9999-9999-9999-999999999999/transformer_comparison.pdf', 'pdf', 2516582), -- 2.4 MB
+(@W_SE, @T3, @P_Bob, 'Database_Schema_Draft.docx', 'files/99999999-9999-9999-9999-999999999999/db_schema.docx', 'doc', 1153433), -- 1.1 MB
+(@W_SE, NULL, @P_Diana, 'Budget.xlsx', 'files/99999999-9999-9999-9999-999999999999/budget.xlsx', 'spreadsheet', 348160), -- 340 KB
+(@W_SE, @T10, @P_Charlie, 'Wireframe.png', 'files/99999999-9999-9999-9999-999999999999/wireframe.png', 'image', 4404019), -- 4.2 MB
+(@W_SE, @T4, @P_Eve, 'Lab_Procedure_3.pdf', 'files/99999999-9999-9999-9999-999999999999/lab_procedure_3.pdf', 'pdf', 911360); -- 890 KB
 
 -- 10. Add ChatRoom for Workspace (General)
 DECLARE @CR_SE UNIQUEIDENTIFIER = NEWID();
