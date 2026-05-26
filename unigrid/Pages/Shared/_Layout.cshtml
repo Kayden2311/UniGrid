@@ -15,6 +15,8 @@
         .glass { background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
         .sidebar-gradient { background: #ffffff; }
         [x-cloak] { display: none !important; }
+        /* Anti-flicker: hide html until DOM is parsed */
+        html { visibility: hidden; }
     </style>
 </head>
 @{
@@ -190,6 +192,11 @@
     <script src="~/js/site.js" asp-append-version="true"></script>
     <script>
         lucide.createIcons();
+        
+        document.addEventListener("DOMContentLoaded", function () {
+            // Anti-flicker: reveal the html layout instantly now that DOM is parsed and Tailwind/CSS are loaded
+            document.documentElement.style.setProperty("visibility", "visible", "important");
+        });
     </script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

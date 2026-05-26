@@ -15,40 +15,44 @@
 
     <!-- Stats Row -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="glass p-5 rounded-2xl flex items-center gap-4 border-l-4 border-indigo-500 shadow-sm">
-            <div class="h-12 w-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
-                <i data-lucide="target" class="w-6 h-6"></i>
-            </div>
+        <!-- Total Tasks -->
+        <div class="bg-white py-3 px-5 rounded-2xl border border-slate-150 border-l-[4px] border-l-indigo-500 flex items-center justify-between shadow-xs">
             <div>
-                <p class="text-2xl font-bold text-slate-800" x-text="totalTasks()"></p>
-                <p class="text-xs text-slate-500 font-medium">Total Tasks</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Tasks</p>
+                <h4 class="text-2xl font-black text-slate-800 tracking-tight mt-0.5" x-text="totalTasks()"></h4>
+            </div>
+            <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <i data-lucide="target" class="w-4 h-4"></i>
             </div>
         </div>
-        <div class="glass p-5 rounded-2xl flex items-center gap-4 border-l-4 border-emerald-500 shadow-sm">
-            <div class="h-12 w-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
-                <i data-lucide="check-circle" class="w-6 h-6"></i>
-            </div>
+        <!-- Completed -->
+        <div class="bg-white py-3 px-5 rounded-2xl border border-slate-150 border-l-[4px] border-l-emerald-500 flex items-center justify-between shadow-xs">
             <div>
-                <p class="text-2xl font-bold text-slate-800" x-text="completedTasks()"></p>
-                <p class="text-xs text-slate-500 font-medium">Completed</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Completed</p>
+                <h4 class="text-2xl font-black text-emerald-600 tracking-tight mt-0.5" x-text="completedTasks()"></h4>
+            </div>
+            <div class="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                <i data-lucide="check-circle" class="w-4 h-4"></i>
             </div>
         </div>
-        <div class="glass p-5 rounded-2xl flex items-center gap-4 border-l-4 border-amber-500 shadow-sm">
-            <div class="h-12 w-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600">
-                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
-            </div>
+        <!-- Due Soon -->
+        <div class="bg-white py-3 px-5 rounded-2xl border border-slate-150 border-l-[4px] border-l-amber-500 flex items-center justify-between shadow-xs">
             <div>
-                <p class="text-2xl font-bold text-slate-800" x-text="dueSoonCount()"></p>
-                <p class="text-xs text-slate-500 font-medium">Due Soon</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Due Soon</p>
+                <h4 class="text-2xl font-black text-amber-600 tracking-tight mt-0.5" x-text="dueSoonCount()"></h4>
+            </div>
+            <div class="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
             </div>
         </div>
-        <div class="glass p-5 rounded-2xl flex items-center gap-4 border-l-4 border-rose-500 shadow-sm">
-            <div class="h-12 w-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600">
-                <i data-lucide="flame" class="w-6 h-6"></i>
-            </div>
+        <!-- Overdue -->
+        <div class="bg-white py-3 px-5 rounded-2xl border border-slate-150 border-l-[4px] border-l-rose-500 flex items-center justify-between shadow-xs">
             <div>
-                <p class="text-2xl font-bold text-slate-800" x-text="overdueCount()"></p>
-                <p class="text-xs text-slate-500 font-medium">Overdue</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Overdue</p>
+                <h4 class="text-2xl font-black text-rose-500 tracking-tight mt-0.5" x-text="overdueCount()"></h4>
+            </div>
+            <div class="h-8 w-8 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600">
+                <i data-lucide="flame" class="w-4 h-4"></i>
             </div>
         </div>
     </div>

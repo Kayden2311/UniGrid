@@ -77,6 +77,11 @@ namespace unigrid.Controllers
                     _logger.LogWarning("REST API: Member {UserId} attempted to complete task {TaskId} without management approval.", userProfile.Id, id);
                     return StatusCode(403, new { message = "Only Managers or Owners have permission to approve and complete tasks!" });
                 }
+                if (task.Status == 3)
+                {
+                    _logger.LogWarning("REST API: Member {UserId} attempted to rework completed task {TaskId}.", userProfile.Id, id);
+                    return StatusCode(403, new { message = "Only Managers or Owners have permission to rework completed tasks!" });
+                }
             }
 
             task.Status = request.Status;
