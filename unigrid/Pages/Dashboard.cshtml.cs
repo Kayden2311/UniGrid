@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using unigrid.Data;
 using unigrid.Models;
 using System.Security.Claims;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace unigrid.Pages;
 
@@ -11,10 +12,12 @@ namespace unigrid.Pages;
 public class DashboardModel : PageModel
 {
     private readonly UniGridDbContext _context;
+    private readonly IMemoryCache _cache;
 
-    public DashboardModel(UniGridDbContext context)
+    public DashboardModel(UniGridDbContext context, IMemoryCache cache)
     {
         _context = context;
+        _cache = cache;
     }
 
     public List<unigrid.Models.Task> RecentTasks { get; set; } = new();
@@ -34,7 +37,13 @@ public class DashboardModel : PageModel
         if (string.IsNullOrEmpty(accountIdClaim)) return RedirectToPage("/Login");
 
         var accountId = Guid.Parse(accountIdClaim);
-        var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        
+        // Cache user profile
+        var userProfile = await _cache.GetOrCreateAsync($"User_{accountId}", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+            return await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        });
         
         if (userProfile != null)
         {
@@ -44,19 +53,27 @@ public class DashboardModel : PageModel
             ViewData["UserName"] = CurrentUserName;
             ViewData["UserInitials"] = UserInitials;
 
-            // Fetch Workspaces
-            UserWorkspaces = await _context.Workspaces
-                .Include(w => w.Tasks)
-                .Where(w => w.OwnerId == userProfile.Id || w.WorkspaceMembers.Any(m => m.UserId == userProfile.Id))
-                .ToListAsync();
+            // Fetch Workspaces (Cache)
+            UserWorkspaces = await _cache.GetOrCreateAsync($"UserWorkspaces_{userProfile.Id}", async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+                return await _context.Workspaces
+                    .Include(w => w.Tasks)
+                    .Where(w => w.OwnerId == userProfile.Id || w.WorkspaceMembers.Any(m => m.UserId == userProfile.Id))
+                    .ToListAsync();
+            });
             
             ViewData["Workspaces"] = UserWorkspaces;
 
-            // Fetch All Tasks for Stats
-            var allUserTasks = await _context.Tasks
-                .Include(t => t.Workspace)
-                .Where(t => t.AssigneeId == userProfile.Id)
-                .ToListAsync();
+            // Fetch All Tasks for Stats (Cache)
+            var allUserTasks = await _cache.GetOrCreateAsync($"UserTasks_{userProfile.Id}", async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+                return await _context.Tasks
+                    .Include(t => t.Workspace)
+                    .Where(t => t.AssigneeId == userProfile.Id)
+                    .ToListAsync();
+            });
 
             TotalTasksCount = allUserTasks.Count;
             CompletedTasksCount = allUserTasks.Count(t => t.Status == 3); // 3 = Done
@@ -90,6 +107,14 @@ public class DashboardModel : PageModel
         // Toggle status between 0 (Todo) and 3 (Done)
         task.Status = task.Status == 3 ? 0 : 3;
         await _context.SaveChangesAsync();
+
+        // Evict affected cache entries
+        _cache.Remove($"WorkspaceTasks_{task.WorkspaceId}");
+        if (task.AssigneeId.HasValue)
+        {
+            _cache.Remove($"UserTasks_{task.AssigneeId.Value}");
+            _cache.Remove($"UserWorkspaces_{task.AssigneeId.Value}");
+        }
 
         return new JsonResult(new { success = true, newStatus = task.Status });
     }

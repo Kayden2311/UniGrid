@@ -6,6 +6,7 @@ using unigrid.Models;
 using System.Security.Claims;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace unigrid.Pages;
 
@@ -15,12 +16,14 @@ public class WorkspaceDetailModel : PageModel
     private readonly UniGridDbContext _context;
     private readonly ILogger<WorkspaceDetailModel> _logger;
     private readonly IHubContext<unigrid.Hubs.ChatHub> _hubContext;
+    private readonly IMemoryCache _cache;
 
-    public WorkspaceDetailModel(UniGridDbContext context, ILogger<WorkspaceDetailModel> logger, IHubContext<unigrid.Hubs.ChatHub> hubContext)
+    public WorkspaceDetailModel(UniGridDbContext context, ILogger<WorkspaceDetailModel> logger, IHubContext<unigrid.Hubs.ChatHub> hubContext, IMemoryCache cache)
     {
         _context = context;
         _logger = logger;
         _hubContext = hubContext;
+        _cache = cache;
     }
 
     public Workspace Workspace { get; set; } = null!;
@@ -86,10 +89,15 @@ public class WorkspaceDetailModel : PageModel
             return RedirectToPage("/Dashboard");
         }
 
-        // Set sidebar workspaces list
-        var userWorkspaces = await _context.Workspaces
-            .Where(w => w.OwnerId == CurrentUser.Id || w.WorkspaceMembers.Any(m => m.UserId == CurrentUser.Id))
-            .ToListAsync();
+        // Set sidebar workspaces list using cache
+        string userWSKey = $"UserWorkspaces_{CurrentUser.Id}";
+        var userWorkspaces = await _cache.GetOrCreateAsync(userWSKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+            return await _context.Workspaces
+                .Where(w => w.OwnerId == CurrentUser.Id || w.WorkspaceMembers.Any(m => m.UserId == CurrentUser.Id))
+                .ToListAsync();
+        });
         ViewData["Workspaces"] = userWorkspaces;
 
         return Page();
@@ -101,63 +109,94 @@ public class WorkspaceDetailModel : PageModel
         if (string.IsNullOrEmpty(accountIdClaim)) return false;
 
         var accountId = Guid.Parse(accountIdClaim);
-        var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
-        if (userProfile == null) return false;
+        
+        // Cache User profile
+        CurrentUser = await _cache.GetOrCreateAsync($"User_{accountId}", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+            return await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        });
 
-        CurrentUser = userProfile;
+        if (CurrentUser == null) return false;
+        
         ViewData["UserName"] = CurrentUser.FullName;
         UserInitials = string.Concat(CurrentUser.FullName.Split(' ').Select(n => n[0]));
         ViewData["UserInitials"] = UserInitials;
 
-        // Fetch Workspace by JoinCode
-        Workspace = await _context.Workspaces
-            .Include(w => w.Owner)
-            .FirstOrDefaultAsync(w => w.JoinCode == joinCode);
+        // Cache Workspace metadata
+        Workspace = await _cache.GetOrCreateAsync($"Workspace_{joinCode}", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+            return await _context.Workspaces
+                .Include(w => w.Owner)
+                .FirstOrDefaultAsync(w => w.JoinCode == joinCode);
+        });
 
         if (Workspace == null) return false;
 
         var workspaceId = Workspace.Id;
 
-        // Check if user is a member or owner
-        var isMember = await _context.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == CurrentUser.Id);
-        if (Workspace.OwnerId != CurrentUser.Id && !isMember)
+        // Cache Workspace Members
+        Members = await _cache.GetOrCreateAsync($"WorkspaceMembers_{workspaceId}", async entry =>
         {
-            return false;
-        }
-
-        // Load Members
-        Members = await _context.WorkspaceMembers
-            .Include(wm => wm.User)
-            .Where(wm => wm.WorkspaceId == workspaceId)
-            .ToListAsync();
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+            return await _context.WorkspaceMembers
+                .Include(wm => wm.User)
+                .Where(wm => wm.WorkspaceId == workspaceId)
+                .ToListAsync();
+        });
 
         var memberRecord = Members.FirstOrDefault(m => m.UserId == CurrentUser.Id);
         CurrentUserRole = memberRecord?.Role ?? (Workspace.OwnerId == CurrentUser.Id ? "Owner" : "Member");
 
-        // Load Tasks
-        WorkspaceTasks = await _context.Tasks
-            .Include(t => t.Assignee)
-            .Include(t => t.TaskComments)
-                .ThenInclude(tc => tc.User)
-            .Where(t => t.WorkspaceId == workspaceId)
-            .ToListAsync();
+        // Check if user is a member or owner
+        if (Workspace.OwnerId != CurrentUser.Id && memberRecord == null)
+        {
+            return false;
+        }
 
-        // Load Files
-        Files = await _context.WorkspaceFiles
-            .Include(wf => wf.User)
-            .Where(wf => wf.WorkspaceId == workspaceId)
-            .OrderByDescending(wf => wf.CreatedAt)
-            .ToListAsync();
+        // Cache Workspace Tasks
+        WorkspaceTasks = await _cache.GetOrCreateAsync($"WorkspaceTasks_{workspaceId}", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+            return await _context.Tasks
+                .Include(t => t.Assignee)
+                .Include(t => t.WorkspaceFiles)
+                .Include(t => t.TaskComments)
+                    .ThenInclude(tc => tc.User)
+                .Where(t => t.WorkspaceId == workspaceId)
+                .ToListAsync();
+        });
 
-        // Load Chat Room & Messages
-        ChatRoom = await _context.ChatRooms.FirstOrDefaultAsync(cr => cr.WorkspaceId == workspaceId);
+        // Cache Workspace Files
+        Files = await _cache.GetOrCreateAsync($"WorkspaceFiles_{workspaceId}", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+            return await _context.WorkspaceFiles
+                .Include(wf => wf.User)
+                .Where(wf => wf.WorkspaceId == workspaceId)
+                .OrderByDescending(wf => wf.CreatedAt)
+                .ToListAsync();
+        });
+
+        // Cache Chat Room & Messages
+        ChatRoom = await _cache.GetOrCreateAsync($"WorkspaceChatRoom_{workspaceId}", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+            return await _context.ChatRooms.FirstOrDefaultAsync(cr => cr.WorkspaceId == workspaceId);
+        });
+
         if (ChatRoom != null)
         {
-            ChatMessages = await _context.ChatMessages
-                .Include(cm => cm.Sender)
-                .Where(cm => cm.RoomId == ChatRoom.Id)
-                .OrderBy(cm => cm.SentAt)
-                .ToListAsync();
+            ChatMessages = await _cache.GetOrCreateAsync($"WorkspaceChatMessages_{ChatRoom.Id}", async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+                return await _context.ChatMessages
+                    .Include(cm => cm.Sender)
+                    .Where(cm => cm.RoomId == ChatRoom.Id)
+                    .OrderBy(cm => cm.SentAt)
+                    .ToListAsync();
+            });
         }
 
         return true;
@@ -196,6 +235,7 @@ public class WorkspaceDetailModel : PageModel
                 }
             }
 
+            EvictAllWorkspaceMembersCache(Workspace.Id);
             _logger.LogInformation("Task created: {Title} in Workspace {WorkspaceId}", NewTaskTitle, Workspace.Id);
         }
 
@@ -228,6 +268,7 @@ public class WorkspaceDetailModel : PageModel
 
             task.Status = status;
             await _context.SaveChangesAsync();
+            EvictAllWorkspaceMembersCache(Workspace.Id);
             _logger.LogInformation("Task status updated. TaskId: {TaskId}, NewStatus: {Status}", taskId, status);
         }
 
@@ -264,6 +305,7 @@ public class WorkspaceDetailModel : PageModel
             }
 
             await _context.SaveChangesAsync();
+            EvictAllWorkspaceMembersCache(Workspace.Id);
             _logger.LogInformation("Task edited. TaskId: {TaskId}", editTaskId);
         }
 
@@ -356,6 +398,7 @@ public class WorkspaceDetailModel : PageModel
 
             await _context.TaskComments.AddAsync(comment);
             await _context.SaveChangesAsync();
+            _cache.Remove($"WorkspaceTasks_{Workspace.Id}");
             _logger.LogInformation("Comment added to task {TaskId} by {UserId}", CommentTaskId, CurrentUser.Id);
 
             var payload = new
@@ -415,6 +458,7 @@ public class WorkspaceDetailModel : PageModel
 
             await _context.ChatMessages.AddAsync(message);
             await _context.SaveChangesAsync();
+            _cache.Remove($"WorkspaceChatMessages_{ChatRoom.Id}");
             _logger.LogInformation("Chat message sent in room {RoomId} in channel {Channel} by {UserId}", ChatRoom.Id, activeChannel, CurrentUser.Id);
 
             string cleanContent = ChatContent;
@@ -562,6 +606,7 @@ public class WorkspaceDetailModel : PageModel
 
         await _context.WorkspaceFiles.AddAsync(file);
         await _context.SaveChangesAsync();
+        EvictAllWorkspaceMembersCache(Workspace.Id);
         TempData["UploadSuccess"] = $"Successfully uploaded file: {originalFileName}";
         _logger.LogInformation("File uploaded in workspace {WorkspaceId} by {UserId}", Workspace.Id, CurrentUser.Id);
 
@@ -595,6 +640,8 @@ public class WorkspaceDetailModel : PageModel
 
                     await _context.WorkspaceMembers.AddAsync(newMember);
                     await _context.SaveChangesAsync();
+                    _cache.Remove($"WorkspaceMembers_{Workspace.Id}");
+                    _cache.Remove($"UserWorkspaces_{inviteeUser.Id}");
                     _logger.LogInformation("User {Invitee} added as {Role} in Workspace {WorkspaceId}", inviteeUser.FullName, InviteRole, Workspace.Id);
                 }
             }
@@ -700,5 +747,26 @@ public class WorkspaceDetailModel : PageModel
     {
         var json = SerializeChatMessages();
         return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
+    }
+
+    private void EvictAllWorkspaceMembersCache(Guid workspaceId)
+    {
+        _cache.Remove($"WorkspaceTasks_{workspaceId}");
+        _cache.Remove($"WorkspaceFiles_{workspaceId}");
+        
+        if (Members != null)
+        {
+            foreach (var member in Members)
+            {
+                _cache.Remove($"UserWorkspaces_{member.UserId}");
+                _cache.Remove($"UserTasks_{member.UserId}");
+            }
+        }
+        
+        if (Workspace != null)
+        {
+            _cache.Remove($"UserWorkspaces_{Workspace.OwnerId}");
+            _cache.Remove($"UserTasks_{Workspace.OwnerId}");
+        }
     }
 }

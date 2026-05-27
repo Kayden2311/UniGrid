@@ -116,6 +116,7 @@ public partial class UniGridDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PK__ChatMess__3214EC0776DADC06");
 
             entity.HasIndex(e => e.SentAt, "IX_ChatMessages_SentAt");
+            entity.HasIndex(e => e.RoomId, "IX_ChatMessages_RoomId");
 
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
@@ -164,8 +165,9 @@ public partial class UniGridDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PK__Tasks__3214EC077E71A0AA");
 
             entity.HasIndex(e => e.DueDate, "IX_Tasks_DueDate");
-
             entity.HasIndex(e => e.Status, "IX_Tasks_Status");
+            entity.HasIndex(e => e.WorkspaceId, "IX_Tasks_WorkspaceId");
+            entity.HasIndex(e => e.AssigneeId, "IX_Tasks_AssigneeId");
 
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
@@ -187,6 +189,8 @@ public partial class UniGridDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__TaskComm__3214EC0701A1C24C");
 
+            entity.HasIndex(e => e.TaskId, "IX_TaskComments_TaskId");
+
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
 
@@ -204,6 +208,8 @@ public partial class UniGridDbContext : DbContext
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Users__3214EC07A9E6FEE1");
+
+            entity.HasIndex(e => e.AccountId, "IX_Users_AccountId");
 
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.FullName).HasMaxLength(256);
@@ -236,6 +242,9 @@ public partial class UniGridDbContext : DbContext
         modelBuilder.Entity<WorkspaceFile>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Workspac__3214EC07AD2BE646");
+
+            entity.HasIndex(e => e.WorkspaceId, "IX_WorkspaceFiles_WorkspaceId");
+            entity.HasIndex(e => e.TaskId, "IX_WorkspaceFiles_TaskId");
 
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
