@@ -74,7 +74,7 @@ public class SignupModel : PageModel
             var newAccount = new Account
             {
                 Id = Guid.NewGuid(),
-                Email = Email,
+                Email = Helpers.InputSanitizer.SanitizeInput(Email),
                 PasswordHash = Password, // Stored as plain text for demo context (or matching VerifyAccount simple check)
                 Role = 2,
                 IsLocked = false,
@@ -88,7 +88,7 @@ public class SignupModel : PageModel
             {
                 Id = Guid.NewGuid(),
                 AccountId = newAccount.Id,
-                FullName = FullName,
+                FullName = Helpers.InputSanitizer.SanitizeInput(FullName),
                 SubscriptionTier = string.IsNullOrEmpty(Tier) ? "Free" : Tier,
                 SubscriptionExpires = DateTime.UtcNow.AddYears(1)
             };

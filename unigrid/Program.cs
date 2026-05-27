@@ -84,6 +84,16 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+// Configure default authorization policy to support both Cookie and JWT Bearer schemes
+builder.Services.AddAuthorization(options =>
+{
+    var defaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder(
+        Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme,
+        Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme);
+    defaultPolicy = defaultPolicy.RequireAuthenticatedUser();
+    options.DefaultPolicy = defaultPolicy.Build();
+});
+
 // Configure Forwarded Headers to support port forwarding, HTTPS proxies, and remote IDE webviews
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {

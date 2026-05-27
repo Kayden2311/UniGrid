@@ -38,6 +38,29 @@ namespace unigrid.Data
                 await context.Database.EnsureCreatedAsync();
             }
 
+            // 1b. Ensure columns RefreshToken and RefreshTokenExpiry exist in Accounts table (Defense-in-Depth schema migration)
+            try
+            {
+                logger.LogInformation("DbInitializer: Ensuring RefreshToken columns exist in Accounts table...");
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Accounts]') AND name = 'RefreshToken')
+                    BEGIN
+                        ALTER TABLE [dbo].[Accounts] ADD [RefreshToken] VARCHAR(512) NULL;
+                    END
+                ");
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Accounts]') AND name = 'RefreshTokenExpiry')
+                    BEGIN
+                        ALTER TABLE [dbo].[Accounts] ADD [RefreshTokenExpiry] DATETIME2 NULL;
+                    END
+                ");
+                logger.LogInformation("DbInitializer: RefreshToken columns verified/added successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "DbInitializer: Failed to add/verify RefreshToken columns in Accounts table.");
+            }
+
             // 2. Check if Alice Nguyen and her User profile exist
             bool hasAlice = false;
             try

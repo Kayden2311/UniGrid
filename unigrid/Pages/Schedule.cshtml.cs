@@ -68,8 +68,8 @@ public class ScheduleModel : PageModel
         {
             Id = Guid.NewGuid(),
             UserId = userProfile.Id,
-            Title = title,
-            Description = description,
+            Title = Helpers.InputSanitizer.SanitizeInput(title),
+            Description = Helpers.InputSanitizer.SanitizeInput(description),
             StartTime = startTime.ToUniversalTime(),
             EndTime = endTime.ToUniversalTime(),
             CreatedAt = DateTime.UtcNow
@@ -100,8 +100,8 @@ public class ScheduleModel : PageModel
         var eventItem = await _context.PersonalSchedules.FirstOrDefaultAsync(p => p.Id == eventId);
         if (eventItem != null)
         {
-            eventItem.Title = title;
-            eventItem.Description = description;
+            eventItem.Title = Helpers.InputSanitizer.SanitizeInput(title);
+            eventItem.Description = Helpers.InputSanitizer.SanitizeInput(description);
             eventItem.StartTime = startTime.ToUniversalTime();
             eventItem.EndTime = endTime.ToUniversalTime();
 

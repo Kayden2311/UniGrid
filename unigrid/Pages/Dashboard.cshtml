@@ -341,6 +341,7 @@
 
                 init() {
                     this.initCalendar();
+                    this.$watch('globalSearchQuery', value => this.searchQuery = value);
                 },
                 
                 initCalendar() {

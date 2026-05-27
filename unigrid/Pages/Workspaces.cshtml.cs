@@ -97,7 +97,7 @@ public class WorkspacesModel : PageModel
             var workspace = new Workspace
             {
                 Id = Guid.NewGuid(),
-                Name = NewWorkspaceName,
+                Name = Helpers.InputSanitizer.SanitizeInput(NewWorkspaceName),
                 JoinCode = joinCode,
                 OwnerId = profile.Id,
                 PackageTier = "Free",
