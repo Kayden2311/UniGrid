@@ -208,6 +208,9 @@ public class WorkspaceDetailModel : PageModel
 
         if (!string.IsNullOrEmpty(NewTaskTitle))
         {
+            NewTaskTitle = Helpers.InputSanitizer.SanitizeInput(NewTaskTitle);
+            NewTaskDescription = Helpers.InputSanitizer.SanitizeInput(NewTaskDescription);
+
             var task = new unigrid.Models.Task
             {
                 Id = Guid.NewGuid(),
@@ -286,13 +289,13 @@ public class WorkspaceDetailModel : PageModel
             // Members can only edit description, while Managers/Owners can edit everything
             if (CurrentUserRole == "Owner" || CurrentUserRole == "Manager")
             {
-                task.Title = editTaskTitle;
+                task.Title = Helpers.InputSanitizer.SanitizeInput(editTaskTitle);
                 task.Priority = editTaskPriority;
                 task.AssigneeId = editTaskAssigneeId;
                 task.DueDate = editTaskDueDate;
             }
             
-            task.Description = editTaskDescription;
+            task.Description = Helpers.InputSanitizer.SanitizeInput(editTaskDescription);
 
             // Handle file attachment if any
             if (EditTaskFile != null && EditTaskFile.Length > 0)
@@ -387,6 +390,7 @@ public class WorkspaceDetailModel : PageModel
 
         if (!string.IsNullOrEmpty(CommentContent) && CommentTaskId != Guid.Empty)
         {
+            CommentContent = Helpers.InputSanitizer.SanitizeInput(CommentContent);
             var comment = new TaskComment
             {
                 Id = Guid.NewGuid(),
@@ -435,6 +439,7 @@ public class WorkspaceDetailModel : PageModel
 
         if (!string.IsNullOrEmpty(ChatContent) && ChatRoom != null)
         {
+            ChatContent = Helpers.InputSanitizer.SanitizeInput(ChatContent);
             string contentWithChannel = ChatContent;
             if (!string.IsNullOrEmpty(activeChannel) && activeChannel != "general")
             {

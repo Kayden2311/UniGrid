@@ -25,7 +25,7 @@
     var isFullPage = currentPage == "/Index" || currentPage == "/Login" || (currentPage == "/Signup" || (currentPage == "/Pricing" && !isAuthenticated));
 }
 <body class="h-full overflow-hidden flex text-slate-900" 
-      x-data="{ sidebarOpen: window.innerWidth > 768, notificationsOpen: false, profileOpen: false, isFullPage: @(isFullPage ? "true" : "false"), wsOpen: true, mobileNavOpen: false }">
+      x-data="{ sidebarOpen: window.innerWidth > 768, notificationsOpen: false, profileOpen: false, isFullPage: @(isFullPage ? "true" : "false"), wsOpen: true, mobileNavOpen: false, globalSearchQuery: '' }">
     
     <!-- Mobile Sidebar Overlay -->
     <div x-show="!isFullPage && sidebarOpen" @@click="sidebarOpen = false" x-cloak
@@ -146,7 +146,7 @@
                 </button>
                 <div class="flex items-center px-3 py-1.5 bg-slate-100 rounded-full text-slate-500 border border-slate-200">
                     <i data-lucide="search" class="w-4 h-4 mr-2"></i>
-                    <input type="text" placeholder="Search tasks..." class="bg-transparent border-none outline-none text-xs w-28 sm:w-48 placeholder:text-slate-400">
+                    <input type="text" x-model="globalSearchQuery" placeholder="Search tasks..." class="bg-transparent border-none outline-none text-xs w-28 sm:w-48 placeholder:text-slate-400">
                 </div>
             </div>
 
