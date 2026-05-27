@@ -799,7 +799,7 @@
                                     var remainingDays = task.DueDate.HasValue ? (task.DueDate.Value - DateTime.UtcNow).Days : 0;
 
                                     <div @@click="selectTask('@Model.SerializeTaskBase64(task)')"
-                                         x-show="(searchQuery === '' || '@task.Title.ToLower()'.includes(searchQuery.toLowerCase())) && 
+                                         x-show="(searchQuery === '' || '@Html.Raw(task.Title.Replace("'", "\\'").Replace("\"", "\\\"").ToLower())'.includes(searchQuery.toLowerCase())) && 
                                                  (filterPriority === '' || '@task.Priority' === filterPriority) && 
                                                  (filterAssignee === '' || '@task.AssigneeId' === filterAssignee)"
                                          draggable="true"
@@ -2451,6 +2451,7 @@
                 init() {
                     this.timeSlots = this.generateTimeSlots();
                     this.scrollChatToBottom();
+                    this.$watch('globalSearchQuery', value => this.searchQuery = value);
                     this.$watch('activeTab', value => {
                         localStorage.setItem('unigrid_workspace_tab_' + '@Model.Workspace.JoinCode', value);
                         if (value === 'chat') this.scrollChatToBottom();

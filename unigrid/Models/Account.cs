@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace unigrid.Models;
@@ -16,6 +16,10 @@ public partial class Account
     public bool? IsLocked { get; set; }
 
     public DateTime? CreatedAt { get; set; }
+
+    public string? RefreshToken { get; set; }
+
+    public DateTime? RefreshTokenExpiry { get; set; }
 
     public virtual ICollection<Admin> Admins { get; set; } = new List<Admin>();
 

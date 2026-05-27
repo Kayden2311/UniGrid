@@ -13,6 +13,9 @@ public interface IAuthService
 {
     Task<Account?> VerifyAccountAsync(string email, string password);
     string GenerateToken(Account account, string fullName);
+    string GenerateAccessToken(Account account, string fullName);
+    string GenerateRefreshToken();
+    ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);
 }
 
 public class AuthService : IAuthService
@@ -59,7 +62,12 @@ public class AuthService : IAuthService
 
     public string GenerateToken(Account account, string fullName)
     {
-        _logger.LogInformation("Generating JWT for {Email} ({FullName})", account.Email, fullName);
+        return GenerateAccessToken(account, fullName);
+    }
+
+    public string GenerateAccessToken(Account account, string fullName)
+    {
+        _logger.LogInformation("Generating Access Token for {Email} ({FullName})", account.Email, fullName);
         
         var jwtSettings = _configuration.GetSection("Jwt");
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? "super_secret_unigrid_key_2024_placeholder_must_be_long"));
@@ -78,10 +86,44 @@ public class AuthService : IAuthService
             issuer: jwtSettings["Issuer"],
             audience: jwtSettings["Audience"],
             claims: claims,
-            expires: DateTime.Now.AddDays(7),
+            expires: DateTime.UtcNow.AddMinutes(15), // 15-minute short-lived access token
             signingCredentials: creds
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    public string GenerateRefreshToken()
+    {
+        _logger.LogInformation("Generating cryptographically secure Refresh Token");
+        var randomNumber = new byte[64];
+        using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+        {
+            rng.GetBytes(randomNumber);
+            return Convert.ToBase64String(randomNumber);
+        }
+    }
+
+    public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
+    {
+        _logger.LogInformation("Parsing claims from expired Access Token");
+        var jwtSettings = _configuration.GetSection("Jwt");
+        var tokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateAudience = false,
+            ValidateIssuer = false,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? "super_secret_unigrid_key_2024_placeholder_must_be_long")),
+            ValidateLifetime = false // ignore lifetime check to read expired token claims
+        };
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        SecurityToken securityToken;
+        var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out securityToken);
+        var jwtSecurityToken = securityToken as JwtSecurityToken;
+        if (jwtSecurityToken == null || !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+            throw new SecurityTokenException("Invalid token");
+
+        return principal;
     }
 }
