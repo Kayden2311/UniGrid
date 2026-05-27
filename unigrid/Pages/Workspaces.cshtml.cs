@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using unigrid.Data;
 using unigrid.Models;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace unigrid.Pages;
 
@@ -10,10 +11,12 @@ namespace unigrid.Pages;
 public class WorkspacesModel : PageModel
 {
     private readonly UniGridDbContext _context;
+    private readonly IMemoryCache _cache;
 
-    public WorkspacesModel(UniGridDbContext context)
+    public WorkspacesModel(UniGridDbContext context, IMemoryCache cache)
     {
         _context = context;
+        _cache = cache;
     }
 
     public List<Workspace> UserWorkspaces { get; set; } = new();
@@ -31,7 +34,13 @@ public class WorkspacesModel : PageModel
         if (!string.IsNullOrEmpty(accountIdClaim))
         {
             var accountId = Guid.Parse(accountIdClaim);
-            var profile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+            
+            // Cache User profile
+            var profile = await _cache.GetOrCreateAsync($"User_{accountId}", async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+                return await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+            });
             
             if (profile != null)
             {
@@ -39,14 +48,18 @@ public class WorkspacesModel : PageModel
                 ViewData["UserName"] = user?.FullName ?? string.Empty;
                 ViewData["UserInitials"] = user?.FullName != null ? string.Concat(user.FullName.Split(' ').Select(n => n[0])) : string.Empty;
 
-                // Fetch Workspaces owned by or joined by the user, including tasks and member user details
-                UserWorkspaces = await _context.Workspaces
-                    .Include(w => w.WorkspaceMembers)
-                        .ThenInclude(m => m.User)
-                    .Include(w => w.Tasks)
-                    .Where(w => w.OwnerId == profile.Id || w.WorkspaceMembers.Any(m => m.UserId == profile.Id))
-                    .OrderByDescending(w => w.CreatedAt)
-                    .ToListAsync();
+                // Fetch Workspaces owned by or joined by the user, including tasks and member user details (Cache)
+                UserWorkspaces = await _cache.GetOrCreateAsync($"UserWorkspaces_{profile.Id}", async entry =>
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+                    return await _context.Workspaces
+                        .Include(w => w.WorkspaceMembers)
+                            .ThenInclude(m => m.User)
+                        .Include(w => w.Tasks)
+                        .Where(w => w.OwnerId == profile.Id || w.WorkspaceMembers.Any(m => m.UserId == profile.Id))
+                        .OrderByDescending(w => w.CreatedAt)
+                        .ToListAsync();
+                });
 
                 return Page();
             }
@@ -113,6 +126,9 @@ public class WorkspacesModel : PageModel
             await _context.ChatRooms.AddAsync(chatRoom);
 
             await _context.SaveChangesAsync();
+
+            // Evict user workspaces list cache
+            _cache.Remove($"UserWorkspaces_{profile.Id}");
         }
 
         return RedirectToPage("/Workspaces");

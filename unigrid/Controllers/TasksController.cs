@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using unigrid.Data;
 using System.Security.Claims;
-
+using Microsoft.Extensions.Caching.Memory;
 
 namespace unigrid.Controllers
 {
@@ -17,11 +17,13 @@ namespace unigrid.Controllers
     {
         private readonly UniGridDbContext _context;
         private readonly ILogger<TasksController> _logger;
+        private readonly IMemoryCache _cache;
 
-        public TasksController(UniGridDbContext context, ILogger<TasksController> _logger)
+        public TasksController(UniGridDbContext context, ILogger<TasksController> _logger, IMemoryCache cache)
         {
             this._context = context;
             this._logger = _logger;
+            this._cache = cache;
         }
 
         [HttpPatch("{id}/status")]
@@ -86,6 +88,26 @@ namespace unigrid.Controllers
 
             task.Status = request.Status;
             await _context.SaveChangesAsync();
+
+            // Evict Cache
+            _cache.Remove($"WorkspaceTasks_{task.WorkspaceId}");
+            
+            var memberUserIds = await _context.WorkspaceMembers
+                .Where(wm => wm.WorkspaceId == task.WorkspaceId)
+                .Select(wm => wm.UserId)
+                .ToListAsync();
+
+            foreach (var memberId in memberUserIds)
+            {
+                _cache.Remove($"UserWorkspaces_{memberId}");
+                _cache.Remove($"UserTasks_{memberId}");
+            }
+
+            if (workspace != null)
+            {
+                _cache.Remove($"UserWorkspaces_{workspace.OwnerId}");
+                _cache.Remove($"UserTasks_{workspace.OwnerId}");
+            }
 
             _logger.LogInformation("REST API: Task {TaskId} status updated successfully to {Status}", id, request.Status);
 
