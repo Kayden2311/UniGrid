@@ -20,6 +20,7 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
     });
 builder.Services.AddSignalR();
+builder.Services.AddMemoryCache();
 
 // Register Services
 builder.Services.AddScoped<unigrid.Services.IAuthService, unigrid.Services.AuthService>();
