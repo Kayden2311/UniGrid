@@ -78,6 +78,67 @@ namespace unigrid.Data
                 logger.LogError(ex, "DbInitializer: Failed to add/verify IsPublic column in WorkspaceFiles table.");
             }
 
+            // 1d. Ensure WorkspaceFederations, WorkspaceFederationMembers, and FederationId exist (Federated Workspace migration)
+            try
+            {
+                logger.LogInformation("DbInitializer: Performing Federated Workspace migrations...");
+                
+                // A. Check and create WorkspaceFederations
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[WorkspaceFederations]') AND type in (N'U'))
+                    BEGIN
+                        CREATE TABLE [dbo].[WorkspaceFederations] (
+                            [Id] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+                            [Name] NVARCHAR(256) NOT NULL,
+                            [JoinCode] NVARCHAR(20) NOT NULL UNIQUE,
+                            [OwnerId] UNIQUEIDENTIFIER NOT NULL,
+                            [CreatedAt] DATETIME2 DEFAULT GETUTCDATE(),
+                            CONSTRAINT [FK_WorkspaceFederations_Users] FOREIGN KEY ([OwnerId]) REFERENCES [dbo].[Users]([Id])
+                        );
+                    END
+                ");
+
+                // B. Check and create WorkspaceFederationMembers
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[WorkspaceFederationMembers]') AND type in (N'U'))
+                    BEGIN
+                        CREATE TABLE [dbo].[WorkspaceFederationMembers] (
+                            [FederationId] UNIQUEIDENTIFIER NOT NULL,
+                            [UserId] UNIQUEIDENTIFIER NOT NULL,
+                            [PersonalWorkspaceId] UNIQUEIDENTIFIER NOT NULL,
+                            [JoinedAt] DATETIME2 DEFAULT GETUTCDATE(),
+                            PRIMARY KEY ([FederationId], [UserId]),
+                            CONSTRAINT [FK_FedMembers_Federations] FOREIGN KEY ([FederationId]) REFERENCES [dbo].[WorkspaceFederations]([Id]) ON DELETE CASCADE,
+                            CONSTRAINT [FK_FedMembers_Users] FOREIGN KEY ([UserId]) REFERENCES [dbo].[Users]([Id]),
+                            CONSTRAINT [FK_FedMembers_Workspaces] FOREIGN KEY ([PersonalWorkspaceId]) REFERENCES [dbo].[Workspaces]([Id])
+                        );
+                    END
+                ");
+
+                // C. Check and add FederationId column to WorkspaceFiles
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[WorkspaceFiles]') AND name = 'FederationId')
+                    BEGIN
+                        ALTER TABLE [dbo].[WorkspaceFiles] ADD [FederationId] UNIQUEIDENTIFIER NULL;
+                        ALTER TABLE [dbo].[WorkspaceFiles] ADD CONSTRAINT [FK_Files_WorkspaceFederations] FOREIGN KEY ([FederationId]) REFERENCES [dbo].[WorkspaceFederations]([Id]) ON DELETE SET NULL;
+                    END
+                ");
+
+                // D. Check and add non-clustered index on WorkspaceFiles(FederationId)
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_WorkspaceFiles_FederationId' AND object_id = OBJECT_ID(N'[dbo].[WorkspaceFiles]'))
+                    BEGIN
+                        CREATE INDEX [IX_WorkspaceFiles_FederationId] ON [dbo].[WorkspaceFiles]([FederationId]);
+                    END
+                ");
+
+                logger.LogInformation("DbInitializer: Federated Workspace migrations completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "DbInitializer: Failed to run Federated Workspace database migrations.");
+            }
+
             // 2. Check if Alice Nguyen and her User profile exist
             bool hasAlice = false;
             try
