@@ -23,6 +23,8 @@ public partial class WorkspaceFile
 
     public bool IsPublic { get; set; } = true;
 
+    public Guid? FederationId { get; set; }
+
     public DateTime? CreatedAt { get; set; }
 
     public virtual Task? Task { get; set; }
@@ -30,4 +32,6 @@ public partial class WorkspaceFile
     public virtual User User { get; set; } = null!;
 
     public virtual Workspace Workspace { get; set; } = null!;
+
+    public virtual WorkspaceFederation? Federation { get; set; }
 }
