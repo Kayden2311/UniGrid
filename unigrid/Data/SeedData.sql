@@ -27,7 +27,9 @@ CREATE TABLE Accounts (
     PasswordHash NVARCHAR(MAX) NOT NULL,
     Role INT NOT NULL, -- 1: Admin, 2: User, 3: Moderator
     IsLocked BIT DEFAULT 0,
-    CreatedAt DATETIME2 DEFAULT GETUTCDATE()
+    CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
+    RefreshToken VARCHAR(512) NULL,
+    RefreshTokenExpiry DATETIME2 NULL
 );
 
 -- 2. Admins
@@ -68,6 +70,28 @@ CREATE TABLE Workspaces (
     PackageTier NVARCHAR(50) DEFAULT 'Free',
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
     CONSTRAINT FK_Workspaces_Users FOREIGN KEY (OwnerId) REFERENCES Users(Id)
+);
+
+-- 5b. WorkspaceFederations (Enterprise & Academic Federated Groups)
+CREATE TABLE WorkspaceFederations (
+    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    Name NVARCHAR(256) NOT NULL,
+    JoinCode NVARCHAR(20) NOT NULL UNIQUE,
+    OwnerId UNIQUEIDENTIFIER NOT NULL,
+    CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
+    CONSTRAINT FK_WorkspaceFederations_Users FOREIGN KEY (OwnerId) REFERENCES Users(Id)
+);
+
+-- 5c. WorkspaceFederationMembers
+CREATE TABLE WorkspaceFederationMembers (
+    FederationId UNIQUEIDENTIFIER NOT NULL,
+    UserId UNIQUEIDENTIFIER NOT NULL,
+    PersonalWorkspaceId UNIQUEIDENTIFIER NOT NULL,
+    JoinedAt DATETIME2 DEFAULT GETUTCDATE(),
+    PRIMARY KEY (FederationId, UserId),
+    CONSTRAINT FK_FedMembers_Federations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_FedMembers_Users FOREIGN KEY (UserId) REFERENCES Users(Id),
+    CONSTRAINT FK_FedMembers_Workspaces FOREIGN KEY (PersonalWorkspaceId) REFERENCES Workspaces(Id)
 );
 
 -- 6. WorkspaceMembers (RBAC)
@@ -117,10 +141,13 @@ CREATE TABLE WorkspaceFiles (
     FileUrl NVARCHAR(MAX) NOT NULL,
     FileType NVARCHAR(100) NOT NULL,
     FileSize BIGINT NOT NULL,
+    IsPublic BIT NOT NULL DEFAULT 1,
+    FederationId UNIQUEIDENTIFIER NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
     CONSTRAINT FK_Files_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id),
     CONSTRAINT FK_Files_Tasks FOREIGN KEY (TaskId) REFERENCES Tasks(Id) ON DELETE SET NULL,
-    CONSTRAINT FK_Files_Users FOREIGN KEY (UserId) REFERENCES Users(Id)
+    CONSTRAINT FK_Files_Users FOREIGN KEY (UserId) REFERENCES Users(Id),
+    CONSTRAINT FK_Files_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE SET NULL
 );
 
 -- 11. ChatRooms (1-to-1 with Workspace as per unique index constraint in EF mapping)
@@ -190,6 +217,13 @@ CREATE INDEX IX_Tasks_AssigneeId ON Tasks(AssigneeId);
 CREATE INDEX IX_Tasks_DueDate ON Tasks(DueDate);
 CREATE INDEX IX_PersonalSchedules_UserId ON PersonalSchedules(UserId);
 CREATE INDEX IX_ChatMessages_SentAt ON ChatMessages(SentAt);
+CREATE INDEX IX_Users_AccountId ON Users(AccountId);
+CREATE INDEX IX_Tasks_WorkspaceId ON Tasks(WorkspaceId);
+CREATE INDEX IX_WorkspaceFiles_WorkspaceId ON WorkspaceFiles(WorkspaceId);
+CREATE INDEX IX_WorkspaceFiles_TaskId ON WorkspaceFiles(TaskId);
+CREATE INDEX IX_WorkspaceFiles_FederationId ON WorkspaceFiles(FederationId);
+CREATE INDEX IX_TaskComments_TaskId ON TaskComments(TaskId);
+CREATE INDEX IX_ChatMessages_RoomId ON ChatMessages(RoomId);
 
 GO
 
@@ -349,6 +383,22 @@ INSERT INTO PersonalSchedules (UserId, Title, Description, StartTime, EndTime) V
 (@P_Alice, 'Research Reading', '{"desc":"Papers for lit review","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 5, @CurrentMonday)), DATEADD(minute, 30, DATEADD(hour, 11, DATEADD(day, 5, @CurrentMonday)))),
 (@P_Alice, 'Lunch Break', '{"desc":"","priority":"low","color":4}', DATEADD(hour, 11, DATEADD(day, 1, @CurrentMonday)), DATEADD(hour, 12, DATEADD(day, 1, @CurrentMonday))),
 (@P_Alice, 'Code Review', '{"desc":"Review PR #42","priority":"high","color":3}', DATEADD(hour, 8, DATEADD(day, 3, @CurrentMonday)), DATEADD(hour, 9, DATEADD(day, 3, @CurrentMonday)));
+
+-- 13. Create a Demo Workspace Federation (Enterprise & Academic Federated Groups)
+DECLARE @Fed_Integration UNIQUEIDENTIFIER = 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF';
+
+INSERT INTO WorkspaceFederations (Id, Name, JoinCode, OwnerId) VALUES
+(@Fed_Integration, 'Store Integration Federation', 'FED-STORE', @P_Alice);
+
+-- 14. Add Members to the Federation mapping their Personal Workspaces
+-- Alice Nguyen links @W_Web (Web Development) and Bob Tran links @W_Calc (Calculus II Study)
+INSERT INTO WorkspaceFederationMembers (FederationId, UserId, PersonalWorkspaceId) VALUES
+(@Fed_Integration, @P_Alice, @W_Web),
+(@Fed_Integration, @P_Bob, @W_Calc);
+
+-- 15. Project Existing Workspace Files to the Shared Federation Portal (Alice & Bob share files)
+UPDATE WorkspaceFiles SET FederationId = @Fed_Integration, IsPublic = 1 WHERE FileName = 'Transformer_Comparison.pdf';
+UPDATE WorkspaceFiles SET FederationId = @Fed_Integration, IsPublic = 1 WHERE FileName = 'Database_Schema_Draft.docx';
 
 PRINT 'UniGrid Complete Dense Database Seeded Successfully.';
 GO

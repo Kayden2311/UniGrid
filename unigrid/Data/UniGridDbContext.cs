@@ -44,6 +44,10 @@ public partial class UniGridDbContext : DbContext
 
     public virtual DbSet<WorkspaceMember> WorkspaceMembers { get; set; }
 
+    public virtual DbSet<WorkspaceFederation> WorkspaceFederations { get; set; }
+
+    public virtual DbSet<WorkspaceFederationMember> WorkspaceFederationMembers { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseSqlServer("Server=localhost;Database=UniGridDb;User ID=sa;Password=123;TrustServerCertificate=True;");
@@ -264,6 +268,13 @@ public partial class UniGridDbContext : DbContext
                 .HasForeignKey(d => d.WorkspaceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Files_Workspaces");
+
+            entity.HasIndex(e => e.FederationId, "IX_WorkspaceFiles_FederationId");
+
+            entity.HasOne(d => d.Federation).WithMany(p => p.WorkspaceFiles)
+                .HasForeignKey(d => d.FederationId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_Files_WorkspaceFederations");
         });
 
         modelBuilder.Entity<WorkspaceMember>(entity =>
@@ -284,6 +295,45 @@ public partial class UniGridDbContext : DbContext
                 .HasForeignKey(d => d.WorkspaceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Members_Workspaces");
+        });
+
+        modelBuilder.Entity<WorkspaceFederation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_WorkspaceFederations");
+
+            entity.HasIndex(e => e.JoinCode, "UQ_WorkspaceFederations_JoinCode").IsUnique();
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.JoinCode).HasMaxLength(20);
+            entity.Property(e => e.Name).HasMaxLength(256);
+
+            entity.HasOne(d => d.Owner).WithMany()
+                .HasForeignKey(d => d.OwnerId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_WorkspaceFederations_Users");
+        });
+
+        modelBuilder.Entity<WorkspaceFederationMember>(entity =>
+        {
+            entity.HasKey(e => new { e.FederationId, e.UserId }).HasName("PK_WorkspaceFederationMembers");
+
+            entity.Property(e => e.JoinedAt).HasDefaultValueSql("(getutcdate())");
+
+            entity.HasOne(d => d.Federation).WithMany(p => p.WorkspaceFederationMembers)
+                .HasForeignKey(d => d.FederationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_FedMembers_Federations");
+
+            entity.HasOne(d => d.User).WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_FedMembers_Users");
+
+            entity.HasOne(d => d.PersonalWorkspace).WithMany()
+                .HasForeignKey(d => d.PersonalWorkspaceId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_FedMembers_Workspaces");
         });
 
         OnModelCreatingPartial(modelBuilder);
