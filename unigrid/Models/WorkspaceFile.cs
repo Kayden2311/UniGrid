@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace unigrid.Models;
@@ -20,6 +20,8 @@ public partial class WorkspaceFile
     public string FileType { get; set; } = null!;
 
     public long FileSize { get; set; }
+
+    public bool IsPublic { get; set; } = true;
 
     public DateTime? CreatedAt { get; set; }
 
