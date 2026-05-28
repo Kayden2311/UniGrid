@@ -27,9 +27,10 @@ public class PricingModel : PageModel
     {
         return plan switch
         {
-            "Pro" => 1,
-            "ProPlus" => 2,
-            "Business" => 3,
+            "Personal" => 1,
+            "Pro" => 2,
+            "ProPlus" => 3,
+            "Business" => 4,
             _ => 0
         };
     }

@@ -141,3 +141,69 @@ To support the "Loveable Frontend" and core logic, the database is structured as
 * **vs. Google Calendar:** Links individual timelines directly to team ecosystems.
 * **vs. Trello / Jira:** Lower enterprise overhead than Jira; integrated communication unlike Trello.
 * **vs. Notion:** Opinionated execution flow instead of an unstructured canvas.
+
+---
+
+## 10. Federated Workspace Architecture (Enterprise & Academic Collaboration)
+
+### A. Architectural Overview
+The **Federated Workspace Model** (Mô hình Workspace Liên bang) represents a shift from central-controlled team spaces to a decentralized network of autonomous workspaces. 
+* **Autonomous Workspaces (Nodes):** Each user maintains a private workspace under their own individual subscription (e.g., Personal Plan with 2 GB storage).
+* **Virtual Portals (Federations):** A shared collaborative space ("Workspace To") created logically to connect independent workspaces. No files are copied or physically merged.
+* **Metadata Projections:** Uploaders selectively project file records and tasks onto the Virtual Portal. The physical files and storage quotas remain isolated within the uploader's Personal workspace, ensuring zero-trust security and department-level budgeting.
+
+### B. Extended Relational DB Entities
+
+#### 1. `WorkspaceFederations` (Logical Combined Workspace)
+Tracks the logical shared portal where teams collaborate.
+```sql
+CREATE TABLE WorkspaceFederations (
+    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    Name NVARCHAR(256) NOT NULL,
+    JoinCode NVARCHAR(20) NOT NULL UNIQUE,
+    OwnerId UNIQUEIDENTIFIER NOT NULL,
+    CreatedAt DATETIME2 DEFAULT GETUTCDATE()
+);
+```
+
+#### 2. `WorkspaceFederationMembers` (Workspace Mapping)
+Binds members and links their individual Personal workspaces into the federation.
+```sql
+CREATE TABLE WorkspaceFederationMembers (
+    FederationId UNIQUEIDENTIFIER NOT NULL,
+    UserId UNIQUEIDENTIFIER NOT NULL,
+    PersonalWorkspaceId UNIQUEIDENTIFIER NOT NULL,
+    JoinedAt DATETIME2 DEFAULT GETUTCDATE(),
+    PRIMARY KEY (FederationId, UserId),
+    CONSTRAINT FK_FedMembers_Federations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_FedMembers_Users FOREIGN KEY (UserId) REFERENCES Users(Id),
+    CONSTRAINT FK_FedMembers_Workspaces FOREIGN KEY (PersonalWorkspaceId) REFERENCES Workspaces(Id)
+);
+```
+
+#### 3. `WorkspaceFiles` (Federation Extension)
+Updated to include an optional link pointing to the shared portal.
+```sql
+ALTER TABLE WorkspaceFiles ADD FederationId UNIQUEIDENTIFIER NULL;
+CREATE INDEX IX_WorkspaceFiles_FederationId ON WorkspaceFiles(FederationId);
+```
+
+### C. Core Logic & Queries
+1. **Querying Federated Files (Cổng thông tin chung):**
+   When viewing a federated workspace, members retrieve files projected to the portal:
+   ```sql
+   SELECT * FROM WorkspaceFiles 
+   WHERE FederationId = @FederationId AND IsPublic = 1
+   ORDER BY CreatedAt DESC;
+   ```
+2. **Quota Calculation (Tự chủ dung lượng):**
+   An uploader's file consumption is tracked globally, regardless of whether a file is kept private or projected to federations:
+   ```sql
+   SELECT SUM(FileSize) FROM WorkspaceFiles 
+   WHERE UserId = @UserId;
+   ```
+
+### D. Strategic Benefits
+1. **Zero-Trust Corporate Isolation:** Sensitive files (e.g., Database Backups) remain completely unprojected and logically isolated inside the department's workspace, mathematically protected from external contributors or compromised accounts in the joint workspace.
+2. **Decentralized Budgeting:** IT and Marketing departments maintain their own storage budgets and pay for their own workspace capacities individually, preventing cost sharing complexities.
+3. **Dynamic Venture Collaboration:** Companies can instantly collaborate with external agencies. When a contract ends, breaking the federation instantly revokes agency access without any complex file migration or account deletions.
