@@ -61,6 +61,23 @@ namespace unigrid.Data
                 logger.LogError(ex, "DbInitializer: Failed to add/verify RefreshToken columns in Accounts table.");
             }
 
+            // 1c. Ensure column IsPublic exists in WorkspaceFiles table (Defense-in-Depth schema migration)
+            try
+            {
+                logger.LogInformation("DbInitializer: Ensuring IsPublic column exists in WorkspaceFiles table...");
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[WorkspaceFiles]') AND name = 'IsPublic')
+                    BEGIN
+                        ALTER TABLE [dbo].[WorkspaceFiles] ADD [IsPublic] BIT NOT NULL DEFAULT 1;
+                    END
+                ");
+                logger.LogInformation("DbInitializer: IsPublic column verified/added successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "DbInitializer: Failed to add/verify IsPublic column in WorkspaceFiles table.");
+            }
+
             // 2. Check if Alice Nguyen and her User profile exist
             bool hasAlice = false;
             try

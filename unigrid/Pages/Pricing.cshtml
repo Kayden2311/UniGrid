@@ -48,7 +48,7 @@
     </div>
 
     <!-- Plan Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
         <!-- Free Plan -->
         <div class="glass p-8 rounded-[3rem] flex flex-col h-full border-t-8 border-slate-200 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 duration-300 @(Model.CurrentPlan == "Free" ? "ring-4 ring-indigo-500/20" : "")">
             <div class="mb-6">
@@ -94,6 +94,55 @@
             } else {
                 <button @@click="triggerUpgrade('Free', 'Free', 'Free', ['1 Workspace', '5 Members', 'Basic Analytics', 'Task Assignment', '1 Chat Channel'])" 
                         class="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50 transition-all">Get Started</button>
+            }
+        </div>
+
+        <!-- Personal Plan -->
+        <div class="glass p-6 rounded-[2.5rem] flex flex-col h-full border-t-8 border-teal-400 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 duration-300 @(Model.CurrentPlan == "Personal" ? "ring-4 ring-teal-500/20" : "")">
+            <div class="mb-6">
+                <h3 class="text-xl font-black text-slate-800 mb-2">Personal</h3>
+                <p class="text-xs text-teal-600 font-bold uppercase tracking-widest">For solo users</p>
+            </div>
+            <div class="mb-6">
+                <div class="flex items-baseline gap-1">
+                    <span class="text-4xl font-black text-slate-800" x-text="billing == 'monthly' ? '40K' : '399K'">40K</span>
+                    <span class="text-slate-400 font-bold text-sm">VND</span>
+                </div>
+                <p class="text-xs text-teal-500/80 font-bold mt-1" x-text="billing == 'monthly' ? '≈ 40K VND / month' : '≈ 33K VND / year'"></p>
+                <p class="text-sm text-slate-500 mt-3 leading-relaxed">Dedicated solo power workspace</p>
+            </div>
+            <ul class="space-y-4 mb-8 flex-1 border-t border-slate-100 pt-6">
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 1 Workspace
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 5 Members
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 2 GB Storage (Individual)
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium text-slate-300">
+                    <i data-lucide="x" class="w-4 h-4 text-slate-300 shrink-0"></i> 0 Chat Channels
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 1 Task Branch
+                </li>
+                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Basic Analytics
+                </li>
+            </ul>
+            @if (User.Identity?.IsAuthenticated == true) {
+                @if (Model.CurrentPlan == "Personal") {
+                    <button disabled class="w-full py-4 bg-teal-50 text-teal-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+                } else if (Model.GetPlanRank(Model.CurrentPlan) > 1) {
+                    <!-- Hidden for downgraded plan -->
+                } else {
+                    <button @@click="triggerUpgrade('Personal', '40K', '399K', ['1 Workspace', '5 Members', '2 GB Individual Storage', '0 Chat Channels', '1 Task Branch', 'Basic Analytics'])" 
+                            class="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold shadow-lg shadow-teal-100 hover:bg-teal-700 transition-all">Upgrade Now</button>
+                }
+            } else {
+                <button @@click="triggerUpgrade('Personal', '40K', '399K', ['1 Workspace', '5 Members', '2 GB Individual Storage', '0 Chat Channels', '1 Task Branch', 'Basic Analytics'])" 
+                        class="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold shadow-lg shadow-teal-100 hover:bg-teal-700 transition-all">Upgrade Now</button>
             }
         </div>
 

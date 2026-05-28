@@ -36,6 +36,7 @@ public class WorkspaceDetailModel : PageModel
     public User CurrentUser { get; set; } = null!;
     public string UserInitials { get; set; } = string.Empty;
     public string CurrentUserRole { get; set; } = "Member";
+    public bool ShowVisibilityControls { get; set; }
 
     // Direct binding for task creation
     [BindProperty]
@@ -74,6 +75,8 @@ public class WorkspaceDetailModel : PageModel
     public long NewFileSize { get; set; } = 1024;
     [BindProperty]
     public Microsoft.AspNetCore.Http.IFormFile? UploadedFile { get; set; }
+    [BindProperty]
+    public bool UploadIsPublic { get; set; } = true;
 
     // Direct binding for invites
     [BindProperty]
@@ -169,7 +172,7 @@ public class WorkspaceDetailModel : PageModel
         });
 
         // Cache Workspace Files
-        Files = await _cache.GetOrCreateAsync($"WorkspaceFiles_{workspaceId}", async entry =>
+        var allFiles = await _cache.GetOrCreateAsync($"WorkspaceFiles_{workspaceId}", async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
             return await _context.WorkspaceFiles
@@ -178,6 +181,8 @@ public class WorkspaceDetailModel : PageModel
                 .OrderByDescending(wf => wf.CreatedAt)
                 .ToListAsync();
         });
+
+        Files = allFiles.Where(f => f.IsPublic || f.UserId == CurrentUser.Id).ToList();
 
         // Cache Chat Room & Messages
         ChatRoom = await _cache.GetOrCreateAsync($"WorkspaceChatRoom_{workspaceId}", async entry =>
@@ -198,6 +203,9 @@ public class WorkspaceDetailModel : PageModel
                     .ToListAsync();
             });
         }
+
+        string packageTier = Workspace.PackageTier ?? "Free";
+        ShowVisibilityControls = (packageTier == "Personal" && Members.Count >= 2);
 
         return true;
     }
@@ -337,15 +345,42 @@ public class WorkspaceDetailModel : PageModel
 
         long maxStorageLimit = 0;
         string packageTier = Workspace.PackageTier ?? "Free";
-        if (packageTier == "Pro") maxStorageLimit = 20L * 1024 * 1024 * 1024;
-        else if (packageTier == "ProPlus") maxStorageLimit = 40L * 1024 * 1024 * 1024;
-        else if (packageTier == "Business") maxStorageLimit = 80L * 1024 * 1024 * 1024;
+        bool isIndividualStorage = (packageTier == "Personal");
+
+        if (isIndividualStorage)
+        {
+            // Individual storage calculation for Personal plan workspace
+            string userTier = CurrentUser.SubscriptionTier ?? "Free";
+            if (userTier == "Personal") maxStorageLimit = 2L * 1024 * 1024 * 1024; // 2 GB
+            else if (userTier == "Pro") maxStorageLimit = 20L * 1024 * 1024 * 1024; // 20 GB
+            else if (userTier == "ProPlus") maxStorageLimit = 40L * 1024 * 1024 * 1024; // 40 GB
+            else if (userTier == "Business") maxStorageLimit = 80L * 1024 * 1024 * 1024; // 80 GB
+            else maxStorageLimit = 0; // Free user gets 0 GB
+        }
+        else
+        {
+            // Workspace-wide shared storage calculation for other plans
+            if (packageTier == "Pro") maxStorageLimit = 20L * 1024 * 1024 * 1024;
+            else if (packageTier == "ProPlus") maxStorageLimit = 40L * 1024 * 1024 * 1024;
+            else if (packageTier == "Business") maxStorageLimit = 80L * 1024 * 1024 * 1024;
+        }
 
         if (packageTier == "Free") return null;
+        if (isIndividualStorage && maxStorageLimit <= 0) return null;
 
-        long totalStorageUsed = await _context.WorkspaceFiles
-            .Where(f => f.WorkspaceId == Workspace.Id)
-            .SumAsync(f => f.FileSize);
+        long totalStorageUsed = 0;
+        if (isIndividualStorage)
+        {
+            totalStorageUsed = await _context.WorkspaceFiles
+                .Where(f => f.WorkspaceId == Workspace.Id && f.UserId == CurrentUser.Id)
+                .SumAsync(f => f.FileSize);
+        }
+        else
+        {
+            totalStorageUsed = await _context.WorkspaceFiles
+                .Where(f => f.WorkspaceId == Workspace.Id)
+                .SumAsync(f => f.FileSize);
+        }
 
         if (totalStorageUsed + uploadedFile.Length > maxStorageLimit) return null;
 
@@ -373,6 +408,7 @@ public class WorkspaceDetailModel : PageModel
             FileUrl = $"files/{Workspace.Id}/{safeFileName}",
             FileType = fileType,
             FileSize = uploadedFile.Length,
+            IsPublic = true,
             CreatedAt = DateTime.UtcNow
         };
     }
@@ -546,17 +582,24 @@ public class WorkspaceDetailModel : PageModel
         // 1. Get workspace plan and maximum allowed storage limit
         long maxStorageLimit = 0;
         string packageTier = Workspace.PackageTier ?? "Free";
-        if (packageTier == "Pro")
+        bool isIndividualStorage = (packageTier == "Personal");
+
+        if (isIndividualStorage)
         {
-            maxStorageLimit = 20L * 1024 * 1024 * 1024; // 20 GB
+            // Individual storage calculation for Personal plan workspace
+            string userTier = CurrentUser.SubscriptionTier ?? "Free";
+            if (userTier == "Personal") maxStorageLimit = 2L * 1024 * 1024 * 1024; // 2 GB
+            else if (userTier == "Pro") maxStorageLimit = 20L * 1024 * 1024 * 1024; // 20 GB
+            else if (userTier == "ProPlus") maxStorageLimit = 40L * 1024 * 1024 * 1024; // 40 GB
+            else if (userTier == "Business") maxStorageLimit = 80L * 1024 * 1024 * 1024; // 80 GB
+            else maxStorageLimit = 0; // Free user gets 0 GB
         }
-        else if (packageTier == "ProPlus")
+        else
         {
-            maxStorageLimit = 40L * 1024 * 1024 * 1024; // 40 GB
-        }
-        else if (packageTier == "Business")
-        {
-            maxStorageLimit = 80L * 1024 * 1024 * 1024; // 80 GB
+            // Workspace-wide shared storage calculation for other plans
+            if (packageTier == "Pro") maxStorageLimit = 20L * 1024 * 1024 * 1024;
+            else if (packageTier == "ProPlus") maxStorageLimit = 40L * 1024 * 1024 * 1024;
+            else if (packageTier == "Business") maxStorageLimit = 80L * 1024 * 1024 * 1024;
         }
 
         // 2. Perform limit validation
@@ -566,17 +609,34 @@ public class WorkspaceDetailModel : PageModel
             return RedirectToPage(new { joinCode });
         }
 
-        // 3. Sum up existing file sizes in the database for this workspace
-        long totalStorageUsed = await _context.WorkspaceFiles
-            .Where(f => f.WorkspaceId == Workspace.Id)
-            .SumAsync(f => f.FileSize);
+        if (isIndividualStorage && maxStorageLimit <= 0)
+        {
+            TempData["UploadError"] = "You do not have individual storage upload privileges in this workspace. Upgrade to a Personal plan to upload files.";
+            return RedirectToPage(new { joinCode });
+        }
+
+        // 3. Sum up existing file sizes in the database
+        long totalStorageUsed = 0;
+        if (isIndividualStorage)
+        {
+            totalStorageUsed = await _context.WorkspaceFiles
+                .Where(f => f.WorkspaceId == Workspace.Id && f.UserId == CurrentUser.Id)
+                .SumAsync(f => f.FileSize);
+        }
+        else
+        {
+            totalStorageUsed = await _context.WorkspaceFiles
+                .Where(f => f.WorkspaceId == Workspace.Id)
+                .SumAsync(f => f.FileSize);
+        }
 
         if (totalStorageUsed + UploadedFile.Length > maxStorageLimit)
         {
             string limitStr = maxStorageLimit >= 1024L * 1024 * 1024 
                 ? $"{(maxStorageLimit / (1024L * 1024 * 1024))} GB" 
                 : "0 GB";
-            TempData["UploadError"] = $"Upload failed. This workspace has exceeded its storage limit of {limitStr} for the {packageTier} plan.";
+            string typeStr = isIndividualStorage ? "individual" : "workspace";
+            TempData["UploadError"] = $"Upload failed. You have exceeded your {typeStr} storage limit of {limitStr} for the {packageTier} plan.";
             return RedirectToPage(new { joinCode });
         }
 
@@ -606,6 +666,7 @@ public class WorkspaceDetailModel : PageModel
             FileUrl = $"files/{Workspace.Id}/{safeFileName}",
             FileType = fileType,
             FileSize = UploadedFile.Length,
+            IsPublic = ShowVisibilityControls ? UploadIsPublic : true,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -635,6 +696,20 @@ public class WorkspaceDetailModel : PageModel
                 var alreadyMember = await _context.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == Workspace.Id && wm.UserId == inviteeUser.Id);
                 if (!alreadyMember)
                 {
+                    // Enforce plan-based maximum member limit checks
+                    int currentMembersCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == Workspace.Id);
+                    int maxMembersAllowed = 5; // Default for Free and Personal
+                    string tier = Workspace.PackageTier ?? "Free";
+                    if (tier == "Pro") maxMembersAllowed = 10;
+                    else if (tier == "ProPlus") maxMembersAllowed = 15;
+                    else if (tier == "Business") maxMembersAllowed = 30;
+
+                    if (currentMembersCount >= maxMembersAllowed)
+                    {
+                        TempData["InviteError"] = $"Invite failed. This workspace has reached its member limit of {maxMembersAllowed} for the {tier} plan.";
+                        return RedirectToPage(new { joinCode });
+                    }
+
                     var newMember = new WorkspaceMember
                     {
                         WorkspaceId = Workspace.Id,
@@ -691,6 +766,7 @@ public class WorkspaceDetailModel : PageModel
             fileUrl = file.FileUrl,
             fileType = file.FileType,
             fileSize = file.FileSize,
+            isPublic = file.IsPublic,
             createdAt = file.CreatedAt,
             user = new { fullName = file.User.FullName }
         };
