@@ -206,6 +206,24 @@ public class WorkspacesModel : PageModel
             return RedirectToPage("/Workspaces");
         }
 
+        // ENFORCE BUSINESS RULE: Link only allowed when BOTH users possess a workspace with subscription as "Personal" plan
+        // 1. Check joiner's selected workspace package tier
+        if (personalWorkspace.PackageTier != "Personal")
+        {
+            TempData["ErrorMessage"] = "Liên kết không thành công! Workspace bạn chọn không thuộc gói 'Personal' plan. Chỉ các Workspace thuộc gói Personal mới được kết nối vào Liên bang.";
+            return RedirectToPage("/Workspaces");
+        }
+
+        // 2. Check federation creator (owner) package tier (must have at least one workspace with 'Personal' plan)
+        var creatorHasPersonalWorkspace = await _context.Workspaces
+            .AnyAsync(w => w.OwnerId == federation.OwnerId && w.PackageTier == "Personal");
+
+        if (!creatorHasPersonalWorkspace)
+        {
+            TempData["ErrorMessage"] = "Liên kết không thành công! Người tạo Liên bang này không sở hữu Workspace nào thuộc gói 'Personal' plan. Quy định liên bang yêu cầu cả 2 thành viên đều phải sở hữu Personal plan Workspace.";
+            return RedirectToPage("/Workspaces");
+        }
+
         // Add user as a member of the federation
         var fedMember = new WorkspaceFederationMember
         {

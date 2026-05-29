@@ -1,0 +1,143 @@
+@page
+@model unigrid.Pages.ProfileModel
+@{
+    ViewData["Title"] = "My Profile";
+}
+
+<div class="max-w-4xl mx-auto space-y-8" x-data="{ fullName: '@System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(Model.FullName)', avatarUrl: '@System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(Model.AvatarUrl ?? "")', previewInitials: '@Model.Initials' }">
+    <!-- Profile Page Header -->
+    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+        <div>
+            <h1 class="text-3xl font-black text-slate-800 tracking-tight">Account Settings</h1>
+            <p class="text-sm text-slate-500 font-semibold mt-1">Manage your UniGrid profile settings, avatars, and social connected states.</p>
+        </div>
+        <a href="/Dashboard" class="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all">
+            <i data-lucide="arrow-left" class="w-4 h-4 text-slate-400"></i>
+            Back to Dashboard
+        </a>
+    </div>
+
+    @if (TempData["ProfileSuccess"] != null)
+    {
+        <div class="p-4 bg-green-50 border border-green-100 text-green-600 rounded-2xl text-xs font-black flex items-center gap-2 animate-bounce">
+            <i data-lucide="check-circle" class="w-4 h-4 shrink-0"></i>
+            <span>@TempData["ProfileSuccess"]</span>
+        </div>
+    }
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <!-- Live Preview Profile Card -->
+        <div class="bg-white border border-slate-200/80 rounded-[2.5rem] shadow-xl p-8 flex flex-col items-center text-center gap-6 relative overflow-hidden group">
+            <!-- Glassmorphic Header Accent -->
+            <div class="absolute inset-x-0 top-0 h-28 bg-gradient-to-tr from-indigo-500 to-violet-500 opacity-90"></div>
+            
+            <!-- Live Preview Badge -->
+            <div class="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider">Live Preview</div>
+
+            <!-- Avatar Block -->
+            <div class="relative z-10 mt-12">
+                <div class="h-24 w-24 rounded-full border-4 border-white shadow-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white text-3xl font-bold overflow-hidden transition-transform group-hover:scale-105 duration-300">
+                    <template x-if="avatarUrl">
+                        <img :src="avatarUrl" class="h-full w-full object-cover" @@error="avatarUrl = ''">
+                    </template>
+                    <template x-if="!avatarUrl">
+                        <span x-text="fullName ? fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U'"></span>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Profile Info -->
+            <div class="space-y-1.5 z-10 w-full">
+                <h3 class="text-lg font-black text-slate-800 truncate" x-text="fullName || 'User Profile'"></h3>
+                <p class="text-xs text-slate-400 font-bold tracking-wider truncate">@Model.Email</p>
+            </div>
+
+            <!-- Connected Accounts Stack -->
+            <div class="w-full pt-4 border-t border-slate-100 flex flex-col gap-2 z-10">
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-left mb-1">Identity Provider</div>
+                
+                @if (Model.IsGoogleConnected)
+                {
+                    <div class="flex items-center gap-3 p-3 bg-blue-50/50 border border-blue-100 rounded-2xl">
+                        <!-- Google Logo -->
+                        <svg class="h-4.5 w-4.5 shrink-0" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.36H12v4.47h6.44c-.28 1.47-1.11 2.71-2.36 3.55l3.67 2.84c2.15-1.98 3.39-4.9 3.39-8.5z" />
+                            <path fill="#34A853" d="M12 23c3.24 0 5.96-1.08 7.95-2.93l-3.67-2.84c-1.02.68-2.33 1.09-3.8 1.09-3.13 0-5.82-2.29-6.77-5.34L.92 15.92C2.87 19.74 6.84 23 12 23z" />
+                            <path fill="#FBBC05" d="M5.24 14.62c-.24-.73-.38-1.5-.38-2.31s.14-1.58.38-2.31L1.45 7.07C.52 8.94 0 11.02 0 13.23s.52 4.29 1.45 6.16l3.79-2.93z" />
+                            <path fill="#EA4335" d="M12 5.04c1.62 0 3.08.56 4.22 1.65l3.15-3.15C17.45 1.71 14.93 1 12 1 7.37 1 3.4 3.63 1.45 7.45l3.79 2.93C6.18 7.33 8.87 5.04 12 5.04z" />
+                        </svg>
+                        <div class="text-left">
+                            <div class="text-xs font-black text-blue-700">Google Connected</div>
+                            <div class="text-[9px] text-blue-500 font-semibold leading-none mt-0.5">Google Social Log-In Active</div>
+                        </div>
+                        <i data-lucide="check" class="w-4 h-4 text-blue-600 ml-auto shrink-0"></i>
+                    </div>
+                }
+                else
+                {
+                    <div class="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200/60 rounded-2xl">
+                        <i data-lucide="shield-check" class="w-4.5 h-4.5 text-indigo-500 shrink-0"></i>
+                        <div class="text-left">
+                            <div class="text-xs font-black text-slate-700">UniGrid Auth Credentials</div>
+                            <div class="text-[9px] text-slate-400 font-semibold leading-none mt-0.5">Standard Email & Password</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Edit Form -->
+        <div class="lg:col-span-2 bg-white border border-slate-200/80 rounded-[2.5rem] shadow-xl p-8">
+            <h3 class="text-xl font-black text-slate-800 tracking-tight mb-6">Profile Details</h3>
+
+            <form method="post" class="space-y-6">
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Full Name</label>
+                    <div class="relative">
+                        <input type="text" asp-for="FullName" x-model="fullName" required placeholder="Alice Nguyen"
+                               class="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all font-semibold text-slate-700">
+                        <div class="absolute inset-y-0 left-4 flex items-center justify-center text-slate-400">
+                            <i data-lucide="user" class="w-4.5 h-4.5"></i>
+                        </div>
+                    </div>
+                    <span asp-validation-for="FullName" class="text-xs text-rose-500 font-bold block mt-1"></span>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Avatar Picture URL</label>
+                    <div class="relative">
+                        <input type="url" asp-for="AvatarUrl" x-model="avatarUrl" placeholder="https://lh3.googleusercontent.com/... (optional)"
+                               class="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all font-semibold text-slate-700">
+                        <div class="absolute inset-y-0 left-4 flex items-center justify-center text-slate-400">
+                            <i data-lucide="image" class="w-4.5 h-4.5"></i>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-400 font-semibold leading-normal mt-1">Provide a link to an image (JPEG, PNG) hosted online. If left blank, your initials will be used as a dynamic avatar instead.</p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Email Address</label>
+                    <div class="relative">
+                        <input type="email" value="@Model.Email" readonly disabled
+                               class="w-full pl-11 pr-4 py-3.5 bg-slate-100 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-400 cursor-not-allowed">
+                        <div class="absolute inset-y-0 left-4 flex items-center justify-center text-slate-400">
+                            <i data-lucide="mail" class="w-4.5 h-4.5"></i>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-400 font-semibold leading-normal mt-1">Your registered email address cannot be changed. This is used for invitations and account identification.</p>
+                </div>
+
+                <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3.5 rounded-2xl text-xs font-black shadow-xl shadow-indigo-100 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center gap-2 cursor-pointer">
+                        <i data-lucide="save" class="w-4 h-4"></i>
+                        Save Account Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

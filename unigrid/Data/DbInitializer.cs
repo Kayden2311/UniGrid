@@ -139,6 +139,54 @@ namespace unigrid.Data
                 logger.LogError(ex, "DbInitializer: Failed to run Federated Workspace database migrations.");
             }
 
+            // 1e. Ensure Notifications and WorkspaceInvitations tables exist
+            try
+            {
+                logger.LogInformation("DbInitializer: Performing Notifications and Workspace Invitations migrations...");
+
+                // A. Check and create Notifications
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Notifications]') AND type in (N'U'))
+                    BEGIN
+                        CREATE TABLE [dbo].[Notifications] (
+                            [Id] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+                            [UserId] UNIQUEIDENTIFIER NOT NULL,
+                            [Message] NVARCHAR(1000) NOT NULL,
+                            [Type] NVARCHAR(100) NOT NULL,
+                            [Link] NVARCHAR(500) NULL,
+                            [IsRead] BIT NOT NULL DEFAULT 0,
+                            [CreatedAt] DATETIME2 DEFAULT GETUTCDATE(),
+                            [RelatedId] UNIQUEIDENTIFIER NULL,
+                            CONSTRAINT [FK_Notifications_Users] FOREIGN KEY ([UserId]) REFERENCES [dbo].[Users]([Id]) ON DELETE CASCADE
+                        );
+                    END
+                ");
+
+                // B. Check and create WorkspaceInvitations
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[WorkspaceInvitations]') AND type in (N'U'))
+                    BEGIN
+                        CREATE TABLE [dbo].[WorkspaceInvitations] (
+                            [Id] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+                            [WorkspaceId] UNIQUEIDENTIFIER NOT NULL,
+                            [InviterId] UNIQUEIDENTIFIER NOT NULL,
+                            [InviteeEmail] NVARCHAR(256) NOT NULL,
+                            [Role] NVARCHAR(50) NOT NULL DEFAULT 'Member',
+                            [Status] NVARCHAR(50) NOT NULL DEFAULT 'Pending',
+                            [CreatedAt] DATETIME2 DEFAULT GETUTCDATE(),
+                            CONSTRAINT [FK_Invitations_Workspaces] FOREIGN KEY ([WorkspaceId]) REFERENCES [dbo].[Workspaces]([Id]) ON DELETE CASCADE,
+                            CONSTRAINT [FK_Invitations_Inviter] FOREIGN KEY ([InviterId]) REFERENCES [dbo].[Users]([Id])
+                        );
+                    END
+                ");
+
+                logger.LogInformation("DbInitializer: Notifications and Workspace Invitations migrations completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "DbInitializer: Failed to run Notifications or Workspace Invitations database migrations.");
+            }
+
             // 2. Check if Alice Nguyen and her User profile exist
             bool hasAlice = false;
             try
@@ -225,8 +273,8 @@ namespace unigrid.Data
 
                 // 6. Seed Workspaces
                 var workspaceSE = new Workspace { Id = Guid.Parse("99999999-9999-9999-9999-999999999999"), Name = "Software Engineering", OwnerId = userAlice.Id, JoinCode = "SE-PRO", PackageTier = "ProPlus" };
-                var workspaceWeb = new Workspace { Id = Guid.Parse("88888888-8888-8888-8888-888888888888"), Name = "Web Development", OwnerId = userAlice.Id, JoinCode = "WEB-DEV", PackageTier = "Free" };
-                var workspaceCalc = new Workspace { Id = Guid.Parse("77777777-7777-7777-7777-777777777777"), Name = "Calculus II Study", OwnerId = userBob.Id, JoinCode = "MATH-101", PackageTier = "Free" };
+                var workspaceWeb = new Workspace { Id = Guid.Parse("88888888-8888-8888-8888-888888888888"), Name = "Web Development", OwnerId = userAlice.Id, JoinCode = "WEB-DEV", PackageTier = "Personal" };
+                var workspaceCalc = new Workspace { Id = Guid.Parse("77777777-7777-7777-7777-777777777777"), Name = "Calculus II Study", OwnerId = userBob.Id, JoinCode = "MATH-101", PackageTier = "Personal" };
                 var workspacePhysics = new Workspace { Id = Guid.Parse("66666666-6666-6666-6666-666666666666"), Name = "Physics Lab", OwnerId = userAlice.Id, JoinCode = "PHYS-101", PackageTier = "Free" };
                 var workspaceEnglish = new Workspace { Id = Guid.Parse("55555555-5555-5555-5555-555555555555"), Name = "English Composition", OwnerId = userAlice.Id, JoinCode = "ENGL-101", PackageTier = "Free" };
                 var workspaceResearch = new Workspace { Id = Guid.Parse("44444444-4444-4444-4444-444444444444"), Name = "Research Methods", OwnerId = userAlice.Id, JoinCode = "RES-101", PackageTier = "Free" };
@@ -236,8 +284,8 @@ namespace unigrid.Data
 
                 // 7. Seed Billings
                 var billingSE = new Billing { WorkspaceId = workspaceSE.Id, PackageId = "proplus_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(1) };
-                var billingWeb = new Billing { WorkspaceId = workspaceWeb.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
-                var billingCalc = new Billing { WorkspaceId = workspaceCalc.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
+                var billingWeb = new Billing { WorkspaceId = workspaceWeb.Id, PackageId = "personal_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
+                var billingCalc = new Billing { WorkspaceId = workspaceCalc.Id, PackageId = "personal_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
                 var billingPhysics = new Billing { WorkspaceId = workspacePhysics.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
                 var billingEnglish = new Billing { WorkspaceId = workspaceEnglish.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
                 var billingResearch = new Billing { WorkspaceId = workspaceResearch.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };

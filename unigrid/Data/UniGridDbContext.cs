@@ -48,6 +48,10 @@ public partial class UniGridDbContext : DbContext
 
     public virtual DbSet<WorkspaceFederationMember> WorkspaceFederationMembers { get; set; }
 
+    public virtual DbSet<Notification> Notifications { get; set; }
+
+    public virtual DbSet<WorkspaceInvitation> WorkspaceInvitations { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseSqlServer("Server=localhost;Database=UniGridDb;User ID=sa;Password=123;TrustServerCertificate=True;");
@@ -334,6 +338,44 @@ public partial class UniGridDbContext : DbContext
                 .HasForeignKey(d => d.PersonalWorkspaceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_FedMembers_Workspaces");
+        });
+
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_Notifications");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.IsRead).HasDefaultValue(false);
+            entity.Property(e => e.Message).HasMaxLength(1000);
+            entity.Property(e => e.Type).HasMaxLength(100);
+            entity.Property(e => e.Link).HasMaxLength(500);
+
+            entity.HasOne(d => d.User).WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_Notifications_Users");
+        });
+
+        modelBuilder.Entity<WorkspaceInvitation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_WorkspaceInvitations");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.InviteeEmail).HasMaxLength(256);
+            entity.Property(e => e.Role).HasMaxLength(50).HasDefaultValue("Member");
+            entity.Property(e => e.Status).HasMaxLength(50).HasDefaultValue("Pending");
+
+            entity.HasOne(d => d.Workspace).WithMany()
+                .HasForeignKey(d => d.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_Invitations_Workspaces");
+
+            entity.HasOne(d => d.Inviter).WithMany()
+                .HasForeignKey(d => d.InviterId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Invitations_Inviter");
         });
 
         OnModelCreatingPartial(modelBuilder);
