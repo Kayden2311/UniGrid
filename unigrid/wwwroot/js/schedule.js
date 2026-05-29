@@ -45,7 +45,9 @@ function scheduleComponent() {
         init() {
             // Load serialized C# Razor Page models
             let rawEvents = window.scheduleRawEvents || [];
-            let personalEvents = rawEvents.map(e => {
+            let rawTasks = window.scheduleRawTasks || [];
+            
+            let allMapped = rawEvents.map(e => {
                 let startDate = new Date(e.startTime);
                 let endDate = new Date(e.endTime);
                 let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
@@ -53,17 +55,31 @@ function scheduleComponent() {
                 let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
                 let duration = Math.max(1, endSlot - startSlot);
 
+                let isTask = !!e.taskId;
+                let workspaceName = '';
+                let workspaceJoinCode = '';
                 let descText = e.description || '';
                 let priority = 'medium';
                 let colorIdx = 0;
-                try {
-                    if (descText.startsWith('{')) {
-                        let descObj = JSON.parse(descText);
-                        descText = descObj.desc || '';
-                        priority = descObj.priority || 'medium';
-                        colorIdx = descObj.color !== undefined ? descObj.color : 0;
+
+                if (isTask) {
+                    let t = rawTasks.find(x => x.id === e.taskId);
+                    if (t) {
+                        workspaceName = t.workspaceName || 'Workspace';
+                        workspaceJoinCode = t.workspaceJoinCode || '';
+                        priority = t.priority || 'medium';
+                        colorIdx = t.priority === 'high' ? 3 : (t.priority === 'medium' ? 2 : 4);
                     }
-                } catch (err) {}
+                } else {
+                    try {
+                        if (descText.startsWith('{')) {
+                            let descObj = JSON.parse(descText);
+                            descText = descObj.desc || '';
+                            priority = descObj.priority || 'medium';
+                            colorIdx = descObj.color !== undefined ? descObj.color : 0;
+                        }
+                    } catch (err) {}
+                }
 
                 return {
                     id: e.id,
@@ -76,49 +92,15 @@ function scheduleComponent() {
                     colorIdx: colorIdx,
                     startDate: startDate,
                     endDate: endDate,
-                    isTask: false
+                    isTask: isTask,
+                    taskId: e.taskId,
+                    workspaceName: workspaceName,
+                    workspaceJoinCode: workspaceJoinCode
                 };
             });
 
-            // Load and map Workspace Tasks with valid due dates
-            let rawTasks = window.scheduleRawTasks || [];
-            let taskEvents = rawTasks.filter(t => t.dueDate).map(t => {
-                let dueDate = new Date(t.dueDate);
-                let dayIdx = dueDate.getDay() === 0 ? 6 : dueDate.getDay() - 1;
-                
-                // If it represents a pure date deadline without custom hours (usually local/UTC midnight), default to 9 AM
-                let hours = dueDate.getHours();
-                let minutes = dueDate.getMinutes();
-                if (hours === 0 && minutes === 0) {
-                    hours = 9;
-                    minutes = 0;
-                }
-                
-                let startSlot = Math.max(0, (hours - 7) * 2 + (minutes >= 30 ? 1 : 0));
-                let duration = 2; // Default 1 hour duration (2 slots)
-
-                // High priority = red (colorIdx 3), medium = yellow/amber (2), low = slate/gray (4)
-                let colorIdx = t.priority === 'high' ? 3 : (t.priority === 'medium' ? 2 : 4);
-
-                return {
-                    id: t.id,
-                    title: t.title,
-                    description: t.description || '',
-                    dayIdx: dayIdx,
-                    startSlot: startSlot,
-                    duration: duration,
-                    priority: t.priority || 'medium',
-                    colorIdx: colorIdx,
-                    startDate: dueDate,
-                    endDate: new Date(dueDate.getTime() + 60 * 60 * 1000),
-                    isTask: true,
-                    workspaceName: t.workspaceName,
-                    workspaceJoinCode: t.workspaceJoinCode || ''
-                };
-            });
-
-            this.events = personalEvents;
-            this.workspaceTasks = taskEvents;
+            this.events = allMapped.filter(e => !e.isTask);
+            this.workspaceTasks = allMapped.filter(e => e.isTask);
         },
 
         get weekDates() {
@@ -197,7 +179,7 @@ function scheduleComponent() {
                 matchedGroup.events.push(ev);
             }
 
-            // Assign virtual columns and properties within each group, dynamically adjusting lane based on cross-lane overlaps
+            // Assign virtual columns and properties within each group
             for (let g of groups) {
                 let groupCols = [];
                 for (let ev of g.events) {
@@ -281,7 +263,7 @@ function scheduleComponent() {
                 matchedGroup.events.push(ev);
             }
 
-            // Assign virtual columns and properties within each group, dynamically adjusting lane based on cross-lane overlaps
+            // Assign virtual columns and properties within each group
             for (let g of groups) {
                 let groupCols = [];
                 for (let ev of g.events) {
@@ -332,8 +314,11 @@ function scheduleComponent() {
             let endOfWeek = new Date(dates[6]);
             endOfWeek.setHours(23, 59, 59, 999);
             
+            let scheduledTaskIds = this.workspaceTasks.map(t => t.taskId);
+            
             return this.tasks.filter(t => {
                 if (!t.dueDate) return false;
+                if (scheduledTaskIds.includes(t.id)) return false;
                 let dDate = new Date(t.dueDate);
                 return dDate >= startOfWeek && dDate <= endOfWeek;
             }).map(t => {
@@ -353,7 +338,8 @@ function scheduleComponent() {
         },
 
         get unscheduledTasks() {
-            return this.tasks.filter(t => !t.dueDate).map(t => {
+            let scheduledTaskIds = this.workspaceTasks.map(t => t.taskId);
+            return this.tasks.filter(t => !t.dueDate && !scheduledTaskIds.includes(t.id)).map(t => {
                 return {
                     id: t.id,
                     title: t.title,
@@ -487,7 +473,7 @@ function scheduleComponent() {
                 }
                 day = Math.max(0, Math.min(day, 6));
                 
-                let slotIdx = Math.floor(relY / 48);
+                let slotIdx = Math.floor(relY / 36);
                 slotIdx = Math.max(0, Math.min(slotIdx, 33));
                 
                 this.dragCreate.endSlot = slotIdx;
@@ -512,17 +498,11 @@ function scheduleComponent() {
             document.addEventListener('mouseup', onUp);
         },
 
-        handleCellMouseEnter(dayIdx, slotIdx) {
-            // Managed seamlessly
-        },
+        handleCellMouseEnter(dayIdx, slotIdx) {},
 
-        async handleMouseUp() {
-            // Managed seamlessly
-        },
+        async handleMouseUp() {},
 
-        handleMouseLeave() {
-            // Managed seamlessly
-        },
+        handleMouseLeave() {},
 
         handleDeadlineDragStart(ev, dl) {
             this.draggedTask = dl;
@@ -585,7 +565,7 @@ function scheduleComponent() {
             let cardEl = document.getElementById((ev.isTask ? 'task-' : 'ev-') + ev.id);
             let rectCard = cardEl.getBoundingClientRect();
             let offsetY = e.clientY - rectCard.top;
-            let offsetSlot = Math.floor(offsetY / 48);
+            let offsetSlot = Math.floor(offsetY / 36);
 
             this.mode = 'moving';
             this.movingTask = {
@@ -625,7 +605,7 @@ function scheduleComponent() {
                 }
                 day = Math.max(0, Math.min(day, 6));
 
-                let slotIdx = Math.floor(relY / 48);
+                let slotIdx = Math.floor(relY / 36);
                 slotIdx = Math.max(0, Math.min(slotIdx, 33));
 
                 let targetEv = this.movingTask.isTask
@@ -663,7 +643,7 @@ function scheduleComponent() {
                         // Capture pending change
                         this.pendingChange = {
                             isTask: !!targetEv.isTask,
-                            taskId: targetEv.id,
+                            taskId: targetEv.taskId || targetEv.id,
                             eventId: targetEv.id,
                             title: targetEv.title,
                             originalDayIdx: originalDayIdx,
@@ -703,7 +683,7 @@ function scheduleComponent() {
 
             let onMove = (evMouse) => {
                 let dy = evMouse.clientY - e.clientY;
-                let slotDelta = Math.round(dy / 48);
+                let slotDelta = Math.round(dy / 36);
                 let targetEv = this.events.find(x => x.id === ev.id);
                 if (!targetEv) return;
 
@@ -756,43 +736,8 @@ function scheduleComponent() {
             if (!this.pendingChange) return;
             let pc = this.pendingChange;
             if (pc.isTask) {
-                let { startTime } = this.slotsToISOTimes(pc.newDayIdx, pc.newStartSlot, pc.newDuration);
-                await this.updateTaskTimeInDb(pc.taskId, startTime);
-                
-                // Update local task state
-                let taskInList = this.tasks.find(x => x.id === pc.taskId);
-                if (taskInList) {
-                    taskInList.dueDate = startTime;
-                }
-                let wTask = this.workspaceTasks.find(x => x.id === pc.taskId);
-                if (wTask) {
-                    let dDate = new Date(startTime);
-                    wTask.startDate = dDate;
-                    wTask.endDate = new Date(dDate.getTime() + 60 * 60 * 1000);
-                    wTask.dayIdx = pc.newDayIdx;
-                    wTask.startSlot = pc.newStartSlot;
-                } else {
-                    let rawTask = this.tasks.find(x => x.id === pc.taskId);
-                    if (rawTask) {
-                        let dueDate = new Date(startTime);
-                        let colorIdx = rawTask.priority === 'high' ? 3 : (rawTask.priority === 'medium' ? 2 : 4);
-                        this.workspaceTasks.push({
-                            id: rawTask.id,
-                            title: rawTask.title,
-                            description: rawTask.description || '',
-                            dayIdx: pc.newDayIdx,
-                            startSlot: pc.newStartSlot,
-                            duration: 2,
-                            priority: rawTask.priority || 'medium',
-                            colorIdx: colorIdx,
-                            startDate: dueDate,
-                            endDate: new Date(dueDate.getTime() + 60 * 60 * 1000),
-                            isTask: true,
-                            workspaceName: rawTask.workspaceName,
-                            workspaceJoinCode: rawTask.workspaceJoinCode || ''
-                        });
-                    }
-                }
+                let { startTime, endTime } = this.slotsToISOTimes(pc.newDayIdx, pc.newStartSlot, pc.newDuration);
+                await this.updateTaskTimeInDb(pc.taskId, startTime, endTime);
             } else {
                 let targetEv = this.events.find(x => x.id === pc.eventId);
                 if (targetEv) {
@@ -807,7 +752,23 @@ function scheduleComponent() {
         cancelPendingChange() {
             if (!this.pendingChange) return;
             let pc = this.pendingChange;
-            if (!pc.isTask) {
+            if (pc.isTask) {
+                let targetEv = this.workspaceTasks.find(x => x.taskId === pc.taskId);
+                if (targetEv) {
+                    targetEv.dayIdx = pc.originalDayIdx;
+                    targetEv.startSlot = pc.originalStartSlot;
+                    targetEv.duration = pc.originalDuration;
+                    
+                    if (pc.originalDayIdx !== null && pc.originalDayIdx !== undefined) {
+                        let { startTime, endTime } = this.slotsToISOTimes(pc.originalDayIdx, pc.originalStartSlot, pc.originalDuration);
+                        targetEv.startDate = new Date(startTime);
+                        targetEv.endDate = new Date(endTime);
+                    } else {
+                        // It was originally unscheduled! Remove it from workspaceTasks
+                        this.workspaceTasks = this.workspaceTasks.filter(x => x.taskId !== pc.taskId);
+                    }
+                }
+            } else {
                 let targetEv = this.events.find(x => x.id === pc.eventId);
                 if (targetEv) {
                     targetEv.dayIdx = pc.originalDayIdx;
@@ -836,19 +797,31 @@ function scheduleComponent() {
                     method: 'POST',
                     body: payload
                 });
-                if (!response.ok) {
-                    console.error("Failed to update event times in database");
+                let data = await response.json();
+                if (data.success) {
+                    let targetEv = this.events.find(x => x.id === eventId);
+                    if (targetEv) {
+                        let e = data.eventItem;
+                        targetEv.startDate = new Date(e.startTime);
+                        targetEv.endDate = new Date(e.endTime);
+                    }
+                } else {
+                    alert(data.message || "Failed to update event time.");
+                    this.init();
                 }
             } catch (err) {
                 console.error("Network error updating event times:", err);
+                alert("Network error. Failed to update event time.");
+                this.init();
             }
         },
 
-        async updateTaskTimeInDb(taskId, dueDate) {
+        async updateTaskTimeInDb(taskId, startTime, endTime) {
             let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
             let payload = new URLSearchParams();
             payload.append('taskId', taskId);
-            payload.append('dueDate', dueDate);
+            payload.append('startTime', startTime);
+            payload.append('endTime', endTime);
             payload.append('__RequestVerificationToken', token);
 
             try {
@@ -856,11 +829,53 @@ function scheduleComponent() {
                     method: 'POST',
                     body: payload
                 });
-                if (!response.ok) {
-                    console.error("Failed to update task times in database");
+                let data = await response.json();
+                if (data.success) {
+                    let e = data.eventItem;
+                    let startDate = new Date(e.startTime);
+                    let endDate = new Date(e.endTime);
+                    let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+                    let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
+                    let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
+                    let duration = Math.max(1, endSlot - startSlot);
+
+                    let rawTask = this.tasks.find(x => x.id === taskId);
+                    let wName = rawTask ? rawTask.workspaceName : 'Workspace';
+                    let wJoinCode = rawTask ? rawTask.workspaceJoinCode : '';
+                    let priority = rawTask ? rawTask.priority : 'medium';
+                    let colorIdx = priority === 'high' ? 3 : (priority === 'medium' ? 2 : 4);
+
+                    let existingWTaskIdx = this.workspaceTasks.findIndex(x => x.taskId === taskId);
+                    let mappedWTask = {
+                        id: e.id,
+                        title: e.title,
+                        description: e.description || '',
+                        dayIdx: dayIdx,
+                        startSlot: startSlot,
+                        duration: duration,
+                        priority: priority,
+                        colorIdx: colorIdx,
+                        startDate: startDate,
+                        endDate: endDate,
+                        isTask: true,
+                        taskId: taskId,
+                        workspaceName: wName,
+                        workspaceJoinCode: wJoinCode
+                    };
+
+                    if (existingWTaskIdx !== -1) {
+                        this.workspaceTasks[existingWTaskIdx] = mappedWTask;
+                    } else {
+                        this.workspaceTasks.push(mappedWTask);
+                    }
+                } else {
+                    alert(data.message || "Failed to schedule task.");
+                    this.init();
                 }
             } catch (err) {
                 console.error("Network error updating task times:", err);
+                alert("Network error. Failed to schedule task.");
+                this.init();
             }
         },
 
@@ -942,6 +957,8 @@ function scheduleComponent() {
                             };
                         }
                         this.dialogOpen = false;
+                    } else {
+                        alert(data.message || "Failed to edit event.");
                     }
                 })
                 .catch(err => console.error("Error saving event:", err));
@@ -986,6 +1003,8 @@ function scheduleComponent() {
                             endDate: endDate
                         });
                         this.dialogOpen = false;
+                    } else {
+                        alert(data.message || "Failed to create event.");
                     }
                 })
                 .catch(err => console.error("Error creating event:", err));
@@ -1074,6 +1093,8 @@ function scheduleComponent() {
                         endDate: endDate
                     });
                     this.dialogOpen = false;
+                } else {
+                    alert(data.message || "Failed to duplicate event.");
                 }
             })
             .catch(err => console.error("Error duplicating event:", err));

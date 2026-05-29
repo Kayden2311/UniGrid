@@ -221,6 +221,9 @@ public partial class UniGridDbContext : DbContext
 
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.FullName).HasMaxLength(256);
+            entity.Property(e => e.BusinessAttribute)
+                .HasMaxLength(50)
+                .HasDefaultValue("normal");
 
             entity.HasOne(d => d.Account).WithMany(p => p.Users)
                 .HasForeignKey(d => d.AccountId)
@@ -240,11 +243,23 @@ public partial class UniGridDbContext : DbContext
             entity.Property(e => e.PackageTier)
                 .HasMaxLength(50)
                 .HasDefaultValue("Free");
+            entity.Property(e => e.WorkspaceType)
+                .HasMaxLength(50)
+                .HasDefaultValue("Personal");
+            entity.Property(e => e.CompanyName).HasMaxLength(256);
+            entity.Property(e => e.CompanyTaxCode).HasMaxLength(100);
+            entity.Property(e => e.CompanyAddress).HasMaxLength(500);
 
             entity.HasOne(d => d.Owner).WithMany(p => p.Workspaces)
                 .HasForeignKey(d => d.OwnerId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Workspaces_Users");
+
+            entity.Property(e => e.FederationId).HasColumnName("FederationId");
+            entity.HasOne(d => d.Federation).WithMany(p => p.Workspaces)
+                .HasForeignKey(d => d.FederationId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_Workspaces_WorkspaceFederations");
         });
 
         modelBuilder.Entity<WorkspaceFile>(entity =>
@@ -289,6 +304,10 @@ public partial class UniGridDbContext : DbContext
             entity.Property(e => e.Role)
                 .HasMaxLength(50)
                 .HasDefaultValue("Member");
+            entity.Property(e => e.DisplayRole).HasMaxLength(100);
+            entity.Property(e => e.CanDeleteFile).HasDefaultValue(false);
+            entity.Property(e => e.CanCreateTask).HasDefaultValue(true);
+            entity.Property(e => e.CanEditTask).HasDefaultValue(true);
 
             entity.HasOne(d => d.User).WithMany(p => p.WorkspaceMembers)
                 .HasForeignKey(d => d.UserId)
@@ -340,6 +359,24 @@ public partial class UniGridDbContext : DbContext
                 .HasConstraintName("FK_FedMembers_Workspaces");
         });
 
+        modelBuilder.Entity<PersonalSchedule>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Title).HasMaxLength(256);
+
+            entity.HasOne(d => d.User).WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_PersonalSchedules_Users");
+
+            entity.HasOne(d => d.Task).WithMany()
+                .HasForeignKey(d => d.TaskId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_PersonalSchedules_Tasks");
+        });
+
         modelBuilder.Entity<Notification>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK_Notifications");
@@ -365,6 +402,7 @@ public partial class UniGridDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
             entity.Property(e => e.InviteeEmail).HasMaxLength(256);
             entity.Property(e => e.Role).HasMaxLength(50).HasDefaultValue("Member");
+            entity.Property(e => e.DisplayRole).HasMaxLength(100);
             entity.Property(e => e.Status).HasMaxLength(50).HasDefaultValue("Pending");
 
             entity.HasOne(d => d.Workspace).WithMany()

@@ -161,9 +161,18 @@
             <a href="/Pricing?joinCode=@Model.Workspace.JoinCode" class="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-orange-100 hover:shadow-orange-200 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2">
                 <i data-lucide="crown" class="w-4 h-4"></i> Upgrade Package
             </a>
-            <button @@click="inviteOpen = true" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2">
-                <i data-lucide="user-plus" class="w-4 h-4"></i> Invite Member
-            </button>
+            @if (packageTier != "Personal")
+            {
+                <button @@click="inviteOpen = true" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2">
+                    <i data-lucide="user-plus" class="w-4 h-4"></i> Invite Member
+                </button>
+            }
+            <form method="post" asp-page-handler="LeaveWorkspace" asp-route-joinCode="@Model.Workspace.JoinCode" onsubmit="return confirm('Bạn có chắc chắn muốn rời khỏi Workspace này không? Nếu bạn là quản lý duy nhất, quyền quản lý sẽ được tự động chuyển giao.');" class="inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="bg-rose-500 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-rose-100 hover:bg-rose-600 transition-all flex items-center gap-2">
+                    <i data-lucide="log-out" class="w-4 h-4"></i> Rời Workspace
+                </button>
+            </form>
         </div>
     </div>
 
@@ -185,11 +194,14 @@
             <i data-lucide="messages-square" class="w-4 h-4"></i> Chat
             <span class="absolute top-2.5 right-1 w-2 h-2 bg-indigo-600 rounded-full"></span>
         </button>
-        <button @@click="activeTab = 'members'"
-                :class="activeTab === 'members' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
-                class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
-            <i data-lucide="users" class="w-4 h-4"></i> Members
-        </button>
+        @if (packageTier != "Personal")
+        {
+            <button @@click="activeTab = 'members'"
+                    :class="activeTab === 'members' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                    class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
+                <i data-lucide="users" class="w-4 h-4"></i> Members
+            </button>
+        }
         <button @@click="activeTab = 'files'"
                 :class="activeTab === 'files' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
                 class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
@@ -735,14 +747,15 @@
                                          }
                                      </div>
                                  </div>
-                            </div>
+                             </div>
                         </div>
                     </div>
-                    <button x-show="currentUserRole !== 'Viewer'" @@click="createTaskStatus = 0; createOpen = true;" class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2">
+ 
+                    <button x-show="currentUserCanCreateTask" @@click="openCreateModal(0)" class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2">
                         <i data-lucide="plus" class="w-4 h-4"></i> Create Task
                     </button>
                 </div>
-
+ 
                 <!-- Flex Container for Kanban & Activity Log -->
                 <div class="flex flex-col lg:flex-row gap-6 items-start w-full">
                     <!-- Left Kanban Board Area -->
@@ -761,7 +774,7 @@
                         var headerIconColor = colStatus == 0 ? "text-slate-400" : colStatus == 1 ? "text-indigo-500 animate-pulse" : colStatus == 2 ? "text-purple-500" : "text-emerald-500";
                         
                         var statusTasks = Model.WorkspaceTasks.Where(t => t.Status == colStatus).ToList();
-
+ 
                         <div class="rounded-3xl p-4 @colBg border @colBorder flex flex-col gap-3"
                              @@dragover.prevent
                              @@drop="
@@ -770,14 +783,14 @@
                                       const tObj = workspaceTasks.find(t => t.id === taskId);
                                       const currentStatus = tObj ? tObj.status : null;
                                       
-                                      if (currentUserRole !== 'Owner' && currentUserRole !== 'Manager') {
+                                      if (currentUserRole !== 'Manager' && currentUserRole !== 'Vice Manager') {
                                           if (@colStatus === 3) {
-                                              alert('Only Managers or Owners have permission to approve and complete tasks!');
+                                              alert('Only Managers or Vice Managers have permission to approve and complete tasks!');
                                               draggedTaskId = null;
                                               return;
                                           }
                                           if (currentStatus === 3) {
-                                              alert('Only Managers or Owners have permission to rework completed tasks!');
+                                              alert('Only Managers or Vice Managers have permission to rework completed tasks!');
                                               draggedTaskId = null;
                                               return;
                                           }
@@ -795,7 +808,7 @@
                                     <span class="text-sm font-black @colText">@colLabel</span>
                                     <span class="px-2 py-0.5 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400">@statusTasks.Count</span>
                                 </div>
-                                <button x-show="currentUserRole !== 'Viewer'" @@click="createTaskStatus = @colStatus; createOpen = true;" class="h-6 w-6 rounded hover:bg-white/80 flex items-center justify-center text-slate-400">
+                                <button x-show="currentUserCanCreateTask" @@click="openCreateModal(@colStatus)" class="h-6 w-6 rounded hover:bg-white/80 flex items-center justify-center text-slate-400">
                                     <i data-lucide="plus" class="w-4 h-4"></i>
                                 </button>
                             </div>
@@ -1212,7 +1225,7 @@
             </div>
         </div>
 
-        <div class="glass rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-sm">
+        <div class="glass rounded-[2.5rem] overflow-visible border border-slate-200 shadow-sm">
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr class="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
@@ -1227,13 +1240,17 @@
                 <tbody class="divide-y divide-slate-100 text-sm font-medium text-slate-600">
                     @foreach (var member in Model.Members)
                     {
-                        var assignedCount = Model.WorkspaceTasks.Count(t => t.AssigneeId == member.UserId);
-                        var completedCount = Model.WorkspaceTasks.Count(t => t.AssigneeId == member.UserId && t.Status == 3);
-                        var workingCount = Model.WorkspaceTasks.Count(t => t.AssigneeId == member.UserId && t.Status == 1);
-                        var rate = assignedCount > 0 ? (int)Math.Round((double)completedCount / assignedCount * 100) : 0;
-                        var initials = string.Concat(member.User.FullName.Split(' ').Select(n => n[0]));
+                        var roleBadgeBg = member.Role == "Manager" ? "bg-amber-50 text-amber-600 border border-amber-200" 
+                                           : member.Role == "Vice Manager" ? "bg-indigo-50 text-indigo-600 border border-indigo-200" 
+                                           : member.Role == "Viewer" ? "bg-slate-50 text-slate-400 border border-slate-200"
+                                           : "bg-blue-50 text-blue-600 border border-blue-200";
 
-                        var roleBadgeBg = member.Role == "Owner" ? "bg-amber-50 text-amber-600" : member.Role == "Manager" ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-500";
+                        var initials = string.Concat(member.User.FullName.Split(' ').Select(n => n.Length > 0 ? n[0].ToString() : ""));
+                        var memberTasks = Model.WorkspaceTasks.Where(t => t.AssigneeId == member.UserId).ToList();
+                        var assignedCount = memberTasks.Count;
+                        var completedCount = memberTasks.Count(t => t.Status == 3);
+                        var workingCount = memberTasks.Count(t => t.Status == 1);
+                        var rate = assignedCount > 0 ? (int)Math.Round((double)completedCount / assignedCount * 100) : 0;
 
                         <tr class="hover:bg-slate-50/50 transition-colors">
                             <td class="px-6 py-4 flex items-center gap-3">
@@ -1241,14 +1258,141 @@
                                     @initials
                                 </div>
                                 <div>
-                                    <p class="font-bold text-slate-700">@member.User.FullName</p>
-                                    <p class="text-[10px] text-slate-400 font-bold">Shared @(Model.Workspace.PackageTier ?? "Free") Plan</p>
+                                    <p class="font-bold text-slate-700 flex items-center gap-2">
+                                        @member.User.FullName
+                                        @if (!string.IsNullOrEmpty(member.DisplayRole))
+                                        {
+                                            <span class="px-2 py-0.5 bg-indigo-50 text-[10px] font-bold text-indigo-650 rounded-md border border-indigo-150 uppercase tracking-wider">
+                                                @member.DisplayRole
+                                            </span>
+                                        }
+                                    </p>
                                 </div>
                             </td>
                             <td class="px-6 py-4">
-                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold @roleBadgeBg">
-                                    @member.Role
-                                </span>
+                                @if (Model.CurrentUserRole == "Manager" && member.UserId != Model.CurrentUser.Id)
+                                {
+                                    <div class="relative inline-block text-left" x-data="{ open: false, selectedRole: '@member.Role', tempDisplayRole: '@(Html.Raw(member.DisplayRole?.Replace("'", "\\'") ?? ""))', canDeleteFile: @(member.CanDeleteFile == true ? "true" : "false"), canCreateTask: @(member.CanCreateTask == true ? "true" : "false"), canEditTask: @(member.CanEditTask == true ? "true" : "false") }">
+                                        <button type="button" @@click="open = !open" 
+                                                class="px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between gap-2 cursor-pointer outline-none w-40 shadow-sm"
+                                                :class="selectedRole === 'Manager' ? 'bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100/50' 
+                                                       : selectedRole === 'Vice Manager' ? 'bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100/50' 
+                                                       : selectedRole === 'Viewer' ? 'bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100/50' 
+                                                       : 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100/50'">
+                                            <span class="truncate" x-text="selectedRole"></span>
+                                            <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform" :class="[open ? 'rotate-180' : '', selectedRole === 'Manager' ? 'text-amber-400' : selectedRole === 'Vice Manager' ? 'text-indigo-400' : selectedRole === 'Viewer' ? 'text-slate-400' : 'text-blue-400']"></i>
+                                        </button>
+                                        
+                                        <!-- Dropdown Panel Matching Project Vibe -->
+                                        <div x-show="open" @@click.away="open = false" x-transition x-cloak
+                                             class="absolute left-0 mt-2 w-64 bg-white border border-slate-150 rounded-2xl shadow-xl z-50 p-4 flex flex-col gap-4">
+                                            
+                                            <!-- Section 1: Role -->
+                                            <div class="space-y-1.5">
+                                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block pb-1 border-b border-slate-100/50">Change Role</span>
+                                                
+                                                <div class="space-y-1 pt-1">
+                                                    <!-- Vice Manager -->
+                                                    <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="memberId" value="@member.UserId" />
+                                                        <input type="hidden" name="newRole" value="Vice Manager" />
+                                                        <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
+                                                        <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
+                                                        <input type="hidden" name="canCreateTask" :value="canCreateTask" />
+                                                        <input type="hidden" name="canEditTask" :value="canEditTask" />
+                                                        <button type="submit" :class="selectedRole === 'Vice Manager' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
+                                                            <span>Vice Manager</span>
+                                                            @if (member.Role == "Vice Manager") {
+                                                                <i data-lucide="check" class="w-3.5 h-3.5 text-indigo-600 shrink-0"></i>
+                                                            }
+                                                        </button>
+                                                    </form>
+
+                                                    <!-- Member -->
+                                                    <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="memberId" value="@member.UserId" />
+                                                        <input type="hidden" name="newRole" value="Member" />
+                                                        <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
+                                                        <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
+                                                        <input type="hidden" name="canCreateTask" :value="canCreateTask" />
+                                                        <input type="hidden" name="canEditTask" :value="canEditTask" />
+                                                        <button type="submit" :class="selectedRole === 'Member' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
+                                                            <span>Member</span>
+                                                            @if (member.Role == "Member") {
+                                                                <i data-lucide="check" class="w-3.5 h-3.5 text-indigo-600 shrink-0"></i>
+                                                            }
+                                                        </button>
+                                                    </form>
+
+                                                    <!-- Viewer -->
+                                                    <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="memberId" value="@member.UserId" />
+                                                        <input type="hidden" name="newRole" value="Viewer" />
+                                                        <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
+                                                        <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
+                                                        <input type="hidden" name="canCreateTask" :value="canCreateTask" />
+                                                        <input type="hidden" name="canEditTask" :value="canEditTask" />
+                                                        <button type="submit" :class="selectedRole === 'Viewer' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
+                                                            <span>Viewer</span>
+                                                            @if (member.Role == "Viewer") {
+                                                                <i data-lucide="check" class="w-3.5 h-3.5 text-indigo-600 shrink-0"></i>
+                                                            }
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Section 2: Phân quyền & Danh hiệu (Permissions & Title) -->
+                                            <div class="space-y-3 pt-2 border-t border-slate-100">
+                                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block pb-1 border-b border-slate-100/50">Phân quyền (Permissions)</span>
+                                                
+                                                <div class="space-y-2.5 pt-1">
+                                                    <!-- Checkbox: Create Task -->
+                                                    <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                                                        <input type="checkbox" x-model="canCreateTask" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
+                                                        <span class="text-xs font-bold text-slate-600">Tạo task (Create Task)</span>
+                                                    </label>
+                                                    <!-- Checkbox: Edit Task -->
+                                                    <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                                                        <input type="checkbox" x-model="canEditTask" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
+                                                        <span class="text-xs font-bold text-slate-600">Sửa task (Edit Task)</span>
+                                                    </label>
+                                                    <!-- Checkbox: Delete File -->
+                                                    <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                                                        <input type="checkbox" x-model="canDeleteFile" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
+                                                        <span class="text-xs font-bold text-slate-600">Xóa file (Delete File)</span>
+                                                    </label>
+                                                </div>
+                                                
+                                                <div class="space-y-1.5 pt-2 border-t border-slate-100/50">
+                                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block pb-1">Danh hiệu (Display Role)</span>
+                                                    <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode" class="space-y-2">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="memberId" value="@member.UserId" />
+                                                        <input type="hidden" name="newRole" value="@member.Role" />
+                                                        <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
+                                                        <input type="hidden" name="canCreateTask" :value="canCreateTask" />
+                                                        <input type="hidden" name="canEditTask" :value="canEditTask" />
+                                                        <input type="text" name="newDisplayRole" x-model="tempDisplayRole" placeholder="e.g. Tech Lead, BA" 
+                                                               class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                                                        <button type="submit" class="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-black shadow shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-1 cursor-pointer">
+                                                            <i data-lucide="save" class="w-3.5 h-3.5"></i> Lưu thay đổi
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="px-2.5 py-1 rounded-full text-[10px] font-bold @roleBadgeBg">
+                                        @member.Role
+                                    </span>
+                                }
                             </td>
                             <td class="px-6 py-4 text-center font-bold text-slate-700">@assignedCount</td>
                             <td class="px-6 py-4 text-center font-bold text-green-600">@completedCount</td>
@@ -1503,6 +1647,16 @@
                 <a :href="'/' + previewFile?.fileUrl" class="w-full py-3 mt-8 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center gap-2 transition-all" download>
                     <i data-lucide="download" class="w-4 h-4"></i> Download File
                 </a>
+                
+                <template x-if="currentUserCanDeleteFile">
+                    <form method="post" asp-page-handler="DeleteFile" asp-route-joinCode="@Model.Workspace.JoinCode" class="w-full mt-2" onsubmit="return confirm('Bạn có chắc chắn muốn xóa file này? Thao tác này sẽ xóa vĩnh viễn tệp tin khỏi hệ thống.')">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="fileId" :value="previewFile?.id" />
+                        <button type="submit" class="w-full py-2.5 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl font-bold hover:bg-rose-100/70 transition-all flex items-center justify-center gap-2 cursor-pointer text-xs">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Xóa file vĩnh viễn
+                        </button>
+                    </form>
+                </template>
             </div>
         </div>
     </div>
@@ -1535,7 +1689,7 @@
                     </div>
                     <h3 class="text-xl font-black text-slate-800 flex items-center justify-between gap-4">
                         <span x-text="selectedTask?.title"></span>
-                        <button x-show="currentUserRole !== 'Viewer'" @@click="isEditing = true" class="text-indigo-600 hover:text-indigo-700 text-xs font-bold flex items-center gap-1.5 shrink-0 bg-indigo-50 px-3 py-1.5 rounded-xl transition-all">
+                        <button x-show="currentUserCanEditTask" @@click="isEditing = true" class="text-indigo-600 hover:text-indigo-700 text-xs font-bold flex items-center gap-1.5 shrink-0 bg-indigo-50 px-3 py-1.5 rounded-xl transition-all">
                             <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                             Edit Task
                         </button>
@@ -1862,7 +2016,7 @@
                         <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date & Time</label>
                         <div class="grid grid-cols-2 gap-2">
                             <!-- Date Selector -->
-                            <input type="date" x-model="createTaskDate" required
+                            <input type="date" x-model="createTaskDate"
                                    class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                             
                             <!-- Custom Time Picker Selector -->
@@ -1998,11 +2152,17 @@
 
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Workspace Role</label>
-                    <select asp-for="InviteRole" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    <select asp-for="InviteRole" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
                         <option value="Member">Member (default)</option>
-                        <option value="Manager">Manager</option>
+                        <option value="Vice Manager">Vice Manager</option>
                         <option value="Viewer">Viewer</option>
                     </select>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Danh hiệu (Display Role)</label>
+                    <input type="text" asp-for="InviteDisplayRole" placeholder="e.g. Tech Lead, BA, HR, ML Specialist"
+                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                 </div>
 
                 <button type="submit" class="w-full py-4 mt-2 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2">
@@ -2167,6 +2327,9 @@
                 currentUserRole: '@Model.CurrentUserRole',
                 currentUserId: '@Model.CurrentUser.Id',
                 workspaceOwnerId: '@Model.Workspace.OwnerId',
+                currentUserCanDeleteFile: @((Model.Workspace.OwnerId == Model.CurrentUser.Id || Model.Members.FirstOrDefault(m => m.UserId == Model.CurrentUser.Id)?.CanDeleteFile == true) ? "true" : "false"),
+                currentUserCanCreateTask: @((Model.Workspace.OwnerId == Model.CurrentUser.Id || Model.Members.FirstOrDefault(m => m.UserId == Model.CurrentUser.Id)?.CanCreateTask == true) ? "true" : "false"),
+                currentUserCanEditTask: @((Model.Workspace.OwnerId == Model.CurrentUser.Id || Model.Members.FirstOrDefault(m => m.UserId == Model.CurrentUser.Id)?.CanEditTask == true) ? "true" : "false"),
                 pendingKanbanTaskTitle: '',
 
                 // Rich Discord-like chat state
@@ -2481,6 +2644,29 @@
                         slots.push({ value: value, label: label });
                     }
                     return slots;
+                },
+
+                openCreateModal(status) {
+                    this.createTaskStatus = status;
+                    let d = new Date();
+                    let year = d.getFullYear();
+                    let month = (d.getMonth() + 1).toString().padStart(2, '0');
+                    let date = d.getDate().toString().padStart(2, '0');
+                    this.createTaskDate = `${year}-${month}-${date}`;
+                    
+                    let hours = d.getHours();
+                    let minutes = d.getMinutes();
+                    if (minutes >= 45) {
+                        hours = (hours + 1) % 24;
+                        minutes = '00';
+                    } else if (minutes >= 15) {
+                        minutes = '30';
+                    } else {
+                        minutes = '00';
+                    }
+                    this.createTaskTime = `${hours.toString().padStart(2, '0')}:${minutes}`;
+                    
+                    this.createOpen = true;
                 },
 
                 selectTask(taskJsonBase64) {

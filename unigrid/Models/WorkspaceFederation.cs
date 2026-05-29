@@ -20,4 +20,6 @@ public partial class WorkspaceFederation
     public virtual ICollection<WorkspaceFederationMember> WorkspaceFederationMembers { get; set; } = new List<WorkspaceFederationMember>();
 
     public virtual ICollection<WorkspaceFile> WorkspaceFiles { get; set; } = new List<WorkspaceFile>();
+
+    public virtual ICollection<Workspace> Workspaces { get; set; } = new List<Workspace>();
 }

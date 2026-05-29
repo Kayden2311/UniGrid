@@ -61,13 +61,13 @@ namespace unigrid.Controllers
             var memberRecord = await _context.WorkspaceMembers
                 .FirstOrDefaultAsync(wm => wm.WorkspaceId == task.WorkspaceId && wm.UserId == userProfile.Id);
 
-            string currentUserRole = memberRecord?.Role ?? (workspace.OwnerId == userProfile.Id ? "Owner" : "Member");
+            string currentUserRole = memberRecord?.Role ?? (workspace.OwnerId == userProfile.Id ? "Manager" : "Member");
 
             // Enforcement of Role Governance:
-            // - Owners and Managers can move any task and transition to/from any status.
+            // - Managers and Vice Managers can move any task and transition to/from any status.
             // - Normal Members can only move tasks assigned specifically to them.
             // - Normal Members cannot drag/move tasks directly to status = 3 (Done).
-            if (currentUserRole != "Owner" && currentUserRole != "Manager")
+            if (currentUserRole != "Manager" && currentUserRole != "Vice Manager")
             {
                 if (task.AssigneeId != userProfile.Id)
                 {
@@ -77,12 +77,12 @@ namespace unigrid.Controllers
                 if (request.Status == 3)
                 {
                     _logger.LogWarning("REST API: Member {UserId} attempted to complete task {TaskId} without management approval.", userProfile.Id, id);
-                    return StatusCode(403, new { message = "Only Managers or Owners have permission to approve and complete tasks!" });
+                    return StatusCode(403, new { message = "Only Managers or Vice Managers have permission to approve and complete tasks!" });
                 }
                 if (task.Status == 3)
                 {
                     _logger.LogWarning("REST API: Member {UserId} attempted to rework completed task {TaskId}.", userProfile.Id, id);
-                    return StatusCode(403, new { message = "Only Managers or Owners have permission to rework completed tasks!" });
+                    return StatusCode(403, new { message = "Only Managers or Vice Managers have permission to rework completed tasks!" });
                 }
             }
 

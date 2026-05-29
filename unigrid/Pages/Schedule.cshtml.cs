@@ -55,6 +55,18 @@ public class ScheduleModel : PageModel
         return RedirectToPage("/Login");
     }
 
+    private async System.Threading.Tasks.Task<bool> HasConflictAsync(Guid userId, Guid ignoreEventId, DateTime startTime, DateTime endTime)
+    {
+        var utcStart = startTime.ToUniversalTime();
+        var utcEnd = endTime.ToUniversalTime();
+        return await _context.PersonalSchedules.AnyAsync(p =>
+            p.UserId == userId &&
+            p.Id != ignoreEventId &&
+            p.StartTime < utcEnd &&
+            p.EndTime > utcStart
+        );
+    }
+
     public async System.Threading.Tasks.Task<IActionResult> OnPostCreateEventAsync(string title, string description, DateTime startTime, DateTime endTime)
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
@@ -63,6 +75,11 @@ public class ScheduleModel : PageModel
         var accountId = Guid.Parse(accountIdClaim);
         var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
         if (userProfile == null) return new JsonResult(new { success = false, message = "User not found" });
+
+        if (await HasConflictAsync(userProfile.Id, Guid.Empty, startTime, endTime))
+        {
+            return new JsonResult(new { success = false, message = "Scheduling conflict! This time slot overlaps with another event on your calendar." });
+        }
 
         var newEvent = new PersonalSchedule
         {
@@ -96,6 +113,15 @@ public class ScheduleModel : PageModel
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
         if (string.IsNullOrEmpty(accountIdClaim)) return new JsonResult(new { success = false, message = "Not authenticated" });
+
+        var accountId = Guid.Parse(accountIdClaim);
+        var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        if (userProfile == null) return new JsonResult(new { success = false, message = "User not found" });
+
+        if (await HasConflictAsync(userProfile.Id, eventId, startTime, endTime))
+        {
+            return new JsonResult(new { success = false, message = "Scheduling conflict! This time slot overlaps with another event on your calendar." });
+        }
 
         var eventItem = await _context.PersonalSchedules.FirstOrDefaultAsync(p => p.Id == eventId);
         if (eventItem != null)
@@ -145,6 +171,15 @@ public class ScheduleModel : PageModel
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
         if (string.IsNullOrEmpty(accountIdClaim)) return new JsonResult(new { success = false, message = "Not authenticated" });
 
+        var accountId = Guid.Parse(accountIdClaim);
+        var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        if (userProfile == null) return new JsonResult(new { success = false, message = "User not found" });
+
+        if (await HasConflictAsync(userProfile.Id, eventId, startTime, endTime))
+        {
+            return new JsonResult(new { success = false, message = "Scheduling conflict! This time slot overlaps with another event on your calendar." });
+        }
+
         var eventItem = await _context.PersonalSchedules.FirstOrDefaultAsync(p => p.Id == eventId);
         if (eventItem != null)
         {
@@ -169,29 +204,61 @@ public class ScheduleModel : PageModel
         return new JsonResult(new { success = false, message = "Event not found" });
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateTaskTimeAsync(Guid taskId, DateTime dueDate)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateTaskTimeAsync(Guid taskId, DateTime startTime, DateTime endTime)
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
         if (string.IsNullOrEmpty(accountIdClaim)) return new JsonResult(new { success = false, message = "Not authenticated" });
 
-        var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId);
-        if (task != null)
-        {
-            task.DueDate = dueDate.ToUniversalTime();
-            await _context.SaveChangesAsync();
+        var accountId = Guid.Parse(accountIdClaim);
+        var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        if (userProfile == null) return new JsonResult(new { success = false, message = "User not found" });
 
-            return new JsonResult(new
-            {
-                success = true,
-                taskItem = new
-                {
-                    id = task.Id,
-                    title = task.Title,
-                    dueDate = task.DueDate?.ToString("yyyy-MM-ddTHH:mm:ssZ")
-                }
-            });
+        var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId);
+        if (task == null) return new JsonResult(new { success = false, message = "Task not found" });
+
+        var personalSchedule = await _context.PersonalSchedules.FirstOrDefaultAsync(p => p.UserId == userProfile.Id && p.TaskId == taskId);
+        var ignoreId = personalSchedule?.Id ?? Guid.Empty;
+
+        if (await HasConflictAsync(userProfile.Id, ignoreId, startTime, endTime))
+        {
+            return new JsonResult(new { success = false, message = "Scheduling conflict! This time slot overlaps with another event on your calendar." });
         }
 
-        return new JsonResult(new { success = false, message = "Task not found" });
+        if (personalSchedule != null)
+        {
+            personalSchedule.StartTime = startTime.ToUniversalTime();
+            personalSchedule.EndTime = endTime.ToUniversalTime();
+        }
+        else
+        {
+            personalSchedule = new PersonalSchedule
+            {
+                Id = Guid.NewGuid(),
+                UserId = userProfile.Id,
+                TaskId = taskId,
+                Title = task.Title,
+                Description = task.Description,
+                StartTime = startTime.ToUniversalTime(),
+                EndTime = endTime.ToUniversalTime(),
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.PersonalSchedules.Add(personalSchedule);
+        }
+
+        await _context.SaveChangesAsync();
+
+        return new JsonResult(new
+        {
+            success = true,
+            eventItem = new
+            {
+                id = personalSchedule.Id,
+                title = personalSchedule.Title,
+                description = personalSchedule.Description ?? "",
+                startTime = personalSchedule.StartTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                endTime = personalSchedule.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                taskId = personalSchedule.TaskId
+            }
+        });
     }
 }
