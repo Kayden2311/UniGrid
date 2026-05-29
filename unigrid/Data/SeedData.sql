@@ -275,8 +275,8 @@ DECLARE @W_Research UNIQUEIDENTIFIER = '44444444-4444-4444-4444-444444444444';
 
 INSERT INTO Workspaces (Id, Name, OwnerId, JoinCode, PackageTier) VALUES 
 (@W_SE, 'Software Engineering', @P_Alice, 'SE-PRO', 'ProPlus'),
-(@W_Web, 'Web Development', @P_Alice, 'WEB-DEV', 'Free'),
-(@W_Calc, 'Calculus II Study', @P_Bob, 'MATH-101', 'Free'),
+(@W_Web, 'Web Development', @P_Alice, 'WEB-DEV', 'Personal'),
+(@W_Calc, 'Calculus II Study', @P_Bob, 'MATH-101', 'Personal'),
 (@W_Physics, 'Physics Lab', @P_Alice, 'PHYS-101', 'Free'),
 (@W_English, 'English Composition', @P_Alice, 'ENGL-101', 'Free'),
 (@W_Research, 'Research Methods', @P_Alice, 'RES-101', 'Free');
@@ -284,8 +284,8 @@ INSERT INTO Workspaces (Id, Name, OwnerId, JoinCode, PackageTier) VALUES
 -- 4. Set Up Billings for workspaces
 INSERT INTO Billings (WorkspaceId, PackageId, Status, EndDate) VALUES 
 (@W_SE, 'proplus_monthly', 'Active', DATEADD(year, 1, GETUTCDATE())),
-(@W_Web, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE())),
-(@W_Calc, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE())),
+(@W_Web, 'personal_monthly', 'Active', DATEADD(year, 10, GETUTCDATE())),
+(@W_Calc, 'personal_monthly', 'Active', DATEADD(year, 10, GETUTCDATE())),
 (@W_Physics, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE())),
 (@W_English, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE())),
 (@W_Research, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE()));

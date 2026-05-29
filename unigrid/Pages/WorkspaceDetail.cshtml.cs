@@ -213,6 +213,7 @@ public class WorkspaceDetailModel : PageModel
     public async System.Threading.Tasks.Task<IActionResult> OnPostCreateTaskAsync(string joinCode)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+        if (CurrentUserRole == "Viewer") return Forbid();
 
         if (!string.IsNullOrEmpty(NewTaskTitle))
         {
@@ -233,6 +234,23 @@ public class WorkspaceDetailModel : PageModel
             };
 
             await _context.Tasks.AddAsync(task);
+
+            if (task.AssigneeId.HasValue && task.AssigneeId.Value != CurrentUser.Id)
+            {
+                var notification = new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = task.AssigneeId.Value,
+                    Message = $"Bạn được giao nhiệm vụ '{task.Title}' trong Workspace '{Workspace.Name}' bởi {CurrentUser.FullName}.",
+                    Type = "TaskAssignment",
+                    Link = $"/WorkspaceDetail/{Workspace.JoinCode}",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow,
+                    RelatedId = task.Id
+                };
+                await _context.Notifications.AddAsync(notification);
+            }
+
             await _context.SaveChangesAsync();
 
             // Handle file attachment if any
@@ -256,6 +274,7 @@ public class WorkspaceDetailModel : PageModel
     public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateTaskStatusAsync(string joinCode, Guid taskId, int status)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+        if (CurrentUserRole == "Viewer") return Forbid();
 
         var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId && t.WorkspaceId == Workspace.Id);
         if (task != null)
@@ -277,7 +296,38 @@ public class WorkspaceDetailModel : PageModel
                 }
             }
 
+            int oldStatus = task.Status ?? 0;
             task.Status = status;
+
+            if (task.AssigneeId.HasValue && task.AssigneeId.Value != CurrentUser.Id)
+            {
+                string msg = "";
+                if (status == 3) // Done (Approved)
+                {
+                    msg = $"Nhiệm vụ '{task.Title}' của bạn trong Workspace '{Workspace.Name}' đã được DUYỆT (Approved) bởi {CurrentUser.FullName}.";
+                }
+                else if ((oldStatus == 2 || oldStatus == 3) && (status == 0 || status == 1)) // Back to Todo/In Progress (Rework)
+                {
+                    msg = $"Nhiệm vụ '{task.Title}' của bạn trong Workspace '{Workspace.Name}' đã được yêu cầu LÀM LẠI (Rework) bởi {CurrentUser.FullName}.";
+                }
+
+                if (!string.IsNullOrEmpty(msg))
+                {
+                    var notification = new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = task.AssigneeId.Value,
+                        Message = msg,
+                        Type = status == 3 ? "TaskApproved" : "TaskRework",
+                        Link = $"/WorkspaceDetail/{Workspace.JoinCode}",
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow,
+                        RelatedId = task.Id
+                    };
+                    await _context.Notifications.AddAsync(notification);
+                }
+            }
+
             await _context.SaveChangesAsync();
             EvictAllWorkspaceMembersCache(Workspace.Id);
             _logger.LogInformation("Task status updated. TaskId: {TaskId}, NewStatus: {Status}", taskId, status);
@@ -289,10 +339,12 @@ public class WorkspaceDetailModel : PageModel
     public async System.Threading.Tasks.Task<IActionResult> OnPostEditTaskAsync(string joinCode, Guid editTaskId, string editTaskTitle, string editTaskDescription, int editTaskPriority, Guid? editTaskAssigneeId, DateTime? editTaskDueDate)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+        if (CurrentUserRole == "Viewer") return Forbid();
 
         var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == editTaskId && t.WorkspaceId == Workspace.Id);
         if (task != null)
         {
+            Guid? oldAssigneeId = task.AssigneeId;
             // Backend Permission Check
             // Members can only edit description, while Managers/Owners can edit everything
             if (CurrentUserRole == "Owner" || CurrentUserRole == "Manager")
@@ -313,6 +365,22 @@ public class WorkspaceDetailModel : PageModel
                 {
                     await _context.WorkspaceFiles.AddAsync(file);
                 }
+            }
+
+            if (editTaskAssigneeId.HasValue && editTaskAssigneeId != oldAssigneeId && editTaskAssigneeId.Value != CurrentUser.Id)
+            {
+                var notification = new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = editTaskAssigneeId.Value,
+                    Message = $"Bạn được giao nhiệm vụ '{task.Title}' trong Workspace '{Workspace.Name}' bởi {CurrentUser.FullName}.",
+                    Type = "TaskAssignment",
+                    Link = $"/WorkspaceDetail/{Workspace.JoinCode}",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow,
+                    RelatedId = task.Id
+                };
+                await _context.Notifications.AddAsync(notification);
             }
 
             await _context.SaveChangesAsync();
@@ -424,6 +492,15 @@ public class WorkspaceDetailModel : PageModel
             return RedirectToPage("/Dashboard");
         }
 
+        if (CurrentUserRole == "Viewer")
+        {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "Viewer role cannot add comments." });
+            }
+            return Forbid();
+        }
+
         if (!string.IsNullOrEmpty(CommentContent) && CommentTaskId != Guid.Empty)
         {
             CommentContent = Helpers.InputSanitizer.SanitizeInput(CommentContent);
@@ -471,6 +548,15 @@ public class WorkspaceDetailModel : PageModel
                 return new BadRequestObjectResult(new { message = "Workspace not found or unauthorized." });
             }
             return RedirectToPage("/Dashboard");
+        }
+
+        if (CurrentUserRole == "Viewer")
+        {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "Viewer role cannot send chat messages." });
+            }
+            return Forbid();
         }
 
         if (!string.IsNullOrEmpty(ChatContent) && ChatRoom != null)
@@ -529,6 +615,7 @@ public class WorkspaceDetailModel : PageModel
     public async System.Threading.Tasks.Task<IActionResult> OnPostUploadFileAsync(string joinCode)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+        if (CurrentUserRole == "Viewer") return Forbid();
 
         if (UploadedFile == null || UploadedFile.Length == 0)
         {
@@ -682,49 +769,89 @@ public class WorkspaceDetailModel : PageModel
     public async System.Threading.Tasks.Task<IActionResult> OnPostInviteMemberAsync(string joinCode)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+        if (CurrentUserRole != "Owner" && CurrentUserRole != "Manager") return Forbid();
 
         if (!string.IsNullOrEmpty(InviteEmail))
         {
+            var email = InviteEmail.Trim();
+
             // Find user profile by email through Account relationship
             var inviteeUser = await _context.Users
                 .Include(u => u.Account)
-                .FirstOrDefaultAsync(u => u.Account.Email == InviteEmail);
+                .FirstOrDefaultAsync(u => u.Account.Email.ToLower() == email.ToLower());
 
             if (inviteeUser != null)
             {
-                // Check if already member
-                var alreadyMember = await _context.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == Workspace.Id && wm.UserId == inviteeUser.Id);
-                if (!alreadyMember)
+                var alreadyMember = await _context.WorkspaceMembers
+                    .AnyAsync(wm => wm.WorkspaceId == Workspace.Id && wm.UserId == inviteeUser.Id);
+
+                if (alreadyMember)
                 {
-                    // Enforce plan-based maximum member limit checks
-                    int currentMembersCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == Workspace.Id);
-                    int maxMembersAllowed = 5; // Default for Free and Personal
-                    string tier = Workspace.PackageTier ?? "Free";
-                    if (tier == "Pro") maxMembersAllowed = 10;
-                    else if (tier == "ProPlus") maxMembersAllowed = 15;
-                    else if (tier == "Business") maxMembersAllowed = 30;
-
-                    if (currentMembersCount >= maxMembersAllowed)
-                    {
-                        TempData["InviteError"] = $"Invite failed. This workspace has reached its member limit of {maxMembersAllowed} for the {tier} plan.";
-                        return RedirectToPage(new { joinCode });
-                    }
-
-                    var newMember = new WorkspaceMember
-                    {
-                        WorkspaceId = Workspace.Id,
-                        UserId = inviteeUser.Id,
-                        Role = InviteRole,
-                        JoinedAt = DateTime.UtcNow
-                    };
-
-                    await _context.WorkspaceMembers.AddAsync(newMember);
-                    await _context.SaveChangesAsync();
-                    _cache.Remove($"WorkspaceMembers_{Workspace.Id}");
-                    _cache.Remove($"UserWorkspaces_{inviteeUser.Id}");
-                    _logger.LogInformation("User {Invitee} added as {Role} in Workspace {WorkspaceId}", inviteeUser.FullName, InviteRole, Workspace.Id);
+                    TempData["InviteError"] = "Người dùng này đã là thành viên của Workspace rồi.";
+                    return RedirectToPage(new { joinCode });
                 }
             }
+
+            // Check if there is already a pending invitation for this email
+            var existingInvitation = await _context.WorkspaceInvitations
+                .FirstOrDefaultAsync(i => i.WorkspaceId == Workspace.Id && i.InviteeEmail.ToLower() == email.ToLower() && i.Status == "Pending");
+
+            if (existingInvitation != null)
+            {
+                TempData["InviteError"] = "Lời mời đến email này đã được gửi và đang chờ xác nhận.";
+                return RedirectToPage(new { joinCode });
+            }
+
+            // Enforce plan-based maximum member limit checks (counting both active members and pending invites)
+            int currentMembersCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == Workspace.Id);
+            int pendingInvitesCount = await _context.WorkspaceInvitations.CountAsync(i => i.WorkspaceId == Workspace.Id && i.Status == "Pending");
+            
+            int maxMembersAllowed = 5; // Default for Free and Personal
+            string tier = Workspace.PackageTier ?? "Free";
+            if (tier == "Pro") maxMembersAllowed = 10;
+            else if (tier == "ProPlus") maxMembersAllowed = 15;
+            else if (tier == "Business") maxMembersAllowed = 30;
+
+            if (currentMembersCount + pendingInvitesCount >= maxMembersAllowed)
+            {
+                TempData["InviteError"] = $"Không thể gửi lời mời. Workspace đã đạt giới hạn thành viên cho phép ({maxMembersAllowed}) của gói {tier}.";
+                return RedirectToPage(new { joinCode });
+            }
+
+            // Create WorkspaceInvitation
+            var invitation = new WorkspaceInvitation
+            {
+                Id = Guid.NewGuid(),
+                WorkspaceId = Workspace.Id,
+                InviterId = CurrentUser.Id,
+                InviteeEmail = email,
+                Role = InviteRole,
+                Status = "Pending",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _context.WorkspaceInvitations.AddAsync(invitation);
+
+            // If the user already has an account, send a notification immediately!
+            if (inviteeUser != null)
+            {
+                var notification = new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = inviteeUser.Id,
+                    Message = $"{CurrentUser.FullName} đã mời bạn tham gia Workspace '{Workspace.Name}' với tư cách là '{InviteRole}'.",
+                    Type = "WorkspaceInvitation",
+                    Link = $"/api/invitations/{invitation.Id}/accept",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow,
+                    RelatedId = Workspace.Id
+                };
+                await _context.Notifications.AddAsync(notification);
+            }
+
+            await _context.SaveChangesAsync();
+            TempData["InviteSuccess"] = $"Đã gửi thư mời thành công tới email {email}!";
+            _logger.LogInformation("Invitation created for email {Email} as {Role} in Workspace {WorkspaceId}", email, InviteRole, Workspace.Id);
         }
 
         return RedirectToPage(new { joinCode });
