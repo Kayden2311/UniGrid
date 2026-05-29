@@ -17,6 +17,8 @@ public partial class User
 
     public string? AvatarUrl { get; set; }
 
+    public string BusinessAttribute { get; set; } = "normal";
+
     public virtual Account Account { get; set; } = null!;
 
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();

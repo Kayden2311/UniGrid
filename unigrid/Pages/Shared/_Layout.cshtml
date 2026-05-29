@@ -30,20 +30,25 @@
     List<unigrid.Models.WorkspaceInvitation> pendingInvitations = new();
     int unreadNotificationsCount = 0;
 
+    List<unigrid.Models.Workspace> sidebarPersonalWorkspaces = new();
+    List<unigrid.Models.Workspace> sidebarGroupWorkspaces = new();
+    List<unigrid.Models.WorkspaceFederation> sidebarFederations = new();
+    unigrid.Models.User? currentUser = null;
+
     var accountIdClaim = User.FindFirst("AccountId")?.Value;
     if (!string.IsNullOrEmpty(accountIdClaim) && Guid.TryParse(accountIdClaim, out var accountId))
     {
-        var user = DbContext.Users.FirstOrDefault(u => u.AccountId == accountId);
-        if (user != null)
+        currentUser = DbContext.Users.FirstOrDefault(u => u.AccountId == accountId);
+        if (currentUser != null)
         {
             notifications = DbContext.Notifications
-                .Where(n => n.UserId == user.Id)
+                .Where(n => n.UserId == currentUser.Id)
                 .OrderByDescending(n => n.CreatedAt)
                 .Take(8)
                 .ToList();
 
             unreadNotificationsCount = DbContext.Notifications
-                .Count(n => n.UserId == user.Id && !n.IsRead);
+                .Count(n => n.UserId == currentUser.Id && !n.IsRead);
 
             var accountRecord = DbContext.Accounts.FirstOrDefault(a => a.Id == accountId);
             if (accountRecord != null && !string.IsNullOrEmpty(accountRecord.Email))
@@ -55,11 +60,35 @@
                     .OrderByDescending(i => i.CreatedAt)
                     .ToList();
             }
+
+            // Query user workspaces
+            var userWorkspaces = DbContext.WorkspaceMembers
+                .Include(m => m.Workspace)
+                .Where(m => m.UserId == currentUser.Id)
+                .Select(m => m.Workspace)
+                .Distinct()
+                .ToList();
+
+            sidebarPersonalWorkspaces = userWorkspaces
+                .Where(w => w.WorkspaceType == "Personal" && w.FederationId == null)
+                .ToList();
+
+            sidebarGroupWorkspaces = userWorkspaces
+                .Where(w => w.WorkspaceType == "Group" && w.FederationId == null)
+                .ToList();
+
+            sidebarFederations = DbContext.WorkspaceFederations
+                .Include(f => f.Workspaces)
+                .Include(f => f.WorkspaceFederationMembers)
+                    .ThenInclude(m => m.PersonalWorkspace)
+                .Where(f => f.OwnerId == currentUser.Id || f.WorkspaceFederationMembers.Any(m => m.UserId == currentUser.Id))
+                .Distinct()
+                .ToList();
         }
     }
 }
 <body class="h-full overflow-hidden flex text-slate-900" 
-      x-data="{ sidebarOpen: window.innerWidth > 768, notificationsOpen: false, profileOpen: false, isFullPage: @(isFullPage ? "true" : "false"), wsOpen: true, mobileNavOpen: false, globalSearchQuery: '' }">
+      x-data="{ sidebarOpen: window.innerWidth > 768, notificationsOpen: false, profileOpen: false, isFullPage: @(isFullPage ? "true" : "false"), wsOpen: true, personalWsOpen: true, groupWsOpen: true, fedOpen: true, mobileNavOpen: false, globalSearchQuery: '' }">
     
     <!-- Mobile Sidebar Overlay -->
     <div x-show="!isFullPage && sidebarOpen" @@click="sidebarOpen = false" x-cloak
@@ -95,24 +124,140 @@
                 </a>
             </div>
 
-            <!-- Workspaces Collapsible -->
-            <div x-show="sidebarOpen" class="space-y-1">
-                <button @@click="wsOpen = !wsOpen" class="flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors">
+            <!-- Solo Portals Collapsible -->
+            <div x-show="sidebarOpen" class="space-y-1 mb-4">
+                <button @@click="personalWsOpen = !personalWsOpen" class="flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors">
                     <div class="flex items-center gap-2">
-                        <i data-lucide="briefcase" class="h-3.5 w-3.5"></i>
-                        <span>Workspaces</span>
+                        <i data-lucide="user" class="h-3.5 w-3.5 text-teal-500"></i>
+                        <span>Solo Portals</span>
                     </div>
-                    <i data-lucide="chevron-down" class="h-3.5 w-3.5 transition-transform" :class="wsOpen ? 'rotate-180' : ''"></i>
+                    <i data-lucide="chevron-down" class="h-3.5 w-3.5 transition-transform" :class="personalWsOpen ? 'rotate-180' : ''"></i>
                 </button>
-                <div x-show="wsOpen" x-transition class="space-y-0.5">
-                    @foreach (var ws in (List<unigrid.Models.Workspace>)(ViewData["Workspaces"] ?? new List<unigrid.Models.Workspace>()))
+                <div x-show="personalWsOpen" x-transition class="space-y-0.5">
+                    @if (sidebarPersonalWorkspaces.Any())
                     {
-                        <a href="/WorkspaceDetail/@ws.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm">
-                            <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-indigo-50 text-[10px] font-black text-indigo-600">
-                                @ws.Name.Substring(0, 1)
+                        @foreach (var ws in sidebarPersonalWorkspaces)
+                        {
+                            <a href="/WorkspaceDetail/@ws.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm">
+                                <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-teal-50 text-[10px] font-black text-teal-600">
+                                    @ws.Name.Substring(0, 1)
+                                </div>
+                                <span class="truncate">@ws.Name</span>
+                            </a>
+                        }
+                    }
+                    else
+                    {
+                        <div class="px-3 py-2 text-xs text-slate-400 italic">No Solo Portals</div>
+                    }
+                </div>
+            </div>
+
+            <!-- Group Boards Collapsible -->
+            <div x-show="sidebarOpen" class="space-y-1 mb-4">
+                <button @@click="groupWsOpen = !groupWsOpen" class="flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="users" class="h-3.5 w-3.5 text-indigo-500"></i>
+                        <span>Group Boards</span>
+                    </div>
+                    <i data-lucide="chevron-down" class="h-3.5 w-3.5 transition-transform" :class="groupWsOpen ? 'rotate-180' : ''"></i>
+                </button>
+                <div x-show="groupWsOpen" x-transition class="space-y-0.5">
+                    @if (sidebarGroupWorkspaces.Any())
+                    {
+                        @foreach (var ws in sidebarGroupWorkspaces)
+                        {
+                            <a href="/WorkspaceDetail/@ws.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm">
+                                <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-indigo-50 text-[10px] font-black text-indigo-600">
+                                    @ws.Name.Substring(0, 1)
+                                </div>
+                                <span class="truncate">@ws.Name</span>
+                            </a>
+                        }
+                    }
+                    else
+                    {
+                        <div class="px-3 py-2 text-xs text-slate-400 italic">No Group Boards</div>
+                    }
+                </div>
+            </div>
+
+            <!-- Enterprise Federations Collapsible -->
+            <div x-show="sidebarOpen" class="space-y-1 mb-4">
+                <button @@click="fedOpen = !fedOpen" class="flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="globe" class="h-3.5 w-3.5 text-violet-500"></i>
+                        <span>Enterprise Federations</span>
+                    </div>
+                    <i data-lucide="chevron-down" class="h-3.5 w-3.5 transition-transform" :class="fedOpen ? 'rotate-180' : ''"></i>
+                </button>
+                <div x-show="fedOpen" x-transition class="space-y-2">
+                    @if (sidebarFederations.Any())
+                    {
+                        @foreach (var fed in sidebarFederations)
+                        {
+                            var isFedOwner = fed.OwnerId == currentUser?.Id;
+                            <div class="border-l border-slate-100 pl-2 ml-2 space-y-1">
+                                <div class="flex items-center justify-between px-2 py-1 text-xs font-bold text-slate-600 bg-slate-50 rounded-lg">
+                                    <span class="truncate">@fed.Name</span>
+                                </div>
+                                
+                                @if (isFedOwner)
+                                {
+                                    <a href="/FederationDetail?joinCode=@fed.JoinCode" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-bold text-violet-600 hover:bg-violet-50 transition-all animate-pulse">
+                                        <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>
+                                        <span>🌐 Joint Control Center</span>
+                                    </a>
+                                }
+                                
+                                @{
+                                    var directChildren = fed.Workspaces.ToList();
+                                    var linkedPersonal = fed.WorkspaceFederationMembers
+                                        .Where(m => m.PersonalWorkspace != null)
+                                        .Select(m => m.PersonalWorkspace)
+                                        .ToList();
+                                    
+                                    var allFedChildren = directChildren.Concat(linkedPersonal)
+                                        .GroupBy(w => w.Id)
+                                        .Select(g => g.First())
+                                        .ToList();
+
+                                    var visibleChildren = allFedChildren;
+                                    if (!isFedOwner && currentUser != null)
+                                    {
+                                        var userJoinedWorkspaceIds = DbContext.WorkspaceMembers
+                                            .Where(m => m.UserId == currentUser.Id)
+                                            .Select(m => m.WorkspaceId)
+                                            .ToHashSet();
+                                        
+                                        visibleChildren = allFedChildren
+                                            .Where(w => userJoinedWorkspaceIds.Contains(w.Id))
+                                            .ToList();
+                                    }
+                                }
+
+                                @if (visibleChildren.Any())
+                                {
+                                    @foreach (var childWs in visibleChildren)
+                                    {
+                                        <a href="/WorkspaceDetail/@childWs.JoinCode" class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-xs">
+                                            <div class="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded bg-violet-50 text-[9px] font-black text-violet-600">
+                                                @childWs.Name.Substring(0, 1)
+                                            </div>
+                                            <span class="truncate">@childWs.Name</span>
+                                        </a>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="px-2 py-1 text-[10px] text-slate-400 italic">No visible portals</div>
+                                }
                             </div>
-                            <span class="truncate">@ws.Name</span>
-                        </a>
+                        }
+                    }
+                    else
+                    {
+                        <div class="px-3 py-2 text-xs text-slate-400 italic">No Active Federations</div>
                     }
                 </div>
             </div>
