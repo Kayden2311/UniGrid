@@ -12,7 +12,8 @@
         title = e.Title,
         description = e.Description ?? "",
         startTime = e.StartTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
-        endTime = e.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
+        endTime = e.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+        taskId = e.TaskId
     }), serializerSettings);
 
     var jsonTasks = System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceTasks.Select(t => new {
@@ -89,7 +90,7 @@
                      @@mouseleave="handleMouseLeave()" 
                      class="relative select-none" 
                      :class="mode === 'moving' ? 'cursor-grabbing' : ''"
-                     style="display: grid; grid-template-columns: 80px repeat(7, 1fr); height: 1632px;"
+                     style="display: grid; grid-template-columns: 80px repeat(7, 1fr); height: 1224px;"
                      id="grid-container">
                     
                     <!-- Vertical Time Grid Rails -->
@@ -98,7 +99,7 @@
                         {
                             var slotLabelIdx = i;
                             <div class="flex items-start justify-end pr-2 text-[11px] text-slate-400 font-medium" 
-                                 style="height: 48px;">
+                                 style="height: 36px;">
                                  <span :class="@slotLabelIdx === 0 ? 'mt-1' : '-mt-1.5'" x-text="@slotLabelIdx % 2 === 0 ? slotToTime(@slotLabelIdx) : ''"></span>
                              </div>
                         }
@@ -124,13 +125,13 @@
                                           mode === 'moving' && movingTask && movingTask.currentDayIdx === @dIdx && movingTask.currentStartSlot <= @sIdx && @sIdx < (movingTask.currentStartSlot + (events.find(x => x.id === movingTask.taskId)?.duration || 2)) ? 'grid-cell-active-hover' : (mode === 'moving' ? 'hover:bg-slate-50/30' : 'hover:bg-slate-50'),
                                           mode === 'idle' ? 'cursor-crosshair' : 'cursor-grabbing'
                                       ]"
-                                      style="height: 48px;"></div>
+                                      style="height: 36px;"></div>
                              }
 
                              <!-- Dashed New Event Selection Preview -->
                              <div x-show="createPreview && createPreview.dayIdx === @dIdx" x-cloak
                                   class="absolute left-1 right-1 rounded-lg bg-indigo-500/10 border-2 border-dashed border-indigo-500/50 z-10 pointer-events-none"
-                                  :style="'top: ' + (createPreview ? createPreview.startSlot * 48 : 0) + 'px; height: ' + (createPreview ? createPreview.duration * 48 : 0) + 'px;'">
+                                  :style="'top: ' + (createPreview ? createPreview.startSlot * 36 : 0) + 'px; height: ' + (createPreview ? createPreview.duration * 36 : 0) + 'px;'">
                                  <span class="text-[10px] text-indigo-600 font-semibold px-2 pt-1 block" 
                                        x-text="createPreview ? (slotToTime(createPreview.startSlot) + ' – ' + slotToTime(createPreview.startSlot + createPreview.duration)) : ''"></span>
                              </div>
@@ -141,7 +142,7 @@
                                       @@click="openEdit(ev)"
                                       @@mouseenter="hoveredId = ev.id" 
                                       @@mouseleave="hoveredId = null"
-                                      class="event-card absolute rounded-lg border-l-[3px] px-2 py-1 text-xs leading-normal z-20 shadow-sm hover:shadow-md select-none flex flex-col justify-start gap-0.5 cursor-pointer group transition-shadow"
+                                      class="event-card absolute rounded-lg border-l-[3px] text-xs leading-normal z-20 shadow-sm hover:shadow-md select-none flex flex-col cursor-pointer group transition-shadow"
                                       :class="[
                                           ['bg-indigo-50 border-indigo-200 text-indigo-700',
                                            'bg-teal-50 border-teal-200 text-teal-700',
@@ -149,42 +150,80 @@
                                            'bg-rose-50 border-rose-200 text-rose-700',
                                            'bg-slate-50 border-slate-200 text-slate-700'][ev.colorIdx] || 'bg-indigo-50 border-indigo-200 text-indigo-700',
                                           ev.priority === 'high' ? 'ring-1 ring-rose-500/20' : '',
-                                          mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'event-card-dragging' : ''
+                                          mode === 'moving' && movingTask && movingTask.taskId === ev.id ? 'event-card-dragging' : '',
+                                          ev.duration === 1 ? 'py-0.5 px-1.5 justify-center gap-0' : 'py-1 px-2 justify-start gap-0.5'
                                       ]"
-                                      :style="'top: ' + (ev.startSlot * 48 + 1) + 'px; height: ' + (ev.duration * 48 - 2) + 'px; left: ' + (ev.left + 1) + '%; width: ' + (ev.width - 2) + '%;' + (mode === 'moving' && movingTask && movingTask.taskId === ev.id ? ' transform: translate3d(' + dragTranslateX + 'px, ' + dragTranslateY + 'px, 0px) scale(1.02) rotate(1.2deg);' : '')">
+                                      :style="'top: ' + (ev.startSlot * 36 + 1) + 'px; height: ' + (ev.duration * 36 - 2) + 'px; left: ' + (ev.left + 1) + '%; width: ' + (ev.width - 2) + '%;' + (mode === 'moving' && movingTask && movingTask.taskId === ev.id ? ' transform: translate3d(' + dragTranslateX + 'px, ' + dragTranslateY + 'px, 0px) scale(1.02) rotate(1.2deg);' : '')">
                                       
-                                      <!-- Row 1: Grip + Dot -->
-                                      <div class="flex items-center gap-1.5 select-none w-full shrink-0">
-                                          <!-- 3x3 Dot Grid Overlay (acts as GRIP handle) -->
-                                          <div @@mousedown.stop.prevent="startMoveTask($event, ev, @dIdx)"
-                                               class="flex flex-wrap w-[11px] h-[11px] gap-[1.5px] opacity-[0.4] hover:opacity-[0.9] pointer-events-auto shrink-0 text-current cursor-grab active:cursor-grabbing">
-                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
-                                              <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                      <!-- When duration is 1 (30 minutes) -->
+                                      <template x-if="ev.duration === 1">
+                                          <div class="flex flex-col justify-center gap-0 w-full min-w-0">
+                                              <!-- Row 1: Grip + Dot + Title inline -->
+                                              <div class="flex items-center gap-1 select-none w-full shrink-0 min-w-0">
+                                                  <!-- 3x3 Dot Grid Overlay (acts as GRIP handle) -->
+                                                  <div @@mousedown.stop.prevent="startMoveTask($event, ev, @dIdx)"
+                                                       class="flex flex-wrap w-[11px] h-[11px] gap-[1.5px] opacity-[0.4] hover:opacity-[0.9] pointer-events-auto shrink-0 text-current cursor-grab active:cursor-grabbing">
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                  </div>
+                                                  <!-- Priority Dot -->
+                                                  <span class="h-1.5 w-1.5 rounded-full shrink-0" 
+                                                        :class="{
+                                                            'bg-slate-400': ev.priority === 'low',
+                                                            'bg-amber-500': ev.priority === 'medium',
+                                                            'bg-rose-500': ev.priority === 'high'
+                                                        }"></span>
+                                                  <!-- Title -->
+                                                  <div class="font-bold text-slate-700 truncate text-[11px] select-none leading-none flex-1 min-w-0" 
+                                                       x-text="ev.title"></div>
+                                              </div>
+                                              <!-- Row 2: Time range -->
+                                              <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none mt-0.5 shrink-0"
+                                                   x-text="formatTimeRange(ev.startSlot, ev.duration)"></div>
                                           </div>
+                                      </template>
 
-                                          <!-- Priority Dot -->
-                                          <span class="h-1.5 w-1.5 rounded-full shrink-0" 
-                                                :class="{
-                                                    'bg-slate-400': ev.priority === 'low',
-                                                    'bg-amber-500': ev.priority === 'medium',
-                                                    'bg-rose-500': ev.priority === 'high'
-                                                }"></span>
-                                      </div>
-
-                                      <!-- Row 2: Title (Full Width) -->
-                                      <div class="font-bold text-slate-700 truncate text-[11px] select-none leading-none w-full min-w-0" 
-                                           x-text="ev.title"></div>
-
-                                      <!-- Row 3: Time details (Full Width, Compact Formatted) -->
-                                      <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none"
-                                           x-text="formatTimeRange(ev.startSlot, ev.duration)"></div>
+                                      <!-- When duration is > 1 (longer events) -->
+                                      <template x-if="ev.duration > 1">
+                                          <div class="flex flex-col justify-start gap-0.5 w-full min-w-0">
+                                              <!-- Row 1: Grip + Dot -->
+                                              <div class="flex items-center gap-1.5 select-none w-full shrink-0">
+                                                  <!-- 3x3 Dot Grid Overlay (acts as GRIP handle) -->
+                                                  <div @@mousedown.stop.prevent="startMoveTask($event, ev, @dIdx)"
+                                                       class="flex flex-wrap w-[11px] h-[11px] gap-[1.5px] opacity-[0.4] hover:opacity-[0.9] pointer-events-auto shrink-0 text-current cursor-grab active:cursor-grabbing">
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                      <span class="w-[2.5px] h-[2.5px] rounded-full bg-current"></span>
+                                                  </div>
+                                                  <!-- Priority Dot -->
+                                                  <span class="h-1.5 w-1.5 rounded-full shrink-0" 
+                                                        :class="{
+                                                            'bg-slate-400': ev.priority === 'low',
+                                                            'bg-amber-500': ev.priority === 'medium',
+                                                            'bg-rose-500': ev.priority === 'high'
+                                                        }"></span>
+                                              </div>
+                                              <!-- Row 2: Title (Full Width) -->
+                                              <div class="font-bold text-slate-700 truncate text-[11px] select-none leading-none w-full min-w-0" 
+                                                   x-text="ev.title"></div>
+                                              <!-- Row 3: Time details -->
+                                              <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none"
+                                                   x-text="formatTimeRange(ev.startSlot, ev.duration)"></div>
+                                          </div>
+                                      </template>
 
                                       <!-- Resize Handle Top -->
                                       <div @@mousedown.stop.prevent="startResize($event, ev, 'top')"
@@ -218,7 +257,7 @@
                                       @@click="openEdit(task)"
                                       @@mouseenter="hoveredId = task.id" 
                                       @@mouseleave="hoveredId = null"
-                                      class="event-card absolute rounded-lg border-l-[3px] px-2 py-1 text-xs leading-normal z-20 shadow-sm hover:shadow-md select-none flex flex-col justify-start gap-1 cursor-pointer group transition-shadow"
+                                      class="event-card absolute rounded-lg border-l-[3px] text-xs leading-normal z-20 shadow-sm hover:shadow-md select-none flex flex-col cursor-pointer group transition-shadow"
                                       :class="[
                                           ['bg-indigo-50/80 border-indigo-200/90 text-indigo-800',
                                            'bg-teal-50/80 border-teal-200/90 text-teal-800',
@@ -226,9 +265,10 @@
                                            'bg-rose-50/80 border-rose-200/90 text-rose-800',
                                            'bg-slate-50/80 border-slate-200/90 text-slate-800'][task.colorIdx] || 'bg-slate-50/80 border-slate-200/90 text-slate-800',
                                           task.priority === 'high' ? 'ring-1 ring-rose-500/25' : '',
-                                          mode === 'moving' && movingTask && movingTask.taskId === task.id ? 'event-card-dragging' : ''
+                                          mode === 'moving' && movingTask && movingTask.taskId === task.id ? 'event-card-dragging' : '',
+                                          task.duration === 1 ? 'py-0.5 px-1.5 justify-center gap-0' : 'py-1 px-2 justify-start gap-1'
                                       ]"
-                                      :style="'top: ' + (task.startSlot * 48 + 1) + 'px; height: ' + (task.duration * 48 - 2) + 'px; left: ' + (task.left + 1) + '%; width: ' + (task.width - 2) + '%;' + (mode === 'moving' && movingTask && movingTask.taskId === task.id ? ' transform: translate3d(' + dragTranslateX + 'px, ' + dragTranslateY + 'px, 0px) scale(1.02) rotate(1.2deg);' : '')">
+                                      :style="'top: ' + (task.startSlot * 36 + 1) + 'px; height: ' + (task.duration * 36 - 2) + 'px; left: ' + (task.left + 1) + '%; width: ' + (task.width - 2) + '%;' + (mode === 'moving' && movingTask && movingTask.taskId === task.id ? ' transform: translate3d(' + dragTranslateX + 'px, ' + dragTranslateY + 'px, 0px) scale(1.02) rotate(1.2deg);' : '')">
                                       
                                       <!-- Corner Triangle Overlay for Workspace Tasks (acts as GRIP handle) -->
                                       <div @@mousedown.stop.prevent="startMoveTask($event, task, @dIdx)"
@@ -237,26 +277,51 @@
                                           <div class="absolute -top-3.5 -left-3.5 w-7 h-7 bg-indigo-600/90 rotate-45 shadow-[0_1px_2px_rgba(0,0,0,0.15)] hover:bg-indigo-700 transition-colors"></div>
                                       </div>
 
-                                      <!-- Row 1: Priority Dot (offset to clear the top-left triangle handle) -->
-                                      <div class="flex items-center pl-[22px] select-none w-full shrink-0 h-[11px]">
-                                          <!-- Priority Dot -->
-                                          <span class="h-1.5 w-1.5 rounded-full shrink-0" 
-                                                :class="{
-                                                    'bg-slate-400': task.priority === 'low',
-                                                    'bg-amber-500': task.priority === 'medium',
-                                                    'bg-rose-500': task.priority === 'high'
-                                                }"></span>
-                                      </div>
+                                      <!-- When duration is 1 (30 minutes) -->
+                                      <template x-if="task.duration === 1">
+                                          <div class="flex flex-col justify-center gap-0 w-full min-w-0 pl-[20px]">
+                                              <!-- Row 1: Priority Dot + Title inline -->
+                                              <div class="flex items-center gap-1 select-none w-full shrink-0 min-w-0">
+                                                  <!-- Priority Dot -->
+                                                  <span class="h-1.5 w-1.5 rounded-full shrink-0" 
+                                                        :class="{
+                                                            'bg-slate-400': task.priority === 'low',
+                                                            'bg-amber-500': task.priority === 'medium',
+                                                            'bg-rose-500': task.priority === 'high'
+                                                        }"></span>
+                                                  <!-- Title -->
+                                                  <div class="font-bold text-slate-700 truncate text-[11px] select-none leading-none flex-1 min-w-0" 
+                                                       x-text="task.title"></div>
+                                              </div>
+                                              <!-- Row 2: Time range -->
+                                              <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none mt-0.5 shrink-0"
+                                                   x-text="formatTimeRange(task.startSlot, task.duration)"></div>
+                                          </div>
+                                      </template>
 
-                                      <!-- Row 2: Title (Full Width) -->
-                                      <div class="font-bold text-slate-700 truncate text-[11px] select-none leading-none w-full min-w-0" 
-                                           x-text="task.title"></div>
+                                      <!-- When duration is > 1 (longer events) -->
+                                      <template x-if="task.duration > 1">
+                                          <div class="flex flex-col justify-start gap-1 w-full min-w-0">
+                                              <!-- Row 1: Priority Dot (offset to clear the top-left triangle handle) -->
+                                              <div class="flex items-center pl-[22px] select-none w-full shrink-0 h-[11px]">
+                                                  <!-- Priority Dot -->
+                                                  <span class="h-1.5 w-1.5 rounded-full shrink-0" 
+                                                        :class="{
+                                                            'bg-slate-400': task.priority === 'low',
+                                                            'bg-amber-500': task.priority === 'medium',
+                                                            'bg-rose-500': task.priority === 'high'
+                                                        }"></span>
+                                              </div>
+                                              <!-- Row 2: Title (Full Width) -->
+                                              <div class="font-bold text-slate-700 truncate text-[11px] select-none leading-none w-full min-w-0" 
+                                                   x-text="task.title"></div>
+                                              <!-- Row 3: Time details -->
+                                              <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none"
+                                                   x-text="formatTimeRange(task.startSlot, task.duration)"></div>
+                                          </div>
+                                      </template>
 
-                                      <!-- Row 3: Time details (Full Width, Compact Formatted) -->
-                                      <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none"
-                                           x-text="formatTimeRange(task.startSlot, task.duration)"></div>
-
-                                      <!-- Hover Tooltip Popover (Floating centered above card like in pic 2) -->
+                                      <!-- Hover Tooltip Popover (Floating centered above card) -->
                                       <div x-show="hoveredId === task.id" x-cloak
                                            class="absolute z-50 min-w-[200px] max-w-[280px] bg-white border border-slate-100 rounded-2xl p-4 shadow-xl text-xs text-left cursor-default pointer-events-none transition-all duration-200"
                                            :class="'left-1/2 -translate-x-1/2 bottom-full mb-2'"

@@ -73,6 +73,8 @@ public class WorkspacesModel : PageModel
                     .Include(f => f.Owner)
                     .Include(f => f.WorkspaceFederationMembers)
                         .ThenInclude(m => m.User)
+                    .Include(f => f.WorkspaceFederationMembers)
+                        .ThenInclude(m => m.PersonalWorkspace)
                     .Where(f => f.OwnerId == profile.Id || f.WorkspaceFederationMembers.Any(m => m.UserId == profile.Id))
                     .OrderByDescending(f => f.CreatedAt)
                     .ToListAsync();
@@ -132,7 +134,7 @@ public class WorkspacesModel : PageModel
             {
                 WorkspaceId = workspace.Id,
                 UserId = profile.Id,
-                Role = "Owner",
+                Role = "Manager",
                 JoinedAt = DateTime.UtcNow
             };
             await _context.WorkspaceMembers.AddAsync(member);
@@ -234,6 +236,11 @@ public class WorkspacesModel : PageModel
         };
 
         await _context.WorkspaceFederationMembers.AddAsync(fedMember);
+        
+        // Symmetrically set FederationId at the database level for the workspace
+        personalWorkspace.FederationId = federation.Id;
+        _context.Workspaces.Update(personalWorkspace);
+
         await _context.SaveChangesAsync();
 
         // Evict cache to refresh workspaces and federations lists

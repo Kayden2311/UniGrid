@@ -83,6 +83,8 @@ public class WorkspaceDetailModel : PageModel
     public string InviteEmail { get; set; } = string.Empty;
     [BindProperty]
     public string InviteRole { get; set; } = "Member";
+    [BindProperty]
+    public string InviteDisplayRole { get; set; } = string.Empty;
 
     public async System.Threading.Tasks.Task<IActionResult> OnGetAsync(string joinCode)
     {
@@ -150,7 +152,7 @@ public class WorkspaceDetailModel : PageModel
         });
 
         var memberRecord = Members.FirstOrDefault(m => m.UserId == CurrentUser.Id);
-        CurrentUserRole = memberRecord?.Role ?? (Workspace.OwnerId == CurrentUser.Id ? "Owner" : "Member");
+        CurrentUserRole = memberRecord?.Role ?? (Workspace.OwnerId == CurrentUser.Id ? "Manager" : "Member");
 
         // Check if user is a member or owner
         if (Workspace.OwnerId != CurrentUser.Id && memberRecord == null)
@@ -213,7 +215,10 @@ public class WorkspaceDetailModel : PageModel
     public async System.Threading.Tasks.Task<IActionResult> OnPostCreateTaskAsync(string joinCode)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
-        if (CurrentUserRole == "Viewer") return Forbid();
+        
+        var memberRecord = Members.FirstOrDefault(m => m.UserId == CurrentUser.Id);
+        bool canCreate = (Workspace.OwnerId == CurrentUser.Id) || (CurrentUserRole == "Manager") || (memberRecord != null && memberRecord.CanCreateTask == true);
+        if (!canCreate) return Forbid();
 
         if (!string.IsNullOrEmpty(NewTaskTitle))
         {
@@ -280,7 +285,7 @@ public class WorkspaceDetailModel : PageModel
         if (task != null)
         {
             // Backend Permission Check
-            if (CurrentUserRole != "Owner" && CurrentUserRole != "Manager")
+            if (CurrentUserRole != "Manager" && CurrentUserRole != "Vice Manager")
             {
                 if (task.AssigneeId != CurrentUser.Id)
                 {
@@ -339,15 +344,18 @@ public class WorkspaceDetailModel : PageModel
     public async System.Threading.Tasks.Task<IActionResult> OnPostEditTaskAsync(string joinCode, Guid editTaskId, string editTaskTitle, string editTaskDescription, int editTaskPriority, Guid? editTaskAssigneeId, DateTime? editTaskDueDate)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
-        if (CurrentUserRole == "Viewer") return Forbid();
+        
+        var memberRecord = Members.FirstOrDefault(m => m.UserId == CurrentUser.Id);
+        bool canEdit = (Workspace.OwnerId == CurrentUser.Id) || (CurrentUserRole == "Manager") || (memberRecord != null && memberRecord.CanEditTask == true);
+        if (!canEdit) return Forbid();
 
         var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == editTaskId && t.WorkspaceId == Workspace.Id);
         if (task != null)
         {
             Guid? oldAssigneeId = task.AssigneeId;
             // Backend Permission Check
-            // Members can only edit description, while Managers/Owners can edit everything
-            if (CurrentUserRole == "Owner" || CurrentUserRole == "Manager")
+            // Members can only edit description, while Managers/Vice Managers can edit everything
+            if (CurrentUserRole == "Manager" || CurrentUserRole == "Vice Manager")
             {
                 task.Title = Helpers.InputSanitizer.SanitizeInput(editTaskTitle);
                 task.Priority = editTaskPriority;
@@ -769,7 +777,13 @@ public class WorkspaceDetailModel : PageModel
     public async System.Threading.Tasks.Task<IActionResult> OnPostInviteMemberAsync(string joinCode)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
-        if (CurrentUserRole != "Owner" && CurrentUserRole != "Manager") return Forbid();
+        if (CurrentUserRole != "Manager" && CurrentUserRole != "Vice Manager") return Forbid();
+
+        if (Workspace.PackageTier == "Personal")
+        {
+            TempData["InviteError"] = "Không thể mời thành viên trong Workspace gói Personal.";
+            return RedirectToPage(new { joinCode });
+        }
 
         if (!string.IsNullOrEmpty(InviteEmail))
         {
@@ -826,6 +840,7 @@ public class WorkspaceDetailModel : PageModel
                 InviterId = CurrentUser.Id,
                 InviteeEmail = email,
                 Role = InviteRole,
+                DisplayRole = Helpers.InputSanitizer.SanitizeInput(InviteDisplayRole),
                 Status = "Pending",
                 CreatedAt = DateTime.UtcNow
             };
@@ -957,6 +972,139 @@ public class WorkspaceDetailModel : PageModel
         return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
     }
 
+    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateMemberRoleAsync(string joinCode, Guid memberId, string newRole, string newDisplayRole, bool canDeleteFile, bool canCreateTask, bool canEditTask)
+    {
+        var result = await LoadWorkspaceDataAsync(joinCode);
+        if (!result)
+        {
+            return RedirectToPage("/Dashboard");
+        }
+
+        // Only Manager can modify roles
+        if (CurrentUserRole != "Manager")
+        {
+            TempData["ErrorMessage"] = "Bạn không có quyền thực hiện thao tác này. Chỉ quản lý (Manager) mới có quyền thay đổi vai trò.";
+            return RedirectToPage("/WorkspaceDetail", new { joinCode });
+        }
+
+        var memberToUpdate = await _context.WorkspaceMembers
+            .FirstOrDefaultAsync(m => m.WorkspaceId == Workspace.Id && m.UserId == memberId);
+
+        if (memberToUpdate == null)
+        {
+            TempData["ErrorMessage"] = "Thành viên không tồn tại trong Workspace này.";
+            return RedirectToPage("/WorkspaceDetail", new { joinCode });
+        }
+
+        // Prevent changing own role (manager cannot demote themselves this way, they must leave or transfer ownership)
+        if (memberToUpdate.UserId == CurrentUser.Id)
+        {
+            TempData["ErrorMessage"] = "Bạn không thể tự thay đổi vai trò của chính mình.";
+            return RedirectToPage("/WorkspaceDetail", new { joinCode });
+        }
+
+        // ENFORCE SINGLE-MANAGER RULE: "chưa chặn trường hợp 2 manager hình 1"
+        // Non-owners can only be: Vice Manager, Member, Viewer
+        if (newRole == "Manager")
+        {
+            TempData["ErrorMessage"] = "Workspace chỉ được phép có duy nhất một Quản lý (Manager) là Chủ sở hữu. Bạn có thể bổ nhiệm thành viên này làm Phó quản lý (Vice Manager).";
+            return RedirectToPage("/WorkspaceDetail", new { joinCode });
+        }
+
+        var validRoles = new List<string> { "Vice Manager", "Member", "Viewer" };
+        if (!validRoles.Contains(newRole))
+        {
+            TempData["ErrorMessage"] = "Vai trò mới không hợp lệ.";
+            return RedirectToPage("/WorkspaceDetail", new { joinCode });
+        }
+
+        memberToUpdate.Role = newRole;
+        memberToUpdate.DisplayRole = Helpers.InputSanitizer.SanitizeInput(newDisplayRole);
+        memberToUpdate.CanDeleteFile = canDeleteFile;
+        memberToUpdate.CanCreateTask = canCreateTask;
+        memberToUpdate.CanEditTask = canEditTask;
+        _context.WorkspaceMembers.Update(memberToUpdate);
+        await _context.SaveChangesAsync();
+
+        // Evict caches
+        _cache.Remove($"Workspace_{joinCode}");
+        _cache.Remove($"WorkspaceMembers_{Workspace.Id}");
+        EvictAllWorkspaceMembersCache(Workspace.Id);
+
+        TempData["SuccessMessage"] = $"Đã cập nhật vai trò và danh hiệu của thành viên thành công.";
+        return RedirectToPage("/WorkspaceDetail", new { joinCode });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostLeaveWorkspaceAsync(string joinCode)
+    {
+        var result = await LoadWorkspaceDataAsync(joinCode);
+        if (!result)
+        {
+            return RedirectToPage("/Dashboard");
+        }
+
+        var workspaceId = Workspace.Id;
+        var currentMember = await _context.WorkspaceMembers
+            .FirstOrDefaultAsync(m => m.WorkspaceId == workspaceId && m.UserId == CurrentUser.Id);
+
+        if (currentMember == null)
+        {
+            TempData["ErrorMessage"] = "Bạn không phải là thành viên của Workspace này.";
+            return RedirectToPage("/WorkspaceDetail", new { joinCode });
+        }
+
+        // Check logic if user is a Manager (or the Creator / Owner)
+        bool isWorkspaceOwner = Workspace.OwnerId == CurrentUser.Id;
+        bool isManager = currentMember.Role == "Manager" || isWorkspaceOwner;
+
+        var otherMembers = await _context.WorkspaceMembers
+            .Where(m => m.WorkspaceId == workspaceId && m.UserId != CurrentUser.Id)
+            .ToListAsync();
+
+        if (isManager && otherMembers.Any())
+        {
+            // Automated Succession Logic:
+            // 1. Look for a Vice Manager to promote to Manager
+            var successor = otherMembers.FirstOrDefault(m => m.Role == "Vice Manager");
+            if (successor == null)
+            {
+                // 2. If no Vice Manager, promote a random active member
+                successor = otherMembers.FirstOrDefault();
+            }
+
+            if (successor != null)
+            {
+                // Promote successor to Manager
+                successor.Role = "Manager";
+                _context.WorkspaceMembers.Update(successor);
+
+                // If leaving user is the database Workspace.OwnerId, transfer ownership
+                if (isWorkspaceOwner)
+                {
+                    Workspace.OwnerId = successor.UserId;
+                    _context.Workspaces.Update(Workspace);
+                }
+
+                _logger.LogInformation($"Workspace Succession: User {CurrentUser.Id} is leaving. Promoted user {successor.UserId} to Manager.");
+            }
+        }
+
+        // Remove leaving user's membership
+        _context.WorkspaceMembers.Remove(currentMember);
+        await _context.SaveChangesAsync();
+
+        // Evict caches
+        _cache.Remove($"Workspace_{joinCode}");
+        _cache.Remove($"WorkspaceMembers_{workspaceId}");
+        EvictAllWorkspaceMembersCache(workspaceId);
+        
+        // Symmetrically clear user workspaces cache keys
+        _cache.Remove($"UserWorkspaces_{CurrentUser.Id}");
+
+        TempData["SuccessMessage"] = $"Bạn đã rời khỏi Workspace '{Workspace.Name}' thành công.";
+        return RedirectToPage("/Workspaces");
+    }
+
     private void EvictAllWorkspaceMembersCache(Guid workspaceId)
     {
         _cache.Remove($"WorkspaceTasks_{workspaceId}");
@@ -976,5 +1124,40 @@ public class WorkspaceDetailModel : PageModel
             _cache.Remove($"UserWorkspaces_{Workspace.OwnerId}");
             _cache.Remove($"UserTasks_{Workspace.OwnerId}");
         }
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostDeleteFileAsync(string joinCode, Guid fileId)
+    {
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+        
+        var memberRecord = Members.FirstOrDefault(m => m.UserId == CurrentUser.Id);
+        bool canDelete = (Workspace.OwnerId == CurrentUser.Id) || (CurrentUserRole == "Manager") || (memberRecord != null && memberRecord.CanDeleteFile == true);
+        if (!canDelete) return Forbid();
+
+        var file = await _context.WorkspaceFiles.FirstOrDefaultAsync(f => f.Id == fileId && f.WorkspaceId == Workspace.Id);
+        if (file != null)
+        {
+            // Delete physically
+            string physicalPath = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "wwwroot", file.FileUrl);
+            if (System.IO.File.Exists(physicalPath))
+            {
+                try
+                {
+                    System.IO.File.Delete(physicalPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to physically delete file: {Path}", physicalPath);
+                }
+            }
+
+            _context.WorkspaceFiles.Remove(file);
+            await _context.SaveChangesAsync();
+            EvictAllWorkspaceMembersCache(Workspace.Id);
+            TempData["SuccessMessage"] = $"Đã xóa file '{file.FileName}' thành công.";
+            _logger.LogInformation("File deleted: {FileName} from Workspace {WorkspaceId}", file.FileName, Workspace.Id);
+        }
+        
+        return RedirectToPage(new { joinCode });
     }
 }

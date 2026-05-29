@@ -19,5 +19,9 @@ public partial class PersonalSchedule
 
     public DateTime? CreatedAt { get; set; }
 
+    public Guid? TaskId { get; set; }
+
+    public virtual Task? Task { get; set; }
+
     public virtual User User { get; set; } = null!;
 }

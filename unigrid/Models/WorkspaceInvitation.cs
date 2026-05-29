@@ -14,6 +14,8 @@ public partial class WorkspaceInvitation
 
     public string Role { get; set; } = "Member"; // Manager, Member, Viewer
 
+    public string? DisplayRole { get; set; }
+
     public string Status { get; set; } = "Pending"; // Pending, Accepted, Declined
 
     public DateTime CreatedAt { get; set; }

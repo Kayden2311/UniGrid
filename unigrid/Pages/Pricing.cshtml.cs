@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using unigrid.Data;
+using unigrid.Models;
 using System.Security.Claims;
 
 namespace unigrid.Pages;
@@ -84,6 +85,15 @@ public class PricingModel : PageModel
                 var workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == JoinCode);
                 if (workspace != null)
                 {
+                    if (tier == "Personal")
+                    {
+                        int memberCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == workspace.Id);
+                        if (memberCount > 1)
+                        {
+                            TempData["UpgradeError"] = "Không thể chuyển Workspace này sang gói Personal vì đang có nhiều hơn 1 thành viên. Gói Personal chỉ dành riêng cho cá nhân.";
+                            return RedirectToPage("/Pricing", new { joinCode = JoinCode });
+                        }
+                    }
                     workspace.PackageTier = tier;
                     await _context.SaveChangesAsync();
                     return RedirectToPage("/WorkspaceDetail", new { joinCode = JoinCode });
@@ -97,5 +107,32 @@ public class PricingModel : PageModel
         }
 
         return RedirectToPage();
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostSubmitFederationRequestAsync(string businessName, string contactPhone)
+    {
+        var accountIdClaim = User.FindFirst("AccountId")?.Value;
+        if (string.IsNullOrEmpty(accountIdClaim)) return new BadRequestResult();
+
+        var accountId = Guid.Parse(accountIdClaim);
+        var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        if (userProfile != null)
+        {
+            var adminNotification = new Notification
+            {
+                Id = Guid.NewGuid(),
+                UserId = userProfile.Id,
+                Message = $"Yêu cầu đăng ký Enterprise Federation cho '{businessName}' (SĐT: {contactPhone}) đã được gửi thành công và đang chờ Quản trị viên xử lý.",
+                Type = "FederationRequest",
+                Link = "/workspaces",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            };
+            
+            await _context.Notifications.AddAsync(adminNotification);
+            await _context.SaveChangesAsync();
+        }
+
+        return new JsonResult(new { success = true });
     }
 }

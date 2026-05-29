@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace unigrid.Models;
@@ -17,6 +17,16 @@ public partial class Workspace
 
     public DateTime? CreatedAt { get; set; }
 
+    public string WorkspaceType { get; set; } = "Personal";
+
+    public string? CompanyName { get; set; }
+
+    public string? CompanyTaxCode { get; set; }
+
+    public string? CompanyAddress { get; set; }
+    
+    public Guid? FederationId { get; set; }
+
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
     public virtual ICollection<Billing> Billings { get; set; } = new List<Billing>();
@@ -24,6 +34,8 @@ public partial class Workspace
     public virtual ChatRoom? ChatRoom { get; set; }
 
     public virtual User Owner { get; set; } = null!;
+
+    public virtual WorkspaceFederation? Federation { get; set; }
 
     public virtual ICollection<Task> Tasks { get; set; } = new List<Task>();
 

@@ -116,6 +116,7 @@ namespace unigrid.Controllers
                     WorkspaceId = invitation.WorkspaceId,
                     UserId = user.Id,
                     Role = invitation.Role,
+                    DisplayRole = invitation.DisplayRole,
                     JoinedAt = DateTime.UtcNow
                 };
                 await _context.WorkspaceMembers.AddAsync(member);

@@ -8,6 +8,10 @@
      x-data="{ 
         billing: 'monthly', 
         showConfirmModal: false, 
+        showBusinessModal: false,
+        businessName: '',
+        contactPhone: '',
+        federationSubmitted: false,
         selectedTier: '', 
         selectedPriceMonthly: '', 
         selectedPriceYearly: '',
@@ -23,9 +27,35 @@
             this.selectedFeatures = features;
             this.showConfirmModal = true;
         },
+        triggerBusinessUpgrade() {
+            if (@(User.Identity?.IsAuthenticated == true ? "false" : "true")) {
+                window.location.href = '/Signup?tier=Business';
+                return;
+            }
+            this.showBusinessModal = true;
+        },
         confirmUpgrade() {
             document.getElementById('upgradeTier').value = this.selectedTier;
             document.getElementById('upgradeForm').submit();
+        },
+        async submitFederationRequest() {
+            if (!this.businessName.trim() || !this.contactPhone.trim()) return;
+            
+            const formData = new FormData();
+            formData.append('businessName', this.businessName);
+            formData.append('contactPhone', this.contactPhone);
+            formData.append('__RequestVerificationToken', document.querySelector('input[name=__RequestVerificationToken]')?.value || '');
+
+            try {
+                await fetch('?handler=SubmitFederationRequest', {
+                    method: 'POST',
+                    body: formData
+                });
+            } catch(e) {
+                console.error(e);
+            }
+            
+            this.federationSubmitted = true;
         }
      }">
     
@@ -46,6 +76,16 @@
             </button>
         </div>
     </div>
+
+    @if (TempData["UpgradeError"] != null)
+    {
+        <div class="max-w-2xl mx-auto p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl text-xs font-bold flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-2">
+                <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i>
+                <span>@TempData["UpgradeError"]</span>
+            </div>
+        </div>
+    }
 
     <!-- Plan Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
@@ -289,11 +329,11 @@
                 @if (Model.CurrentPlan == "Business") {
                     <button disabled class="w-full py-4 bg-slate-800/10 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
                 } else {
-                    <button @@click="triggerUpgrade('Business', '899K', '8.9M', ['1 Workspace', '30 Members', '80 GB Storage', 'Unlimited Chat', 'Unlimited Task Branches', 'Advanced Analytics', 'Role Permissions', 'Priority Support'])" 
+                    <button @@click="triggerBusinessUpgrade()" 
                             class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-900 transition-all">Contact Us</button>
                 }
             } else {
-                <button @@click="triggerUpgrade('Business', '899K', '8.9M', ['1 Workspace', '30 Members', '80 GB Storage', 'Unlimited Chat', 'Unlimited Task Branches', 'Advanced Analytics', 'Role Permissions', 'Priority Support'])" 
+                <button @@click="triggerBusinessUpgrade()" 
                         class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-900 transition-all">Contact Us</button>
             }
         </div>
@@ -360,6 +400,92 @@
         </div>
     </div>
 
+    <!-- Business Upgrade Selection Modal -->
+    <div x-show="showBusinessModal" x-transition x-cloak class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @@click="showBusinessModal = false"></div>
+        
+        <!-- Modal Content -->
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-2xl relative z-10 w-full max-w-2xl transform transition-all duration-300">
+            <button @@click="showBusinessModal = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+            
+            <div class="space-y-6">
+                <div class="h-12 w-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-md">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                </div>
+                
+                <div>
+                    <h3 class="text-2xl font-black text-slate-800 tracking-tight">Business & Enterprise Federation options</h3>
+                    <p class="text-sm text-slate-500 mt-1">Please select the plan setup that matches your organizational workflow needs.</p>
+                </div>
+
+                <div x-show="!federationSubmitted" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Option 1: Direct 899K Workspace Upgrade -->
+                    <div class="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col justify-between hover:border-indigo-200 transition-all shadow-sm">
+                        <div class="space-y-3">
+                            <span class="px-2.5 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black rounded-full uppercase tracking-wider">Choice 1: Group Workspace</span>
+                            <h4 class="text-lg font-black text-slate-850">Nâng cấp Workspace Group trực tiếp</h4>
+                            <p class="text-xs text-slate-500 leading-relaxed font-semibold">Tự động nâng cấp workspace hiện tại thành Workspace Group (Pro/Pro Plus) với chi phí <span class="text-indigo-600 font-bold">899,000 VND / tháng</span>. Cho phép lên tới 30 thành viên, 80 GB dung lượng, và các tính năng Premium tức thì.</p>
+                        </div>
+                        <button @@click="showBusinessModal = false; triggerUpgrade('Business', '899K', '8.9M', ['1 Workspace', '30 Members', '80 GB Storage', 'Unlimited Chat', 'Unlimited Task Branches', 'Advanced Analytics', 'Role Permissions', 'Priority Support'])" 
+                                class="w-full mt-6 py-3 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all cursor-pointer">
+                            Nâng cấp ngay (899K/tháng)
+                        </button>
+                    </div>
+
+                    <!-- Option 2: Federation Contact Form -->
+                    <div class="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col justify-between hover:border-violet-200 transition-all shadow-sm">
+                        <div class="space-y-3">
+                            <span class="px-2.5 py-0.5 bg-violet-100 text-violet-700 text-[9px] font-black rounded-full uppercase tracking-wider">Choice 2: Corporate Fed</span>
+                            <h4 class="text-lg font-black text-slate-850">Đăng ký Enterprise Federation</h4>
+                            <p class="text-xs text-slate-500 leading-relaxed font-semibold">Enterprise Federation đại diện cho một tổ chức hoặc doanh nghiệp đã đăng ký chính thức, cho phép kết nối liên thông và điều hướng chéo qua nhiều Workspace con. <span class="text-violet-600 font-bold">Yêu cầu thiết lập bởi Quản trị viên hệ thống.</span></p>
+                        </div>
+                        
+                        <!-- Mini Contact form -->
+                        <div class="mt-4 space-y-2 border-t border-slate-200/60 pt-4">
+                            <div>
+                                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Tên doanh nghiệp / tổ chức</label>
+                                <input type="text" x-model="businessName" placeholder="Ví dụ: FPT Software" 
+                                       class="w-full mt-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                            </div>
+                            <div>
+                                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Số điện thoại liên hệ</label>
+                                <input type="text" x-model="contactPhone" placeholder="Ví dụ: 0987654321" 
+                                       class="w-full mt-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                            </div>
+                            <button @@click="submitFederationRequest()" 
+                                    :disabled="!businessName || !contactPhone"
+                                    class="w-full mt-2 py-3 bg-violet-600 text-white text-xs font-black rounded-xl hover:bg-violet-700 shadow-md shadow-violet-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer">
+                                Gửi yêu cầu liên kết Federation
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submission Success State -->
+                <div x-show="federationSubmitted" class="p-8 text-center space-y-4" x-cloak>
+                    <div class="h-16 w-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto border border-emerald-100 shadow-sm">
+                        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <h4 class="text-xl font-black text-slate-800">Yêu cầu đã được gửi tới Admin!</h4>
+                    <p class="text-xs text-slate-500 max-w-md mx-auto leading-relaxed font-semibold">Cảm ơn bạn đã quan tâm đến giải pháp Enterprise Federation của UniGrid. Doanh nghiệp <span class="text-indigo-600 font-bold" x-text="businessName"></span> (SĐT: <span x-text="contactPhone"></span>) đã được ghi nhận trên hệ thống. Quản trị viên của UniGrid sẽ liên hệ để xác minh doanh nghiệp và cấu hình liên kết Federation gồm nhiều phòng ban/workspaces của bạn trong vòng 24 giờ.</p>
+                    <button @@click="showBusinessModal = false; federationSubmitted = false; businessName = ''; contactPhone = ''" 
+                            class="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl transition-all cursor-pointer">
+                        Đóng
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Comparison Table -->
     <div class="glass p-10 rounded-[3rem] shadow-sm overflow-hidden reveal-on-scroll">
         <h3 class="text-3xl font-black text-slate-800 mb-10 text-center font-display">Compare all features</h3>
@@ -369,6 +495,7 @@
                     <tr class="border-b border-slate-100 bg-slate-50/50">
                         <th class="py-6 px-4 text-sm font-black text-slate-400 uppercase tracking-widest">Feature</th>
                         <th class="py-6 px-4 text-sm font-black text-slate-800">Free</th>
+                        <th class="py-6 px-4 text-sm font-black text-teal-600">Personal</th>
                         <th class="py-6 px-4 text-sm font-black text-slate-800">Pro</th>
                         <th class="py-6 px-4 text-sm font-black text-indigo-600">Pro+</th>
                         <th class="py-6 px-4 text-sm font-black text-slate-800">Business</th>
@@ -378,6 +505,7 @@
                     <tr>
                         <td class="py-5 px-4 text-sm font-bold text-slate-700">Workspace</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">1</td>
+                        <td class="py-5 px-4 text-sm text-teal-600 font-bold">1</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">1</td>
                         <td class="py-5 px-4 text-sm text-indigo-600 font-bold">1</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">1</td>
@@ -385,12 +513,14 @@
                     <tr>
                         <td class="py-5 px-4 text-sm font-bold text-slate-700">Members</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">5</td>
+                        <td class="py-5 px-4 text-sm text-teal-600 font-bold">5</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">10</td>
                         <td class="py-5 px-4 text-sm text-indigo-600 font-bold">15</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">30</td>
                     </tr>
                     <tr>
                         <td class="py-5 px-4 text-sm font-bold text-slate-700">Task Assignment</td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
                         <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
                         <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
                         <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
@@ -402,10 +532,12 @@
                         <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
                         <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
                         <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
+                        <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
                     </tr>
                     <tr>
                         <td class="py-5 px-4 text-sm font-bold text-slate-700">Chat Channels</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">1</td>
+                        <td class="py-5 px-4 text-sm text-teal-600 font-bold">0</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">3</td>
                         <td class="py-5 px-4 text-sm text-indigo-600 font-bold">5</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">Unlimited</td>
@@ -413,6 +545,7 @@
                     <tr>
                         <td class="py-5 px-4 text-sm font-bold text-slate-700">Task Branches</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">1</td>
+                        <td class="py-5 px-4 text-sm text-teal-600 font-bold">1</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">2</td>
                         <td class="py-5 px-4 text-sm text-indigo-600 font-bold">4</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">Unlimited</td>
@@ -420,6 +553,7 @@
                     <tr>
                         <td class="py-5 px-4 text-sm font-bold text-slate-700">File Storage</td>
                         <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
+                        <td class="py-5 px-4 text-sm text-teal-600 font-bold">2 GB (Indiv)</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">20 GB</td>
                         <td class="py-5 px-4 text-sm text-indigo-600 font-bold">40 GB</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">80 GB</td>
@@ -427,6 +561,7 @@
                     <tr>
                         <td class="py-5 px-4 text-sm font-bold text-slate-700">Analytics</td>
                         <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
+                        <td class="py-5 px-4 text-sm text-teal-600 font-bold">Basic</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">Basic</td>
                         <td class="py-5 px-4 text-sm text-indigo-600 font-bold">Advanced</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">Advanced</td>
@@ -435,11 +570,13 @@
                         <td class="py-5 px-4 text-sm font-bold text-slate-700">Role Permissions</td>
                         <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
                         <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
+                        <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
                         <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
                         <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
                     </tr>
                     <tr>
                         <td class="py-5 px-4 text-sm font-bold text-slate-700">Data Export</td>
+                        <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
                         <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
                         <td class="py-5 px-4 text-sm text-slate-300"><i data-lucide="x" class="w-4 h-4"></i></td>
                         <td class="py-5 px-4 text-sm text-emerald-500"><i data-lucide="check" class="w-5 h-5"></i></td>
@@ -460,7 +597,7 @@
                 <h2 class="font-display text-3xl font-extrabold sm:text-4xl">Ready to upgrade to Business?</h2>
                 <p class="text-indigo-100 text-lg leading-relaxed">Upgrade to Business now to unlock ultimate features, unlimited chat channels, and unlimited task branches.</p>
                 <div class="pt-2">
-                    <button @@click="triggerUpgrade('Business', '899K', '8.9M', ['1 Workspace', '30 Members', '80 GB Storage', 'Unlimited Chat', 'Unlimited Task Branches', 'Advanced Analytics', 'Role Permissions', 'Priority Support'])" 
+                    <button @@click="triggerBusinessUpgrade()" 
                             class="inline-flex items-center gap-2 px-8 py-4 bg-white text-indigo-600 hover:bg-indigo-50 rounded-2xl font-bold shadow-xl transition-all hover:scale-105">
                         <span>Upgrade to Business</span>
                         <i data-lucide="arrow-right" class="w-5 h-5"></i>
