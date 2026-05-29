@@ -738,7 +738,7 @@
                             </div>
                         </div>
                     </div>
-                    <button @@click="createTaskStatus = 0; createOpen = true;" class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2">
+                    <button x-show="currentUserRole !== 'Viewer'" @@click="createTaskStatus = 0; createOpen = true;" class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2">
                         <i data-lucide="plus" class="w-4 h-4"></i> Create Task
                     </button>
                 </div>
@@ -795,7 +795,7 @@
                                     <span class="text-sm font-black @colText">@colLabel</span>
                                     <span class="px-2 py-0.5 rounded-full bg-white border border-slate-100 text-[10px] font-black text-slate-400">@statusTasks.Count</span>
                                 </div>
-                                <button @@click="createTaskStatus = @colStatus; createOpen = true;" class="h-6 w-6 rounded hover:bg-white/80 flex items-center justify-center text-slate-400">
+                                <button x-show="currentUserRole !== 'Viewer'" @@click="createTaskStatus = @colStatus; createOpen = true;" class="h-6 w-6 rounded hover:bg-white/80 flex items-center justify-center text-slate-400">
                                     <i data-lucide="plus" class="w-4 h-4"></i>
                                 </button>
                             </div>
@@ -1170,26 +1170,33 @@
 
             <!-- Message Input Area -->
             <div class="p-4 border-t border-slate-100">
-                <form @@submit.prevent="sendChatMessageViaAjax()" class="flex gap-2">
-                    <input type="hidden" name="activeChannel" :value="activeChannel">
-                    <input type="hidden" name="selectedFileId" :value="selectedAttachmentId">
-                    
-                    <!-- Paperclip Button -->
-                    <button type="button" 
-                            @@click="attachFileOpen = !attachFileOpen" 
-                            :class="attachFileOpen || selectedAttachmentId ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400 hover:text-slate-600 border border-slate-200'"
-                            class="p-3 rounded-xl flex items-center justify-center transition-all shrink-0">
-                        <i data-lucide="paperclip" class="w-4.5 h-4.5"></i>
-                    </button>
-                    
-                    <input type="text" id="chat-input-field" asp-for="ChatContent" x-model="chatInput" autocomplete="off"
-                           :placeholder="'Message in #' + activeChannel + '...'" required
-                           class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
-                    
-                    <button type="submit" class="bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
-                        <i data-lucide="send" class="w-4 h-4"></i>
-                    </button>
-                </form>
+                <template x-if="currentUserRole !== 'Viewer'">
+                    <form @@submit.prevent="sendChatMessageViaAjax()" class="flex gap-2">
+                        <input type="hidden" name="activeChannel" :value="activeChannel">
+                        <input type="hidden" name="selectedFileId" :value="selectedAttachmentId">
+                        
+                        <!-- Paperclip Button -->
+                        <button type="button" 
+                                @@click="attachFileOpen = !attachFileOpen" 
+                                :class="attachFileOpen || selectedAttachmentId ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400 hover:text-slate-600 border border-slate-200'"
+                                class="p-3 rounded-xl flex items-center justify-center transition-all shrink-0">
+                            <i data-lucide="paperclip" class="w-4.5 h-4.5"></i>
+                        </button>
+                        
+                        <input type="text" id="chat-input-field" asp-for="ChatContent" x-model="chatInput" autocomplete="off"
+                               :placeholder="'Message in #' + activeChannel + '...'" required
+                               class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        
+                        <button type="submit" class="bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
+                            <i data-lucide="send" class="w-4 h-4"></i>
+                        </button>
+                    </form>
+                </template>
+                <template x-if="currentUserRole === 'Viewer'">
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-bold text-slate-400 italic">
+                        Bạn đang xem với quyền Viewer. Không thể gửi tin nhắn.
+                    </div>
+                </template>
             </div>
         </div>
     </div>
@@ -1314,16 +1321,20 @@
                         
                         @if (Model.ShowVisibilityControls)
                         {
-                            <select asp-for="UploadIsPublic" class="bg-slate-50 border border-slate-200 text-slate-600 rounded-xl px-3 py-2.5 text-xs font-black focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-sm">
+                            <select x-show="currentUserRole !== 'Viewer'" asp-for="UploadIsPublic" class="bg-slate-50 border border-slate-200 text-slate-600 rounded-xl px-3 py-2.5 text-xs font-black focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-sm">
                                 <option value="true">🌐 Public (Workspace)</option>
                                 <option value="false">🔒 Private (Only Me)</option>
                             </select>
                         }
                         
-                        <button type="button" onclick="document.getElementById('real-file-upload').click()" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 cursor-pointer">
+                        <button x-show="currentUserRole !== 'Viewer'" type="button" onclick="document.getElementById('real-file-upload').click()" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 cursor-pointer">
                             <i data-lucide="upload-cloud" class="w-4 h-4"></i> Pick & Upload Local File
                         </button>
-                        <span class="text-[10px] text-slate-400 font-bold max-w-xs truncate italic" id="selected-file-label">No file selected. Only alphanumeric, space, dash, and underscore characters are allowed.</span>
+                        <span x-show="currentUserRole !== 'Viewer'" class="text-[10px] text-slate-400 font-bold max-w-xs truncate italic" id="selected-file-label">No file selected. Only alphanumeric, space, dash, and underscore characters are allowed.</span>
+                        
+                        <div x-show="currentUserRole === 'Viewer'" class="text-xs font-bold text-slate-400 italic bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl">
+                            Bạn đang xem với quyền Viewer. Không thể tải tệp lên.
+                        </div>
                     </form>
                 </div>
 
@@ -1524,7 +1535,7 @@
                     </div>
                     <h3 class="text-xl font-black text-slate-800 flex items-center justify-between gap-4">
                         <span x-text="selectedTask?.title"></span>
-                        <button @@click="isEditing = true" class="text-indigo-600 hover:text-indigo-700 text-xs font-bold flex items-center gap-1.5 shrink-0 bg-indigo-50 px-3 py-1.5 rounded-xl transition-all">
+                        <button x-show="currentUserRole !== 'Viewer'" @@click="isEditing = true" class="text-indigo-600 hover:text-indigo-700 text-xs font-bold flex items-center gap-1.5 shrink-0 bg-indigo-50 px-3 py-1.5 rounded-xl transition-all">
                             <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                             Edit Task
                         </button>
@@ -1778,14 +1789,21 @@
                         </div>
                     </div>
 
-                    <form @@submit.prevent="sendTaskCommentViaAjax()" class="flex gap-2 pt-2">
-                        <input type="hidden" name="commentTaskId" :value="selectedTask?.id">
-                        <input type="text" id="task-comment-field" asp-for="CommentContent" x-model="newCommentContent" placeholder="Post a comment..." required autocomplete="off"
-                               class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
-                        <button type="submit" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
-                            <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                        </button>
-                    </form>
+                    <template x-if="currentUserRole !== 'Viewer'">
+                        <form @@submit.prevent="sendTaskCommentViaAjax()" class="flex gap-2 pt-2">
+                            <input type="hidden" name="commentTaskId" :value="selectedTask?.id">
+                            <input type="text" id="task-comment-field" asp-for="CommentContent" x-model="newCommentContent" placeholder="Post a comment..." required autocomplete="off"
+                                   class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            <button type="submit" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
+                                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </form>
+                    </template>
+                    <template x-if="currentUserRole === 'Viewer'">
+                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-400 font-bold italic">
+                            Bạn đang xem với quyền Viewer. Không thể bình luận.
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
@@ -1943,7 +1961,39 @@
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Invitee Email</label>
                     <input type="email" asp-for="InviteEmail" placeholder="e.g. member@student.edu" required
+                           x-model="inviteEmail" @@input.debounce.500ms="checkInviteEmail()"
                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                </div>
+
+                <!-- User Found Card -->
+                <div x-show="checkingEmail" class="flex items-center gap-2 text-xs font-bold text-slate-400 py-1" x-cloak>
+                    <div class="animate-spin h-3.5 w-3.5 border-2 border-indigo-600 border-t-transparent rounded-full"></div>
+                    <span>Checking user existence...</span>
+                </div>
+
+                <div x-show="userFound === true" x-cloak class="p-3.5 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-center gap-3">
+                    <div class="h-9 w-9 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center overflow-hidden">
+                        <template x-if="inviteeAvatar">
+                            <img :src="inviteeAvatar" class="h-full w-full object-cover">
+                        </template>
+                        <template x-if="!inviteeAvatar">
+                            <div class="text-[10px] font-black text-indigo-600" x-text="inviteeName.charAt(0)"></div>
+                        </template>
+                    </div>
+                    <div>
+                        <div class="text-xs font-black text-slate-800" x-text="inviteeName"></div>
+                        <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">UniGrid User</div>
+                    </div>
+                    <span class="ml-auto text-[8px] bg-green-100 text-green-700 px-2 py-0.5 rounded font-black uppercase tracking-wider">Registered</span>
+                </div>
+
+                <!-- User Not Found Warning -->
+                <div x-show="userFound === false" x-cloak class="p-3.5 bg-amber-50/50 rounded-2xl border border-amber-100 flex gap-2.5 items-start">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
+                    <div>
+                        <div class="text-xs font-black text-amber-800">Email chưa đăng ký UniGrid</div>
+                        <p class="text-[9px] font-semibold text-slate-500 leading-normal mt-0.5">Lời mời sẽ được gửi tới email này. Thành viên mới có thể nhấp vào liên kết trong email hoặc đăng nhập Google để tham gia sau khi đăng ký.</p>
+                    </div>
                 </div>
 
                 <div class="space-y-1">
@@ -1951,6 +2001,7 @@
                     <select asp-for="InviteRole" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                         <option value="Member">Member (default)</option>
                         <option value="Manager">Manager</option>
+                        <option value="Viewer">Viewer</option>
                     </select>
                 </div>
 
@@ -2090,6 +2141,11 @@
                 isEditing: false,
                 createOpen: false,
                 inviteOpen: false,
+                inviteEmail: '',
+                checkingEmail: false,
+                userFound: null,
+                inviteeName: '',
+                inviteeAvatar: '',
                 previewFile: null,
                 renameOpen: false,
                 renameFileId: null,
@@ -2156,6 +2212,42 @@
                         console.error(err);
                         alert('An error occurred while connecting to the server.');
                         window.location.reload();
+                    });
+                },
+
+                async checkInviteEmail() {
+                    const email = this.inviteEmail.trim();
+                    if (!email || !email.includes('@@')) {
+                        this.userFound = null;
+                        this.inviteeName = "";
+                        this.inviteeAvatar = "";
+                        return;
+                    }
+                    this.checkingEmail = true;
+                    try {
+                        const res = await fetch(`/api/notifications/search-by-email?email=${encodeURIComponent(email)}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.exists) {
+                                this.userFound = true;
+                                this.inviteeName = data.fullName;
+                                this.inviteeAvatar = data.avatarUrl;
+                            } else {
+                                this.userFound = false;
+                                this.inviteeName = "";
+                                this.inviteeAvatar = "";
+                            }
+                        } else {
+                            this.userFound = false;
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        this.userFound = false;
+                    } finally {
+                        this.checkingEmail = false;
+                    }
+                    this.$nextTick(() => {
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
                     });
                 },
 
