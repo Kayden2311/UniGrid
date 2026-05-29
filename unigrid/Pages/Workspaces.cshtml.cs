@@ -20,12 +20,20 @@ public class WorkspacesModel : PageModel
     }
 
     public List<Workspace> UserWorkspaces { get; set; } = new();
+    public List<WorkspaceFederation> UserFederations { get; set; } = new();
+    public List<Workspace> PersonalWorkspaces { get; set; } = new();
 
     [BindProperty]
     public string NewWorkspaceName { get; set; } = string.Empty;
 
     [BindProperty]
     public string NewWorkspaceDesc { get; set; } = string.Empty;
+
+    [BindProperty]
+    public string FedJoinCode { get; set; } = string.Empty;
+
+    [BindProperty]
+    public Guid SelectedPersonalWorkspaceId { get; set; }
 
     public async System.Threading.Tasks.Task<IActionResult> OnGetAsync()
     {
@@ -60,6 +68,19 @@ public class WorkspacesModel : PageModel
                         .OrderByDescending(w => w.CreatedAt)
                         .ToListAsync();
                 });
+
+                UserFederations = await _context.WorkspaceFederations
+                    .Include(f => f.Owner)
+                    .Include(f => f.WorkspaceFederationMembers)
+                        .ThenInclude(m => m.User)
+                    .Where(f => f.OwnerId == profile.Id || f.WorkspaceFederationMembers.Any(m => m.UserId == profile.Id))
+                    .OrderByDescending(f => f.CreatedAt)
+                    .ToListAsync();
+
+                PersonalWorkspaces = await _context.Workspaces
+                    .Where(w => w.OwnerId == profile.Id)
+                    .OrderByDescending(w => w.CreatedAt)
+                    .ToListAsync();
 
                 return Page();
             }
@@ -131,6 +152,76 @@ public class WorkspacesModel : PageModel
             _cache.Remove($"UserWorkspaces_{profile.Id}");
         }
 
+        return RedirectToPage("/Workspaces");
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostJoinFederationAsync()
+    {
+        var accountIdClaim = User.FindFirst("AccountId")?.Value;
+        if (string.IsNullOrEmpty(accountIdClaim))
+        {
+            return RedirectToPage("/Login");
+        }
+
+        var accountId = Guid.Parse(accountIdClaim);
+        var profile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        if (profile == null)
+        {
+            return RedirectToPage("/Login");
+        }
+
+        if (string.IsNullOrWhiteSpace(FedJoinCode) || SelectedPersonalWorkspaceId == Guid.Empty)
+        {
+            TempData["ErrorMessage"] = "Vui lòng nhập mã Liên bang và chọn một Workspace cá nhân để liên kết.";
+            return RedirectToPage("/Workspaces");
+        }
+
+        var normalizedCode = FedJoinCode.Trim().ToUpper();
+        var federation = await _context.WorkspaceFederations
+            .FirstOrDefaultAsync(f => f.JoinCode == normalizedCode);
+
+        if (federation == null)
+        {
+            TempData["ErrorMessage"] = "Mã Liên bang không tồn tại hoặc đã bị hủy. Vui lòng kiểm tra lại.";
+            return RedirectToPage("/Workspaces");
+        }
+
+        // Verify if user is already a member of this federation
+        var isAlreadyMember = await _context.WorkspaceFederationMembers
+            .AnyAsync(m => m.FederationId == federation.Id && m.UserId == profile.Id);
+
+        if (isAlreadyMember)
+        {
+            TempData["ErrorMessage"] = "Bạn đã tham gia Liên bang này rồi.";
+            return RedirectToPage("/Workspaces");
+        }
+
+        // Verify that the personal workspace is owned by this user
+        var personalWorkspace = await _context.Workspaces
+            .FirstOrDefaultAsync(w => w.Id == SelectedPersonalWorkspaceId && w.OwnerId == profile.Id);
+
+        if (personalWorkspace == null)
+        {
+            TempData["ErrorMessage"] = "Workspace cá nhân được chọn không hợp lệ hoặc bạn không phải là chủ sở hữu.";
+            return RedirectToPage("/Workspaces");
+        }
+
+        // Add user as a member of the federation
+        var fedMember = new WorkspaceFederationMember
+        {
+            FederationId = federation.Id,
+            UserId = profile.Id,
+            PersonalWorkspaceId = personalWorkspace.Id,
+            JoinedAt = DateTime.UtcNow
+        };
+
+        await _context.WorkspaceFederationMembers.AddAsync(fedMember);
+        await _context.SaveChangesAsync();
+
+        // Evict cache to refresh workspaces and federations lists
+        _cache.Remove($"UserWorkspaces_{profile.Id}");
+
+        TempData["SuccessMessage"] = $"Kết nối thành công! Workspace '{personalWorkspace.Name}' đã được tích hợp vào Liên bang '{federation.Name}'.";
         return RedirectToPage("/Workspaces");
     }
 }

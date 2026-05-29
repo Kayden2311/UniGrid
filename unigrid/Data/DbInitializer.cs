@@ -306,11 +306,82 @@ namespace unigrid.Data
                 );
                 await context.SaveChangesAsync();
 
+                // 13. Seed Workspace Files (matching the frontend files tab)
+                var file1 = new WorkspaceFile { Id = Guid.NewGuid(), WorkspaceId = workspaceSE.Id, TaskId = t1.Id, UserId = userAlice.Id, FileName = "Transformer_Comparison.pdf", FileUrl = $"files/{workspaceSE.Id}/transformer_comparison.pdf", FileType = "pdf", FileSize = 2516582, IsPublic = true, CreatedAt = DateTime.UtcNow.AddHours(-4) };
+                var file2 = new WorkspaceFile { Id = Guid.NewGuid(), WorkspaceId = workspaceSE.Id, TaskId = t3.Id, UserId = userBob.Id, FileName = "Database_Schema_Draft.docx", FileUrl = $"files/{workspaceSE.Id}/db_schema.docx", FileType = "doc", FileSize = 1153433, IsPublic = true, CreatedAt = DateTime.UtcNow.AddHours(-3) };
+                var file3 = new WorkspaceFile { Id = Guid.NewGuid(), WorkspaceId = workspaceSE.Id, UserId = userDiana.Id, FileName = "Budget.xlsx", FileUrl = $"files/{workspaceSE.Id}/budget.xlsx", FileType = "spreadsheet", FileSize = 348160, IsPublic = true, CreatedAt = DateTime.UtcNow.AddHours(-2) };
+                var file4 = new WorkspaceFile { Id = Guid.NewGuid(), WorkspaceId = workspaceSE.Id, UserId = userCharlie.Id, FileName = "Wireframe.png", FileUrl = $"files/{workspaceSE.Id}/wireframe.png", FileType = "image", FileSize = 4404019, IsPublic = true, CreatedAt = DateTime.UtcNow.AddHours(-1) };
+
+                await context.WorkspaceFiles.AddRangeAsync(file1, file2, file3, file4);
+                await context.SaveChangesAsync();
+
+                // 14. Seed Workspace Federations (Mô hình Liên bang)
+                var fedId = Guid.Parse("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF");
+                var federation = new WorkspaceFederation
+                {
+                    Id = fedId,
+                    Name = "Store Integration Federation",
+                    JoinCode = "FED-STORE",
+                    OwnerId = userAlice.Id,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await context.WorkspaceFederations.AddAsync(federation);
+                await context.SaveChangesAsync();
+
+                // 15. Seed Workspace Federation Members
+                var fedMember1 = new WorkspaceFederationMember
+                {
+                    FederationId = fedId,
+                    UserId = userAlice.Id,
+                    PersonalWorkspaceId = workspaceWeb.Id,
+                    JoinedAt = DateTime.UtcNow
+                };
+                var fedMember2 = new WorkspaceFederationMember
+                {
+                    FederationId = fedId,
+                    UserId = userBob.Id,
+                    PersonalWorkspaceId = workspaceCalc.Id,
+                    JoinedAt = DateTime.UtcNow
+                };
+                await context.WorkspaceFederationMembers.AddRangeAsync(fedMember1, fedMember2);
+                await context.SaveChangesAsync();
+
+                // 16. Seed projected files inside member personal workspaces that map/project to the Federation portal
+                var fedFile1 = new WorkspaceFile 
+                { 
+                    Id = Guid.NewGuid(), 
+                    WorkspaceId = workspaceWeb.Id, 
+                    UserId = userAlice.Id, 
+                    FileName = "Storefront_Mockups_V1.pdf", 
+                    FileUrl = $"files/{workspaceWeb.Id}/storefront_mockups_v1.pdf", 
+                    FileType = "pdf", 
+                    FileSize = 2202010, 
+                    IsPublic = true, 
+                    FederationId = fedId, 
+                    CreatedAt = DateTime.UtcNow.AddHours(-2) 
+                };
+                var fedFile2 = new WorkspaceFile 
+                { 
+                    Id = Guid.NewGuid(), 
+                    WorkspaceId = workspaceCalc.Id, 
+                    UserId = userBob.Id, 
+                    FileName = "Payment_Gateway_Specs.docx", 
+                    FileUrl = $"files/{workspaceCalc.Id}/payment_gateway_specs.docx", 
+                    FileType = "doc", 
+                    FileSize = 1258291, 
+                    IsPublic = true, 
+                    FederationId = fedId, 
+                    CreatedAt = DateTime.UtcNow.AddHours(-1) 
+                };
+
+                await context.WorkspaceFiles.AddRangeAsync(fedFile1, fedFile2);
+                await context.SaveChangesAsync();
+
                 logger.LogInformation("DbInitializer: Database seeded successfully.");
             }
             else
             {
-                logger.LogInformation("DbInitializer: Database is already seeded with Alice. Skipping seeding step.");
+                logger.LogInformation("DbInitializer: Database is already seeded with Alice. Checking Federated Workspace records...");
                 
                 // Double-check password for Alice to ensure it's "password123" (prevents local state mismatch issues)
                 var aliceAcc = await context.Accounts.FirstOrDefaultAsync(a => a.Email == "alice@student.edu");
@@ -319,6 +390,83 @@ namespace unigrid.Data
                     logger.LogInformation("DbInitializer: Resetting Alice's password to password123 to match expected defaults.");
                     aliceAcc.PasswordHash = "password123";
                     await context.SaveChangesAsync();
+                }
+
+                // Self-healing seeder: If database exists but federations are empty, seed them dynamically!
+                bool hasFeds = await context.WorkspaceFederations.AnyAsync();
+                if (!hasFeds)
+                {
+                    logger.LogInformation("DbInitializer: Seeding missing Federated Workspace records incrementally...");
+                    var userAlice = await context.Users.Include(u => u.Account).FirstOrDefaultAsync(u => u.Account.Email == "alice@student.edu");
+                    var userBob = await context.Users.Include(u => u.Account).FirstOrDefaultAsync(u => u.Account.Email == "bob@student.edu");
+                    var workspaceWeb = await context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == "WEB-DEV");
+                    var workspaceCalc = await context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == "MATH-101");
+
+                    if (userAlice != null && userBob != null && workspaceWeb != null && workspaceCalc != null)
+                    {
+                        var fedId = Guid.Parse("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF");
+                        var federation = new WorkspaceFederation
+                        {
+                            Id = fedId,
+                            Name = "Store Integration Federation",
+                            JoinCode = "FED-STORE",
+                            OwnerId = userAlice.Id,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await context.WorkspaceFederations.AddAsync(federation);
+
+                        var fedMember1 = new WorkspaceFederationMember
+                        {
+                            FederationId = fedId,
+                            UserId = userAlice.Id,
+                            PersonalWorkspaceId = workspaceWeb.Id,
+                            JoinedAt = DateTime.UtcNow
+                        };
+                        var fedMember2 = new WorkspaceFederationMember
+                        {
+                            FederationId = fedId,
+                            UserId = userBob.Id,
+                            PersonalWorkspaceId = workspaceCalc.Id,
+                            JoinedAt = DateTime.UtcNow
+                        };
+                        await context.WorkspaceFederationMembers.AddRangeAsync(fedMember1, fedMember2);
+
+                        // Seed projected files if they don't exist yet
+                        var hasMockupFile = await context.WorkspaceFiles.AnyAsync(f => f.FileName == "Storefront_Mockups_V1.pdf");
+                        if (!hasMockupFile)
+                        {
+                            var fedFile1 = new WorkspaceFile 
+                            { 
+                                Id = Guid.NewGuid(), 
+                                WorkspaceId = workspaceWeb.Id, 
+                                UserId = userAlice.Id, 
+                                FileName = "Storefront_Mockups_V1.pdf", 
+                                FileUrl = $"files/{workspaceWeb.Id}/storefront_mockups_v1.pdf", 
+                                FileType = "pdf", 
+                                FileSize = 2202010, 
+                                IsPublic = true, 
+                                FederationId = fedId, 
+                                CreatedAt = DateTime.UtcNow.AddHours(-2) 
+                            };
+                            var fedFile2 = new WorkspaceFile 
+                            { 
+                                Id = Guid.NewGuid(), 
+                                WorkspaceId = workspaceCalc.Id, 
+                                UserId = userBob.Id, 
+                                FileName = "Payment_Gateway_Specs.docx", 
+                                FileUrl = $"files/{workspaceCalc.Id}/payment_gateway_specs.docx", 
+                                FileType = "doc", 
+                                FileSize = 1258291, 
+                                IsPublic = true, 
+                                FederationId = fedId, 
+                                CreatedAt = DateTime.UtcNow.AddHours(-1) 
+                            };
+                            await context.WorkspaceFiles.AddRangeAsync(fedFile1, fedFile2);
+                        }
+
+                        await context.SaveChangesAsync();
+                        logger.LogInformation("DbInitializer: Federated Workspace records seeded successfully.");
+                    }
                 }
             }
         }
