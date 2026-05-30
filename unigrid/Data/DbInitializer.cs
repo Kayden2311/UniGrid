@@ -287,6 +287,14 @@ namespace unigrid.Data
                     END
                 ");
 
+                // PersonalSchedules.TimeZone
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[PersonalSchedules]') AND name = 'TimeZone')
+                    BEGIN
+                        ALTER TABLE [dbo].[PersonalSchedules] ADD [TimeZone] NVARCHAR(100) NOT NULL DEFAULT 'UTC';
+                    END
+                ");
+
                 logger.LogInformation("DbInitializer: Custom columns verified/added successfully.");
             }
             catch (Exception ex)

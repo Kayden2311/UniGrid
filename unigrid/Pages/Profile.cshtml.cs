@@ -122,7 +122,7 @@ namespace unigrid.Pages
                 new ClaimsPrincipal(claimsIdentity),
                 authProperties);
 
-            TempData["ProfileSuccess"] = "Cập nhật hồ sơ tài khoản thành công!";
+            TempData["ProfileSuccess"] = "Account profile updated successfully!";
             _logger.LogInformation("Profile updated for user account {AccountId}", accountId);
 
             return RedirectToPage();

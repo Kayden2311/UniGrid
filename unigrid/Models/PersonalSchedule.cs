@@ -21,6 +21,8 @@ public partial class PersonalSchedule
 
     public Guid? TaskId { get; set; }
 
+    public string? TimeZone { get; set; }
+
     public virtual Task? Task { get; set; }
 
     public virtual User User { get; set; } = null!;

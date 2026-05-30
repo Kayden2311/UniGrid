@@ -174,7 +174,7 @@ public class WorkspacesModel : PageModel
 
         if (string.IsNullOrWhiteSpace(FedJoinCode) || SelectedPersonalWorkspaceId == Guid.Empty)
         {
-            TempData["ErrorMessage"] = "Vui lòng nhập mã Liên bang và chọn một Workspace cá nhân để liên kết.";
+            TempData["ErrorMessage"] = "Please enter a Federation code and select a Personal Workspace to link.";
             return RedirectToPage("/Workspaces");
         }
 
@@ -184,7 +184,7 @@ public class WorkspacesModel : PageModel
 
         if (federation == null)
         {
-            TempData["ErrorMessage"] = "Mã Liên bang không tồn tại hoặc đã bị hủy. Vui lòng kiểm tra lại.";
+            TempData["ErrorMessage"] = "The Federation code does not exist or has been revoked. Please check again.";
             return RedirectToPage("/Workspaces");
         }
 
@@ -194,7 +194,7 @@ public class WorkspacesModel : PageModel
 
         if (isAlreadyMember)
         {
-            TempData["ErrorMessage"] = "Bạn đã tham gia Liên bang này rồi.";
+            TempData["ErrorMessage"] = "You have already joined this Federation.";
             return RedirectToPage("/Workspaces");
         }
 
@@ -204,7 +204,7 @@ public class WorkspacesModel : PageModel
 
         if (personalWorkspace == null)
         {
-            TempData["ErrorMessage"] = "Workspace cá nhân được chọn không hợp lệ hoặc bạn không phải là chủ sở hữu.";
+            TempData["ErrorMessage"] = "The selected Personal Workspace is invalid or you are not the owner.";
             return RedirectToPage("/Workspaces");
         }
 
@@ -212,7 +212,7 @@ public class WorkspacesModel : PageModel
         // 1. Check joiner's selected workspace package tier
         if (personalWorkspace.PackageTier != "Personal")
         {
-            TempData["ErrorMessage"] = "Liên kết không thành công! Workspace bạn chọn không thuộc gói 'Personal' plan. Chỉ các Workspace thuộc gói Personal mới được kết nối vào Liên bang.";
+            TempData["ErrorMessage"] = "Link failed! The selected Workspace is not on the Personal plan. Only Personal plan Workspaces can be connected to a Federation.";
             return RedirectToPage("/Workspaces");
         }
 
@@ -222,7 +222,7 @@ public class WorkspacesModel : PageModel
 
         if (!creatorHasPersonalWorkspace)
         {
-            TempData["ErrorMessage"] = "Liên kết không thành công! Người tạo Liên bang này không sở hữu Workspace nào thuộc gói 'Personal' plan. Quy định liên bang yêu cầu cả 2 thành viên đều phải sở hữu Personal plan Workspace.";
+            TempData["ErrorMessage"] = "Link failed! The Federation creator does not own any Personal plan Workspace. Federation rules require both members to own a Personal plan Workspace.";
             return RedirectToPage("/Workspaces");
         }
 
@@ -246,7 +246,7 @@ public class WorkspacesModel : PageModel
         // Evict cache to refresh workspaces and federations lists
         _cache.Remove($"UserWorkspaces_{profile.Id}");
 
-        TempData["SuccessMessage"] = $"Kết nối thành công! Workspace '{personalWorkspace.Name}' đã được tích hợp vào Liên bang '{federation.Name}'.";
+        TempData["SuccessMessage"] = $"Successfully connected! Workspace '{personalWorkspace.Name}' has been integrated into Federation '{federation.Name}'.";
         return RedirectToPage("/Workspaces");
     }
 }
