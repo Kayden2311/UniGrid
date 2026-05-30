@@ -176,6 +176,70 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
     app.UseHttpsRedirection();
 }
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path.Value;
+    if (path != null && path.StartsWith("/files/", StringComparison.OrdinalIgnoreCase))
+    {
+        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+        {
+            var workspaceIdStr = parts[1];
+            if (Guid.TryParse(workspaceIdStr, out var workspaceId))
+            {
+                // Authenticate manually since UseAuthentication hasn't run yet in the pipeline for static files
+                var authResult = await Microsoft.AspNetCore.Authentication.AuthenticationHttpContextExtensions.AuthenticateAsync(
+                    context, 
+                    Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+
+                if (!authResult.Succeeded || authResult.Principal?.Identity?.IsAuthenticated != true)
+                {
+                    context.Response.StatusCode = 401; // Unauthorized
+                    return;
+                }
+
+                var userPrincipal = authResult.Principal;
+                var accountIdClaim = userPrincipal.FindFirst("AccountId")?.Value;
+                if (string.IsNullOrEmpty(accountIdClaim))
+                {
+                    context.Response.StatusCode = 401;
+                    return;
+                }
+
+                var accountId = Guid.Parse(accountIdClaim);
+                using (var scope = context.RequestServices.CreateScope())
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<unigrid.Data.UniGridDbContext>();
+                    var dbUser = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                        dbContext.Users, 
+                        u => u.AccountId == accountId);
+
+                    if (dbUser == null)
+                    {
+                        context.Response.StatusCode = 403; // Forbidden
+                        return;
+                    }
+
+                    // Check workspace membership or ownership
+                    var isOwner = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
+                        dbContext.Workspaces, 
+                        w => w.Id == workspaceId && w.OwnerId == dbUser.Id);
+
+                    var isMember = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
+                        dbContext.WorkspaceMembers, 
+                        wm => wm.WorkspaceId == workspaceId && wm.UserId == dbUser.Id);
+
+                    if (!isOwner && !isMember)
+                    {
+                        context.Response.StatusCode = 403; // Forbidden
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    await next();
+});
 app.UseStaticFiles();
 
 app.UseRouting();

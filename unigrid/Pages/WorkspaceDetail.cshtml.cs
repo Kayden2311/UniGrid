@@ -184,7 +184,7 @@ public class WorkspaceDetailModel : PageModel
                 .ToListAsync();
         });
 
-        Files = allFiles.Where(f => f.IsPublic || f.UserId == CurrentUser.Id).ToList();
+        Files = allFiles;
 
         // Cache Chat Room & Messages
         ChatRoom = await _cache.GetOrCreateAsync($"WorkspaceChatRoom_{workspaceId}", async entry =>
@@ -634,11 +634,29 @@ public class WorkspaceDetailModel : PageModel
 
     public async System.Threading.Tasks.Task<IActionResult> OnPostUploadFileAsync(string joinCode)
     {
-        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
-        if (CurrentUserRole == "Viewer") return Forbid();
+        if (!await LoadWorkspaceDataAsync(joinCode))
+        {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "Workspace not found or unauthorized." });
+            }
+            return RedirectToPage("/Dashboard");
+        }
+        if (CurrentUserRole == "Viewer")
+        {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "Viewer role cannot upload files." });
+            }
+            return Forbid();
+        }
 
         if (UploadedFile == null || UploadedFile.Length == 0)
         {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "No file was selected for upload." });
+            }
             TempData["UploadError"] = "No file was selected for upload.";
             return RedirectToPage(new { joinCode });
         }
@@ -650,6 +668,10 @@ public class WorkspaceDetailModel : PageModel
         // Validate filename: Not allow regex or . characters in base filename
         if (string.IsNullOrEmpty(baseName))
         {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "Invalid file name." });
+            }
             TempData["UploadError"] = "Invalid file name.";
             return RedirectToPage(new { joinCode });
         }
@@ -657,6 +679,10 @@ public class WorkspaceDetailModel : PageModel
         // Check for any dot in the base name
         if (baseName.Contains('.'))
         {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "File name contains invalid characters. Multiple dots ('.') are not allowed in the file name." });
+            }
             TempData["UploadError"] = "File name contains invalid characters. Multiple dots ('.') are not allowed in the file name.";
             return RedirectToPage(new { joinCode });
         }
@@ -666,6 +692,10 @@ public class WorkspaceDetailModel : PageModel
         {
             if (!char.IsLetterOrDigit(c) && c != ' ' && c != '-' && c != '_')
             {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return new BadRequestObjectResult(new { message = "File name contains invalid characters. Only alphanumeric characters, spaces, hyphens, and underscores are allowed." });
+                }
                 TempData["UploadError"] = "File name contains invalid characters. Only alphanumeric characters, spaces, hyphens, and underscores are allowed.";
                 return RedirectToPage(new { joinCode });
             }
@@ -712,12 +742,20 @@ public class WorkspaceDetailModel : PageModel
         // 2. Perform limit validation
         if (packageTier == "Free")
         {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "File uploads are not allowed on the Free plan. Please upgrade your workspace package to upload files." });
+            }
             TempData["UploadError"] = "File uploads are not allowed on the Free plan. Please upgrade your workspace package to upload files.";
             return RedirectToPage(new { joinCode });
         }
 
         if (isIndividualStorage && maxStorageLimit <= 0)
         {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "You do not have individual storage upload privileges in this workspace. Upgrade to a Personal plan to upload files." });
+            }
             TempData["UploadError"] = "You do not have individual storage upload privileges in this workspace. Upgrade to a Personal plan to upload files.";
             return RedirectToPage(new { joinCode });
         }
@@ -743,7 +781,12 @@ public class WorkspaceDetailModel : PageModel
                 ? $"{(maxStorageLimit / (1024L * 1024 * 1024))} GB" 
                 : "0 GB";
             string typeStr = isIndividualStorage ? "individual" : "workspace";
-            TempData["UploadError"] = $"Upload failed. You have exceeded your {typeStr} storage limit of {limitStr} for the {packageTier} plan.";
+            string errorMsg = $"Upload failed. You have exceeded your {typeStr} storage limit of {limitStr} for the {packageTier} plan.";
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = errorMsg });
+            }
+            TempData["UploadError"] = errorMsg;
             return RedirectToPage(new { joinCode });
         }
 
@@ -773,16 +816,31 @@ public class WorkspaceDetailModel : PageModel
             FileUrl = $"files/{Workspace.Id}/{safeFileName}",
             FileType = fileType,
             FileSize = UploadedFile.Length,
-            IsPublic = ShowVisibilityControls ? UploadIsPublic : true,
+            IsPublic = true,
             CreatedAt = DateTime.UtcNow
         };
 
         await _context.WorkspaceFiles.AddAsync(file);
         await _context.SaveChangesAsync();
         EvictAllWorkspaceMembersCache(Workspace.Id);
-        TempData["UploadSuccess"] = $"Successfully uploaded file: {originalFileName}";
+        
         _logger.LogInformation("File uploaded in workspace {WorkspaceId} by {UserId}", Workspace.Id, CurrentUser.Id);
 
+        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+        {
+            return new JsonResult(new {
+                success = true,
+                file = new {
+                    id = file.Id.ToString(),
+                    fileName = file.FileName,
+                    fileUrl = file.FileUrl,
+                    fileSize = file.FileSize,
+                    fileType = file.FileType
+                }
+            });
+        }
+
+        TempData["UploadSuccess"] = $"Successfully uploaded file: {originalFileName}";
         return RedirectToPage(new { joinCode });
     }
 
