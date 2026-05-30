@@ -74,6 +74,7 @@ CREATE TABLE Workspaces (
     CompanyName NVARCHAR(256) NULL,
     CompanyTaxCode NVARCHAR(100) NULL,
     CompanyAddress NVARCHAR(500) NULL,
+    SettingsJson NVARCHAR(MAX) NULL,
     CONSTRAINT FK_Workspaces_Users FOREIGN KEY (OwnerId) REFERENCES Users(Id)
 );
 
