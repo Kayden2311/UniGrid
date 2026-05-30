@@ -67,7 +67,7 @@ public class ScheduleModel : PageModel
         );
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostCreateEventAsync(string title, string description, DateTime startTime, DateTime endTime)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostCreateEventAsync(string title, string description, DateTime startTime, DateTime endTime, string? timeZone = "UTC")
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
         if (string.IsNullOrEmpty(accountIdClaim)) return new JsonResult(new { success = false, message = "Not authenticated" });
@@ -89,6 +89,7 @@ public class ScheduleModel : PageModel
             Description = Helpers.InputSanitizer.SanitizeInput(description),
             StartTime = startTime.ToUniversalTime(),
             EndTime = endTime.ToUniversalTime(),
+            TimeZone = string.IsNullOrEmpty(timeZone) ? "UTC" : timeZone,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -104,12 +105,13 @@ public class ScheduleModel : PageModel
                 title = newEvent.Title,
                 description = newEvent.Description ?? "",
                 startTime = newEvent.StartTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
-                endTime = newEvent.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                endTime = newEvent.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                timeZone = newEvent.TimeZone
             }
         });
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostEditEventAsync(Guid eventId, string title, string description, DateTime startTime, DateTime endTime)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostEditEventAsync(Guid eventId, string title, string description, DateTime startTime, DateTime endTime, string? timeZone = "UTC")
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
         if (string.IsNullOrEmpty(accountIdClaim)) return new JsonResult(new { success = false, message = "Not authenticated" });
@@ -130,6 +132,7 @@ public class ScheduleModel : PageModel
             eventItem.Description = Helpers.InputSanitizer.SanitizeInput(description);
             eventItem.StartTime = startTime.ToUniversalTime();
             eventItem.EndTime = endTime.ToUniversalTime();
+            eventItem.TimeZone = string.IsNullOrEmpty(timeZone) ? "UTC" : timeZone;
 
             await _context.SaveChangesAsync();
 
@@ -142,7 +145,8 @@ public class ScheduleModel : PageModel
                     title = eventItem.Title,
                     description = eventItem.Description ?? "",
                     startTime = eventItem.StartTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
-                    endTime = eventItem.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                    endTime = eventItem.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    timeZone = eventItem.TimeZone
                 }
             });
         }
@@ -204,7 +208,7 @@ public class ScheduleModel : PageModel
         return new JsonResult(new { success = false, message = "Event not found" });
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateTaskTimeAsync(Guid taskId, DateTime startTime, DateTime endTime)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateTaskTimeAsync(Guid taskId, DateTime startTime, DateTime endTime, string? timeZone = "UTC")
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
         if (string.IsNullOrEmpty(accountIdClaim)) return new JsonResult(new { success = false, message = "Not authenticated" });
@@ -215,6 +219,14 @@ public class ScheduleModel : PageModel
 
         var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId);
         if (task == null) return new JsonResult(new { success = false, message = "Task not found" });
+
+        if (task.DueDate.HasValue)
+        {
+            if (endTime.ToUniversalTime() > task.DueDate.Value.ToUniversalTime())
+            {
+                return new JsonResult(new { success = false, message = $"Scheduling conflict! You cannot schedule this task past its due date ({task.DueDate.Value.ToString("yyyy-MM-dd HH:mm")})." });
+            }
+        }
 
         var personalSchedule = await _context.PersonalSchedules.FirstOrDefaultAsync(p => p.UserId == userProfile.Id && p.TaskId == taskId);
         var ignoreId = personalSchedule?.Id ?? Guid.Empty;
@@ -228,6 +240,7 @@ public class ScheduleModel : PageModel
         {
             personalSchedule.StartTime = startTime.ToUniversalTime();
             personalSchedule.EndTime = endTime.ToUniversalTime();
+            personalSchedule.TimeZone = string.IsNullOrEmpty(timeZone) ? "UTC" : timeZone;
         }
         else
         {
@@ -240,6 +253,7 @@ public class ScheduleModel : PageModel
                 Description = task.Description,
                 StartTime = startTime.ToUniversalTime(),
                 EndTime = endTime.ToUniversalTime(),
+                TimeZone = string.IsNullOrEmpty(timeZone) ? "UTC" : timeZone,
                 CreatedAt = DateTime.UtcNow
             };
             _context.PersonalSchedules.Add(personalSchedule);
@@ -257,7 +271,8 @@ public class ScheduleModel : PageModel
                 description = personalSchedule.Description ?? "",
                 startTime = personalSchedule.StartTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
                 endTime = personalSchedule.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
-                taskId = personalSchedule.TaskId
+                taskId = personalSchedule.TaskId,
+                timeZone = personalSchedule.TimeZone
             }
         });
     }

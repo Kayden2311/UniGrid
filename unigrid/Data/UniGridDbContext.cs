@@ -365,6 +365,7 @@ public partial class UniGridDbContext : DbContext
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
             entity.Property(e => e.Title).HasMaxLength(256);
+            entity.Property(e => e.TimeZone).HasMaxLength(100).HasDefaultValue("UTC");
 
             entity.HasOne(d => d.User).WithMany()
                 .HasForeignKey(d => d.UserId)
