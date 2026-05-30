@@ -65,6 +65,45 @@
 ### 📂 Workspace File Repository
 * Shared document repository categorizing PDF Specs, Documents, Spreadsheets, and Image Assets.
 * Tracks storage metrics against standard billing limits, providing file details and click-to-download controls.
+### 🌐 Mô hình Workspace Liên bang (Federated Workspace Architecture)
+
+Mô hình Workspace Liên bang (Federated Workspace Model) là giải pháp giúp kết nối mạng lưới các không gian làm việc độc lập của các thành viên lại với nhau mà không làm mất đi tính tự chủ về lưu trữ và bảo mật.
+
+```mermaid
+graph TD
+    subgraph PersonalNodes["Autonomous Personal Nodes (Các Nút Workspace Tự Chủ)"]
+        WS_A["Workspace Cá nhân A<br>(User A: Gói Free 2GB)"]
+        WS_B["Workspace Cá nhân B<br>(User B: Gói Free 2GB)"]
+        WS_C["Workspace Cá nhân C<br>(User C: Gói Pro 20GB)"]
+    end
+
+    subgraph FederationPortal["Virtual Collaboration Layer (Lớp Liên Kết Ảo)"]
+        FedWS["Workspace Liên Bang (Cổng Dự Chiếu Chung)"]
+    end
+
+    subgraph PhysicalStorage["Physical Data Isolation (Cách Ly Dữ Liệu Vật Lý)"]
+        Store_A[("Disk Storage A<br>(Tính dung lượng vào quota User A)")]
+        Store_B[("Disk Storage B<br>(Tính dung lượng vào quota User B)")]
+        Store_C[("Disk Storage C<br>(Tính dung lượng vào quota User C)")]
+    end
+
+    WS_A -.->|Chiếu ảo tệp tin công khai| FedWS
+    WS_B -.->|Chiếu ảo tệp tin công khai| FedWS
+    WS_C -.->|Chiếu ảo tệp tin công khai| FedWS
+
+    WS_A ===|Quản lý lưu trữ vật lý| Store_A
+    WS_B ===|Quản lý lưu trữ vật lý| Store_B
+    WS_C ===|Quản lý lưu trữ vật lý| Store_C
+
+    FedWS -->|Thành viên truy cập qua cổng ảo| WS_A
+    FedWS -->|Thành viên truy cập qua cổng ảo| WS_B
+    FedWS -->|Thành viên truy cập qua cổng ảo| WS_C
+```
+
+* **Khái niệm (Concept):** Cho phép các tài khoản sở hữu gói cá nhân (Personal Plan) liên kết các workspace độc lập của họ lại với nhau thành một "Liên bang Workspace" (Federation) thống nhất.
+* **Lưu trữ độc lập (Isolated Quota):** Mỗi thành viên vẫn lưu trữ và quản lý tài liệu trên không gian cá nhân riêng biệt, đảm bảo tính riêng tư, bảo mật, và tính phí độc lập theo từng tài khoản. Dung lượng tải lên được tính trực tiếp vào gói cá nhân của người upload thay vì trừ vào quỹ chung.
+* **Cổng chiếu ảo (Virtual Projection Portal):** Khi một thành viên đánh dấu tài liệu là công khai (`IsPublic = true`) hoặc gán vào task của liên bang, tài liệu đó sẽ lập tức được "chiếu ảo" lên cổng Liên bang. Các thành viên khác có thể đọc và đồng bộ hóa tức thì mà không cần phải nhân bản file vật lý, tránh lãng phí ổ đĩa.
+* **Bảo mật Zero-Trust & Cô lập rủi ro:** Các tệp tin riêng tư chưa chia sẻ vẫn nằm hoàn toàn an toàn trong workspace riêng của từng cá nhân và hoàn toàn vô hình trước các thành viên khác. Khi liên kết liên bang kết thúc, quyền truy cập lập tức bị hủy bỏ mà không cần thực hiện di chuyển dữ liệu phức tạp.
 
 ---
 
@@ -97,22 +136,64 @@ UniGrid is built on a unified, high-performance **SPA-hybrid** architecture leve
 
 ## 📊 Database Schema
 
-UniGrid utilizes a highly normalized SQL Server relational database, populated with rich seed data:
+UniGrid utilizes a highly normalized SQL Server relational database. The Entity-Relationship Diagram (ERD) below illustrates how accounts, profiles, workspaces, members, tasks, and file storage map together:
 
-### Core Tables
-| Table | Description | Key Fields |
+### 🧩 Entity-Relationship Diagram (ERD)
+
+```mermaid
+erDiagram
+    Accounts ||--o{ Users : "owns user profiles"
+    Accounts ||--o{ Admins : "owns admin profiles"
+    Accounts ||--o{ Moderators : "owns mod profiles"
+    
+    Users ||--o{ Workspaces : "creates/owns workspaces (OwnerId)"
+    Users ||--o{ WorkspaceMembers : "joins as workspace member"
+    Workspaces ||--o{ WorkspaceMembers : "has members mapped"
+    
+    Workspaces ||--o{ Tasks : "contains tasks"
+    Users ||--o{ Tasks : "assigned tasks (AssigneeId)"
+    Tasks ||--o{ Subtasks : "contains checklists"
+    Tasks ||--o{ TaskComments : "has feedback comments"
+    Users ||--o{ TaskComments : "posts comments"
+    
+    Workspaces ||--o{ WorkspaceFiles : "stores files"
+    Users ||--o{ WorkspaceFiles : "uploads files"
+    Tasks ||--o{ WorkspaceFiles : "attaches files (optional)"
+    
+    Workspaces ||--o{ ChatRooms : "maps 1:1 chat room"
+    ChatRooms ||--o{ ChatMessages : "contains messages"
+    Users ||--o{ ChatMessages : "sends messages"
+    
+    Users ||--o{ PersonalSchedules : "registers custom events"
+    Tasks ||--o{ PersonalSchedules : "syncs deadlines to events"
+    Users ||--o{ Notifications : "receives alerts"
+    
+    Workspaces ||--o{ WorkspaceInvitations : "has invites"
+    Users ||--o{ WorkspaceInvitations : "invites users"
+    
+    Users ||--o{ WorkspaceFederations : "owns federations"
+    WorkspaceFederations ||--o{ WorkspaceFederationMembers : "maps members"
+    Users ||--o{ WorkspaceFederationMembers : "belongs to federations"
+    Workspaces ||--o{ WorkspaceFederationMembers : "maps personal workspace"
+    WorkspaceFederations ||--o{ WorkspaceFiles : "maps projected files"
+```
+
+### 📋 Core Tables Metadata
+| Table | Description | Key Fields & Relationships |
 | :--- | :--- | :--- |
-| **Accounts** | Core security authentication identities | `Id`, `Email`, `PasswordHash`, `Role` (Admin/User/Mod) |
-| **Users** | Core profiles of registered users | `Id`, `AccountId`, `FullName`, `SubscriptionTier` (Free/Pro/ProPlus) |
-| **Workspaces** | Team collabs | `Id`, `Name`, `JoinCode`, `OwnerId`, `PackageTier` |
-| **WorkspaceMembers**| Membership map | `WorkspaceId`, `UserId`, `Role` (Owner/Manager/Member) |
-| **Tasks** | Assignable deliverables | `Id`, `WorkspaceId`, `AssigneeId`, `Status` (0-3), `Priority` (1-3) |
-| **Subtasks** | Checklist granularity | `Id`, `TaskId`, `Content`, `IsDone` |
-| **TaskComments** | Collaborative feedback | `Id`, `TaskId`, `UserId`, `Content`, `CreatedAt` |
-| **WorkspaceFiles** | Shared documents | `Id`, `WorkspaceId`, `UserId`, `FileName`, `FileType`, `FileSize` |
-| **ChatRooms** | 1:1 Workspace room map | `Id`, `WorkspaceId` |
-| **ChatMessages** | Group timeline logs | `Id`, `RoomId`, `SenderId`, `Content`, `SentAt` |
-| **PersonalSchedules**| Individual calendar dates | `Id`, `UserId`, `Title`, `EventDate` |
+| **Accounts** | Core security authentication identities | `Id` (PK), `Email` (Unique), `PasswordHash`, `Role` (Admin/User/Mod) |
+| **Users** | Core profiles of registered users | `Id` (PK), `AccountId` (FK), `FullName`, `SubscriptionTier` (Free/Pro/ProPlus) |
+| **Workspaces** | Team collaborative boundaries | `Id` (PK), `Name`, `JoinCode` (Unique), `OwnerId` (FK $\rightarrow$ Users), `PackageTier`, `SettingsJson` (virtual locks) |
+| **WorkspaceMembers**| Membership map and standard RBAC roles | `WorkspaceId` (PK/FK), `UserId` (PK/FK), `Role` (Owner/Manager/Member/Viewer), `DisplayRole`, custom permissions |
+| **Tasks** | Assignable deliverables & Kanban cards | `Id` (PK), `WorkspaceId` (FK), `AssigneeId` (FK), `Status` (0-Todo, 1-InProg, 2-Review, 3-Done), `Priority` |
+| **Subtasks** | Granular checkable checklist items | `Id` (PK), `TaskId` (FK), `Content`, `IsDone` (bool) |
+| **TaskComments** | Collaborative feedback feeds for tasks | `Id` (PK), `TaskId` (FK), `UserId` (FK), `Content`, `CreatedAt` |
+| **WorkspaceFiles** | Shared documents storage registry | `Id` (PK), `WorkspaceId` (FK), `UserId` (FK), `TaskId` (FK, optional), `FileName`, `FileType`, `FileSize`, `IsPublic` |
+| **ChatRooms** | 1:1 Workspace room association | `Id` (PK), `WorkspaceId` (FK, Unique) |
+| **ChatMessages** | Group real-time timeline logs | `Id` (PK), `RoomId` (FK), `SenderId` (FK), `Content` (channels/rules prefixed), `SentAt`, `IsDeleted` |
+| **PersonalSchedules**| Individual calendar dates and synced tasks | `Id` (PK), `UserId` (FK), `TaskId` (FK, optional), `Title`, `EventDate`, `TimeZone` |
+| **WorkspaceFederations**| Parent portal logical records | `Id` (PK), `Name`, `JoinCode` (Unique), `OwnerId` (FK) |
+| **WorkspaceFederationMembers**| Maps member nodes to parent portals | `FederationId` (PK/FK), `UserId` (PK/FK), `PersonalWorkspaceId` (FK $\rightarrow$ Workspaces) |
 
 ---
 
