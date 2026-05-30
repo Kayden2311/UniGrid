@@ -188,12 +188,15 @@
                 class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
             <i data-lucide="kanban-square" class="w-4 h-4"></i> Tasks
         </button>
-        <button @@click="activeTab = 'chat'"
-                :class="activeTab === 'chat' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
-                class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all relative">
-            <i data-lucide="messages-square" class="w-4 h-4"></i> Chat
-            <span class="absolute top-2.5 right-1 w-2 h-2 bg-indigo-600 rounded-full"></span>
-        </button>
+        @if (packageTier != "Personal")
+        {
+            <button @@click="activeTab = 'chat'"
+                    :class="activeTab === 'chat' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                    class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all relative">
+                <i data-lucide="messages-square" class="w-4 h-4"></i> Chat
+                <span class="absolute top-2.5 right-1 w-2 h-2 bg-indigo-600 rounded-full"></span>
+            </button>
+        }
         @if (packageTier != "Personal")
         {
             <button @@click="activeTab = 'members'"
@@ -1007,212 +1010,266 @@
     <!-- ════════════════════════════════════════ -->
     <!-- ─── TAB 3: CHAT ROOM (DISCORD STYLE) ─── -->
     <!-- ════════════════════════════════════════ -->
-    <div x-show="activeTab === 'chat'" class="h-[calc(100vh-22rem)] min-h-[500px] border border-slate-200 rounded-[2.5rem] bg-white flex overflow-hidden shadow-sm" x-transition>
-        <!-- Left panel - Channels (Discord Style) -->
-        <div class="w-64 border-r border-slate-100 flex flex-col bg-slate-50/50 shrink-0 select-none">
-            <div class="p-4 border-b border-slate-100 flex items-center justify-between">
-                <h3 class="text-sm font-black text-slate-700 flex items-center gap-1.5 uppercase tracking-wide">
-                    <i data-lucide="message-square" class="w-4 h-4 text-indigo-500"></i>
-                    <span>Workspace Chats</span>
-                </h3>
-                <button type="button" @@click="createChannelOpen = true" class="h-6 w-6 rounded-lg hover:bg-slate-200/60 flex items-center justify-center text-slate-500 transition-colors" title="Create new channel">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                </button>
-            </div>
-            <div class="flex-1 p-2 space-y-1 overflow-y-auto">
-                <template x-for="chan in channels" :key="chan">
-                    <button type="button"
-                            @@click="activeChannel = chan"
-                            :class="activeChannel === chan ? 'bg-indigo-50 border-indigo-100/50 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'"
-                            class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-left text-xs font-bold transition-all group">
-                        <span class="flex items-center gap-2 truncate">
-                            <i data-lucide="hash" class="w-4 h-4 text-slate-400 shrink-0"></i>
-                            <span class="truncate" x-text="chan"></span>
-                        </span>
-                        <!-- Lock badge if private or general -->
-                        <template x-if="chan === 'general'">
-                            <i data-lucide="lock" class="w-3.5 h-3.5 text-slate-400 shrink-0 opacity-60"></i>
-                        </template>
+    @if (packageTier != "Personal")
+    {
+        <div x-show="activeTab === 'chat'" class="h-[calc(100vh-22rem)] min-h-[500px] border border-slate-200 rounded-[2.5rem] bg-white flex overflow-hidden shadow-sm" x-transition>
+            <!-- Left panel - Channels (Discord Style) -->
+            <div class="w-64 border-r border-slate-100 flex flex-col bg-slate-50/50 shrink-0 select-none">
+                <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+                    <h3 class="text-sm font-black text-slate-700 flex items-center gap-1.5 uppercase tracking-wide">
+                        <i data-lucide="message-square" class="w-4 h-4 text-indigo-500"></i>
+                        <span>Workspace Chats</span>
+                    </h3>
+                    <button type="button" @@click="createChannelOpen = true" class="h-6 w-6 rounded-lg hover:bg-slate-200/60 flex items-center justify-center text-slate-500 transition-colors" title="Create new channel">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
                     </button>
-                </template>
-            </div>
-        </div>
-
-        <!-- Right panel - Chat Timeline -->
-        <div class="flex-1 flex flex-col min-w-0 bg-white">
-            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                    <i data-lucide="hash" class="w-4.5 h-4.5 text-slate-400"></i>
-                    <span class="text-sm font-black text-slate-800" x-text="activeChannel"></span>
-                    <span class="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-md uppercase tracking-wider">Discord Channel</span>
                 </div>
-                <span class="text-xs font-bold text-slate-400"><span x-text="workspaceMembers.length"></span> members active</span>
-            </div>
-
-            <!-- Messages Stream -->
-            <div id="chat-messages-container" class="flex-1 p-6 overflow-y-auto space-y-4">
-                <!-- Empty state -->
-                <div x-show="filteredMessages.length === 0" class="text-center py-20 text-slate-400 transition-all">
-                    <i data-lucide="messages-square" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
-                    <p class="font-bold" x-text="'No messages in channel #' + activeChannel + '...'"></p>
-                    <p class="text-xs text-slate-400 mt-1">Start the first conversation in this channel!</p>
-                </div>
-
-                <template x-for="msg in filteredMessages" :key="msg.id">
-                    <div class="flex gap-3 max-w-[80%] transition-all" :class="msg.senderId === currentUserId ? 'ml-auto flex-row-reverse' : ''">
-                        <div class="h-8 w-8 rounded-full bg-slate-100 border flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0 select-none" 
-                             x-text="msg.senderName.split(' ').map(n => n[0]).join('')">
-                        </div>
-                        <div class="space-y-1 min-w-0">
-                            <template x-if="msg.senderId !== currentUserId">
-                                <p class="text-[10px] font-bold text-slate-400" x-text="msg.senderName"></p>
+                <div class="flex-1 p-2 space-y-1 overflow-y-auto">
+                    <template x-for="chan in visibleChannels" :key="chan">
+                        <button type="button"
+                                @@click="activeChannel = chan"
+                                :class="activeChannel === chan ? 'bg-indigo-50 border-indigo-100/50 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'"
+                                class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-left text-xs font-bold transition-all group">
+                            <span class="flex items-center gap-2 truncate">
+                                <template x-if="lockedChannels[chan]">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-amber-500 shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                </template>
+                                <template x-if="!lockedChannels[chan]">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-slate-400 shrink-0"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>
+                                </template>
+                                <span class="truncate" x-text="chan"></span>
+                            </span>
+                            <template x-if="lockedChannels[chan]">
+                                <span class="px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded text-[8px] font-black uppercase tracking-wider">Private</span>
                             </template>
-                            <div class="p-3.5 rounded-2xl text-sm leading-relaxed" 
-                                 :class="msg.senderId === currentUserId ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'">
-                                <div class="break-words" x-html="parseMessageContent(msg.content)"></div>
-                                
-                                <!-- Render Attachment Box if message has an attachment -->
-                                <template x-if="msg.attachment">
-                                    <div class="mt-2.5 p-3 border rounded-xl flex items-center justify-between gap-4 max-w-sm"
-                                         :class="msg.senderId === currentUserId ? 'bg-white/15 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-700'">
-                                        <div class="flex items-center gap-2.5 min-w-0">
-                                            <div class="h-9 w-9 rounded-lg flex items-center justify-center shrink-0"
-                                                 :class="msg.senderId === currentUserId ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-600'">
-                                                <i data-lucide="file-text" class="w-5 h-5"></i>
-                                            </div>
-                                            <div class="min-w-0">
-                                                <p class="text-xs font-bold truncate" :class="msg.senderId === currentUserId ? 'text-white' : 'text-slate-800'" x-text="msg.attachment.fileName"></p>
-                                                <p class="text-[9px] font-bold uppercase" :class="msg.senderId === currentUserId ? 'text-white/70' : 'text-slate-400'" x-text="Math.round(msg.attachment.fileSize / 1024) + ' KB'"></p>
-                                            </div>
-                                        </div>
-                                        <a :href="'/' + msg.attachment.fileUrl" class="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors" 
-                                           :class="msg.senderId === currentUserId ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'" download>
-                                            <i data-lucide="download" class="w-4.5 h-4.5"></i>
-                                        </a>
-                                    </div>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Right panel - Chat Timeline -->
+            <div class="flex-1 flex flex-col min-w-0 bg-white">
+                <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <template x-if="lockedChannels[activeChannel]">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4.5 h-4.5 text-amber-500 shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        </template>
+                        <template x-if="!lockedChannels[activeChannel]">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4.5 h-4.5 text-slate-400 shrink-0"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>
+                        </template>
+                        <span class="text-sm font-black text-slate-800" x-text="activeChannel"></span>
+                        
+                        <!-- Lock Indicator for normal users -->
+                        <template x-if="lockedChannels[activeChannel]">
+                            <span class="flex items-center gap-1 text-[9px] text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md font-black uppercase tracking-wider">
+                                Private
+                            </span>
+                        </template>
+
+                        <!-- Lock / Unlock / Invite Controls for Workspace Owner/Managers or Channel Creator -->
+                        <template x-if="(currentUserRole === 'Owner' || currentUserRole === 'Manager' || channelOwners[activeChannel] === currentUserId) && activeChannel !== 'general'">
+                            <div class="flex items-center gap-1.5 ml-2 flex-wrap">
+                                <!-- Lock/Unlock toggle -->
+                                <button type="button" @@click="toggleChannelLock()" 
+                                        :class="lockedChannels[activeChannel] ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'"
+                                        class="h-7 px-2.5 rounded-xl border text-[9px] font-black transition-all flex items-center gap-1 cursor-pointer select-none"
+                                        :title="lockedChannels[activeChannel] ? 'Unlock Channel (Make Public)' : 'Lock Channel (Make Private)'">
+                                    <template x-if="lockedChannels[activeChannel]">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                    </template>
+                                    <template x-if="!lockedChannels[activeChannel]">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><rect width="18" height="10" x="3" y="11" rx="2" ry="2"/><path d="M12 2a5 5 0 0 0-5 5v4"/></svg>
+                                    </template>
+                                    <span x-text="lockedChannels[activeChannel] ? 'Private' : 'Public'"></span>
+                                </button>
+                                <!-- Invite members button -->
+                                <template x-if="lockedChannels[activeChannel]">
+                                    <button type="button" @@click="openChannelInvite()" 
+                                            class="h-7 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 border border-indigo-200 rounded-xl text-[9px] font-black transition-all flex items-center gap-1 cursor-pointer select-none">
+                                        <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                                        <span>Manage Access</span>
+                                    </button>
                                 </template>
                             </div>
-                            <p class="text-[9px] text-slate-400 font-bold" :class="msg.senderId === currentUserId ? 'text-right' : ''" 
-                               x-text="formatTime(msg.sentAt)"></p>
+                        </template>
+                    </div>
+                    <span class="text-xs font-bold text-slate-400"><span x-text="workspaceMembers.length"></span> members active</span>
+                </div>
+
+                <!-- Messages Stream -->
+                <div id="chat-messages-container" class="flex-1 p-6 overflow-y-auto space-y-4">
+                    <!-- Empty state -->
+                    <div x-show="filteredMessages.length === 0" class="text-center py-20 text-slate-400 transition-all">
+                        <i data-lucide="messages-square" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+                        <p class="font-bold" x-text="'No messages in channel #' + activeChannel + '...'"></p>
+                        <p class="text-xs text-slate-400 mt-1">Start the first conversation in this channel!</p>
+                    </div>
+
+                    <template x-for="msg in filteredMessages" :key="msg.id">
+                        <div class="flex gap-3 max-w-[80%] transition-all" :class="msg.senderId === currentUserId ? 'ml-auto flex-row-reverse' : ''">
+                            <div class="h-8 w-8 rounded-full bg-slate-100 border flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0 select-none" 
+                                 x-text="msg.senderName.split(' ').map(n => n[0]).join('')">
+                            </div>
+                            <div class="space-y-1 min-w-0">
+                                <template x-if="msg.senderId !== currentUserId">
+                                    <p class="text-[10px] font-bold text-slate-400" x-text="msg.senderName"></p>
+                                </template>
+                                <div class="p-3.5 rounded-2xl text-sm leading-relaxed" 
+                                     :class="msg.senderId === currentUserId ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'">
+                                    <div class="break-words" x-html="parseMessageContent(msg.content)"></div>
+                                    
+                                    <!-- Render Attachment Box if message has an attachment -->
+                                    <template x-if="msg.attachment">
+                                        <div class="mt-2.5 p-3 border rounded-xl flex items-center justify-between gap-4 max-w-sm"
+                                             :class="msg.senderId === currentUserId ? 'bg-white/15 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-700'">
+                                            <div class="flex items-center gap-2.5 min-w-0">
+                                                <div class="h-9 w-9 rounded-lg flex items-center justify-center shrink-0"
+                                                     :class="msg.senderId === currentUserId ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-600'">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+                                                </div>
+                                                <div class="min-w-0">
+                                                    <p class="text-xs font-bold truncate" :class="msg.senderId === currentUserId ? 'text-white' : 'text-slate-800'" x-text="msg.attachment.fileName"></p>
+                                                    <p class="text-[9px] font-bold uppercase" :class="msg.senderId === currentUserId ? 'text-white/70' : 'text-slate-400'" x-text="Math.round(msg.attachment.fileSize / 1024) + ' KB'"></p>
+                                                </div>
+                                            </div>
+                                            <a :href="'/' + msg.attachment.fileUrl" class="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors" 
+                                               :class="msg.senderId === currentUserId ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'" download>
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4.5 h-4.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                            </a>
+                                        </div>
+                                    </template>
+                                </div>
+                                <p class="text-[9px] text-slate-400 font-bold" :class="msg.senderId === currentUserId ? 'text-right' : ''" 
+                                   x-text="formatTime(msg.sentAt)"></p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Autocomplete Popover Box -->
+                <div x-show="showSuggestions" 
+                     class="mx-4 p-2 bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col gap-1.5 max-h-48 overflow-y-auto transition-all"
+                     x-transition>
+                    <div class="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                        Mentions suggestions (Type <span x-text="showSuggestions?.type"></span>)
+                    </div>
+                    <div class="space-y-0.5">
+                        <!-- Member Suggestions -->
+                        <template x-if="showSuggestions?.type === '@@' || showSuggestions?.type === '@@'">
+                            <div>
+                                <template x-for="member in filteredMembers" :key="member.id">
+                                    <button type="button" 
+                                            @@click="insertSuggestion('@@' + member.fullName)"
+                                            class="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl flex items-center gap-2 transition-all">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 opacity-60"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                        <span x-text="member.fullName"></span>
+                                    </button>
+                                </template>
+                                <template x-if="filteredMembers.length === 0">
+                                    <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">No matching members found.</div>
+                                </template>
+                            </div>
+                        </template>
+                        
+                        <!-- Task Suggestions -->
+                        <template x-if="showSuggestions?.type === '#'">
+                            <div>
+                                <template x-for="task in filteredTasks" :key="task.id">
+                                    <button type="button" 
+                                            @@click="insertSuggestion('#' + task.title)"
+                                            class="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-600 rounded-xl flex items-center gap-2 transition-all">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 opacity-60"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>
+                                        <span x-text="task.title"></span>
+                                    </button>
+                                </template>
+                                <template x-if="filteredTasks.length === 0">
+                                    <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">No matching tasks found.</div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- File Attachments Selection Popover Panel -->
+                <div x-show="attachFileOpen" 
+                     class="mx-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-xl space-y-3 transition-all"
+                     x-transition>
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
+                        <span class="text-xs font-black text-slate-800 uppercase tracking-widest">Attach Workspace document</span>
+                        <div class="flex items-center gap-2">
+                            <!-- Direct File Upload Label/Input -->
+                            <label class="cursor-pointer bg-indigo-600 hover:bg-indigo-750 text-white text-[9px] font-black px-2.5 py-1.5 rounded-lg flex items-center gap-1 select-none transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                                <span>Upload New</span>
+                                <input type="file" class="hidden" @@change="uploadFileDirectly($event)">
+                            </label>
+                            <button type="button" @@click="attachFileOpen = false" class="text-xs text-slate-400 hover:text-slate-600 font-black font-semibold cursor-pointer">Close</button>
                         </div>
                     </div>
-                </template>
-            </div>
-
-            <!-- Autocomplete Popover Box -->
-            <div x-show="showSuggestions" 
-                 class="mx-4 p-2 bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col gap-1.5 max-h-48 overflow-y-auto transition-all"
-                 x-transition>
-                <div class="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                    Mentions suggestions (Type <span x-text="showSuggestions?.type"></span>)
-                </div>
-                <div class="space-y-0.5">
-                    <!-- Member Suggestions -->
-                    <template x-if="showSuggestions?.type === '@@' || showSuggestions?.type === '@@'">
-                        <div>
-                            <template x-for="member in filteredMembers" :key="member.id">
-                                <button type="button" 
-                                        @@click="insertSuggestion('@@' + member.fullName)"
-                                        class="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl flex items-center gap-2 transition-all">
-                                    <i data-lucide="user" class="w-3.5 h-3.5 opacity-60"></i>
-                                    <span x-text="member.fullName"></span>
-                                </button>
-                            </template>
-                            <template x-if="filteredMembers.length === 0">
-                                <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">No matching members found.</div>
-                            </template>
-                        </div>
-                    </template>
-                    
-                    <!-- Task Suggestions -->
-                    <template x-if="showSuggestions?.type === '#'">
-                        <div>
-                            <template x-for="task in filteredTasks" :key="task.id">
-                                <button type="button" 
-                                        @@click="insertSuggestion('#' + task.title)"
-                                        class="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-600 rounded-xl flex items-center gap-2 transition-all">
-                                    <i data-lucide="hash" class="w-3.5 h-3.5 opacity-60"></i>
-                                    <span x-text="task.title"></span>
-                                </button>
-                            </template>
-                            <template x-if="filteredTasks.length === 0">
-                                <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">No matching tasks found.</div>
-                            </template>
-                        </div>
-                    </template>
-                </div>
-            </div>
-
-            <!-- File Attachments Selection Popover Panel -->
-            <div x-show="attachFileOpen" 
-                 class="mx-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-xl space-y-3 transition-all"
-                 x-transition>
-                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <span class="text-xs font-black text-slate-800 uppercase tracking-widest">Attach Workspace document</span>
-                    <button type="button" @@click="attachFileOpen = false" class="text-xs text-slate-400 hover:text-slate-600 font-black">Close</button>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
-                    <template x-for="file in workspaceFiles" :key="file.id">
-                        <button type="button" 
-                                @@click="selectedAttachmentId = file.id; selectedAttachmentName = file.fileName; attachFileOpen = false;"
-                                :class="selectedAttachmentId === file.id ? 'border-indigo-600 bg-indigo-50/50 text-indigo-700' : 'border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-700'"
-                                class="p-2.5 border rounded-xl flex items-center gap-2 text-left text-xs font-bold transition-all">
-                            <i data-lucide="file" class="w-4 h-4 shrink-0"></i>
-                            <span class="truncate" x-text="file.fileName"></span>
-                        </button>
-                    </template>
-                    <template x-if="workspaceFiles.length === 0">
-                        <div class="col-span-2 text-center py-4 text-xs font-bold text-slate-400 italic">No documents in workspace. Please upload documents first!</div>
-                    </template>
-                </div>
-            </div>
-
-            <!-- Selected Attachment Status Indicator Box -->
-            <div x-show="selectedAttachmentId" 
-                 class="mx-4 p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-xs font-bold text-indigo-700 transition-all"
-                 x-transition>
-                <span class="flex items-center gap-1.5 truncate">
-                    <i data-lucide="file-check" class="w-4 h-4 text-indigo-600"></i>
-                    <span>Attachment: </span>
-                    <strong class="truncate" x-text="selectedAttachmentName"></strong>
-                </span>
-                <button type="button" @@click="selectedAttachmentId = null; selectedAttachmentName = '';" class="text-indigo-400 hover:text-indigo-600 transition-colors">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-            </div>
-
-            <!-- Message Input Area -->
-            <div class="p-4 border-t border-slate-100">
-                <template x-if="currentUserRole !== 'Viewer'">
-                    <form @@submit.prevent="sendChatMessageViaAjax()" class="flex gap-2">
-                        <input type="hidden" name="activeChannel" :value="activeChannel">
-                        <input type="hidden" name="selectedFileId" :value="selectedAttachmentId">
-                        
-                        <!-- Paperclip Button -->
-                        <button type="button" 
-                                @@click="attachFileOpen = !attachFileOpen" 
-                                :class="attachFileOpen || selectedAttachmentId ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400 hover:text-slate-600 border border-slate-200'"
-                                class="p-3 rounded-xl flex items-center justify-center transition-all shrink-0">
-                            <i data-lucide="paperclip" class="w-4.5 h-4.5"></i>
-                        </button>
-                        
-                        <input type="text" id="chat-input-field" asp-for="ChatContent" x-model="chatInput" autocomplete="off"
-                               :placeholder="'Message in #' + activeChannel + '...'" required
-                               class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
-                        
-                        <button type="submit" class="bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
-                            <i data-lucide="send" class="w-4 h-4"></i>
-                        </button>
-                    </form>
-                </template>
-                <template x-if="currentUserRole === 'Viewer'">
-                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-bold text-slate-400 italic">
-                        You are viewing as a Viewer. Cannot send messages.
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                        <template x-for="file in workspaceFiles" :key="file.id">
+                            <button type="button" 
+                                    @@click="selectedAttachmentId = file.id; selectedAttachmentName = file.fileName; attachFileOpen = false;"
+                                    :class="selectedAttachmentId === file.id ? 'border-indigo-600 bg-indigo-50/50 text-indigo-700' : 'border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-700'"
+                                    class="p-2.5 border rounded-xl flex items-center gap-2 text-left text-xs font-bold transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                                <span class="truncate" x-text="file.fileName"></span>
+                            </button>
+                        </template>
+                        <template x-if="workspaceFiles.length === 0">
+                            <div class="col-span-2 text-center py-4 text-xs font-bold text-slate-400 italic">No documents in workspace. Click Upload New to attach files!</div>
+                        </template>
                     </div>
-                </template>
+                </div>
+
+                <!-- Selected Attachment Status Indicator Box -->
+                <div x-show="selectedAttachmentId" 
+                     class="mx-4 p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-xs font-bold text-indigo-700 transition-all"
+                     x-transition>
+                    <span class="flex items-center gap-1.5 truncate">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-indigo-600"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></svg>
+                        <span>Attachment: </span>
+                        <strong class="truncate" x-text="selectedAttachmentName"></strong>
+                    </span>
+                    <button type="button" @@click="selectedAttachmentId = null; selectedAttachmentName = '';" class="text-indigo-400 hover:text-indigo-600 transition-colors cursor-pointer flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+
+                <!-- Message Input Area -->
+                <div class="p-4 border-t border-slate-100">
+                    <template x-if="currentUserRole !== 'Viewer'">
+                        <form @@submit.prevent="sendChatMessageViaAjax()" class="flex gap-2">
+                            <input type="hidden" name="activeChannel" :value="activeChannel">
+                            <input type="hidden" name="selectedFileId" :value="selectedAttachmentId">
+                            
+                            <!-- Paperclip Button (Inline SVG to prevent icon missing) -->
+                            <button type="button" 
+                                    @@click="attachFileOpen = !attachFileOpen" 
+                                    :class="attachFileOpen || selectedAttachmentId ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400 hover:text-slate-600 border border-slate-200'"
+                                    class="p-3 rounded-xl flex items-center justify-center transition-all shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4.5 h-4.5"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                            </button>
+                            
+                            <input type="text" id="chat-input-field" asp-for="ChatContent" x-model="chatInput" autocomplete="off"
+                                   :placeholder="'Message in #' + activeChannel + '...'" required
+                                   class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            
+                            <!-- Send Button (Inline SVG to prevent icon missing) -->
+                            <button type="submit" class="bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                            </button>
+                        </form>
+                    </template>
+                    <template x-if="currentUserRole === 'Viewer'">
+                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-bold text-slate-400 italic">
+                            You are viewing as a Viewer. Cannot send messages.
+                        </div>
+                    </template>
+                </div>
             </div>
         </div>
-    </div>
+    }
 
     <!-- ════════════════════════════════════════ -->
     <!-- ─── TAB 4: MEMBERS LIST ─── -->
@@ -1483,14 +1540,6 @@
                     <form method="post" asp-page-handler="UploadFile" enctype="multipart/form-data" class="flex items-center gap-2">
                         <input type="file" asp-for="UploadedFile" class="hidden" id="real-file-upload" onchange="validateAndUploadFile(event)">
                         
-                        @if (Model.ShowVisibilityControls)
-                        {
-                            <select x-show="currentUserRole !== 'Viewer'" asp-for="UploadIsPublic" class="bg-slate-50 border border-slate-200 text-slate-600 rounded-xl px-3 py-2.5 text-xs font-black focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-sm">
-                                <option value="true">🌐 Public (Workspace)</option>
-                                <option value="false">🔒 Private (Only Me)</option>
-                            </select>
-                        }
-                        
                         <button x-show="currentUserRole !== 'Viewer'" type="button" onclick="document.getElementById('real-file-upload').click()" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 cursor-pointer">
                             <i data-lucide="upload-cloud" class="w-4 h-4"></i> Pick & Upload Local File
                         </button>
@@ -1575,13 +1624,6 @@
                         <div @@click="previewFile = JSON.parse(atob('@Model.SerializeFileBase64(file)'))"
                              class="p-4 bg-white/60 hover:bg-white border border-slate-100 hover:border-slate-200 hover:shadow shadow-sm rounded-2xl flex flex-col items-center text-center cursor-pointer transition-all relative group">
                             
-                            @if (Model.ShowVisibilityControls && !file.IsPublic)
-                            {
-                                <div class="absolute top-2 right-2 bg-rose-50 text-rose-500 p-1.5 rounded-lg border border-rose-100 flex items-center justify-center shadow-sm" title="Private File - Visible only to you">
-                                    <i data-lucide="lock" class="w-3.5 h-3.5"></i>
-                                </div>
-                            }
-                            
                             <div class="h-12 w-12 rounded-xl flex items-center justify-center mb-3 @iconColor">
                                 <i data-lucide="@icon" class="w-6 h-6"></i>
                             </div>
@@ -1608,12 +1650,6 @@
                                     <td class="px-6 py-3 text-slate-700">
                                         <div class="flex items-center gap-2">
                                             <span>@file.FileName</span>
-                                            @if (Model.ShowVisibilityControls && !file.IsPublic)
-                                            {
-                                                <span class="bg-rose-50 text-rose-500 px-2 py-0.5 rounded-md border border-rose-100 text-[10px] font-black flex items-center gap-1 shadow-sm">
-                                                    <i data-lucide="lock" class="w-3 h-3"></i> Private
-                                                </span>
-                                            }
                                         </div>
                                     </td>
                                     <td class="px-6 py-3">@file.User.FullName</td>
@@ -1653,16 +1689,6 @@
                         <span class="text-slate-400 uppercase tracking-wider">Uploaded</span>
                         <span class="text-slate-700" x-text="previewFile?.createdAt ? new Date(previewFile.createdAt).toLocaleDateString('en-US') : 'Just now'"></span>
                     </div>
-                    @if (Model.ShowVisibilityControls)
-                    {
-                        <div class="flex justify-between items-center">
-                            <span class="text-slate-400 uppercase tracking-wider">Visibility</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-sm"
-                                  :class="previewFile?.isPublic ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-rose-50 text-rose-500 border border-rose-100'">
-                                <span x-text="previewFile?.isPublic ? '🌐 Public' : '🔒 Private'"></span>
-                            </span>
-                        </div>
-                    }
                 </div>
                 <a :href="'/' + previewFile?.fileUrl" class="w-full py-3 mt-8 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center gap-2 transition-all" download>
                     <i data-lucide="download" class="w-4 h-4"></i> Download File
@@ -1937,7 +1963,7 @@
                                         <button type="button" 
                                                 @@click="insertCommentSuggestion('@@' + member.fullName)"
                                                 class="w-full text-left px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl flex items-center gap-2 transition-all">
-                                            <i data-lucide="user" class="w-3 h-3 opacity-60"></i>
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 opacity-60"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                                             <span x-text="member.fullName"></span>
                                         </button>
                                     </template>
@@ -1954,7 +1980,7 @@
                                         <button type="button" 
                                                 @@click="insertCommentSuggestion('#' + task.title)"
                                                 class="w-full text-left px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-600 rounded-xl flex items-center gap-2 transition-all">
-                                            <i data-lucide="hash" class="w-3 h-3 opacity-60"></i>
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 opacity-60"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>
                                             <span x-text="task.title"></span>
                                         </button>
                                     </template>
@@ -1972,7 +1998,7 @@
                             <input type="text" id="task-comment-field" asp-for="CommentContent" x-model="newCommentContent" placeholder="Post a comment..." required autocomplete="off"
                                    class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                             <button type="submit" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
-                                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                             </button>
                         </form>
                     </template>
@@ -2333,6 +2359,8 @@
                             if (clean) {
                                 if (!channels.includes(clean)) {
                                     channels.push(clean);
+                                    this.channelOwners[clean] = this.currentUserId;
+                                    this.saveChannelRules();
                                 }
                                 activeChannel = clean;
                                 createChannelOpen = false;
@@ -2346,6 +2374,67 @@
                 <button type="button" 
                         @@click="createChannelOpen = false" 
                         class="flex-1 py-3.5 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-2xl font-bold transition-all">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── MANAGE CHANNEL ACCESS MODAL ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="inviteChannelOpen" 
+         class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
+         style="display: none;"
+         x-transition x-cloak>
+        
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-md p-8 relative flex flex-col gap-6"
+             @@click.away="inviteChannelOpen = false">
+            
+            <button @@click="inviteChannelOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+
+            <div class="flex items-center gap-3">
+                <div class="h-10 w-10 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-black text-slate-800">Manage Channel Access</h3>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5" x-text="'Channel: #' + activeChannel"></p>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <p class="text-[11px] font-bold text-slate-400 leading-normal">
+                    Select the workspace members who are allowed to see and chat in this private channel.
+                </p>
+
+                <!-- Members List with checkboxes -->
+                <div class="border border-slate-100 rounded-2xl p-4 max-h-60 overflow-y-auto space-y-2.5">
+                    <template x-for="member in workspaceMembers" :key="member.id">
+                        <label class="flex items-center justify-between p-2.5 hover:bg-slate-50 rounded-xl transition-all cursor-pointer select-none">
+                            <span class="flex items-center gap-2">
+                                <div class="h-7 w-7 rounded-full bg-indigo-50 border border-indigo-150 flex items-center justify-center text-[9px] font-black text-indigo-650"
+                                     x-text="member.fullName.split(' ').map(n => n[0]).join('')"></div>
+                                <span class="text-xs font-bold text-slate-700" x-text="member.fullName"></span>
+                            </span>
+                            <input type="checkbox" :value="member.id" x-model="selectedChannelMembers"
+                                   class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-600 focus:ring-indigo-500 transition-all">
+                        </label>
+                    </template>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button type="button" 
+                        @@click="saveChannelInvite()"
+                        class="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-md shadow-indigo-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                    Save Changes
+                </button>
+                <button type="button" 
+                        @@click="inviteChannelOpen = false" 
+                        class="flex-1 py-3.5 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-2xl font-bold transition-all cursor-pointer">
                     Cancel
                 </button>
             </div>
@@ -2413,6 +2502,10 @@
                 attachFileOpen: false,
                 selectedAttachmentId: null,
                 selectedAttachmentName: '',
+                lockedChannels: {},
+                channelOwners: {},
+                selectedChannelMembers: [],
+                inviteChannelOpen: false,
 
                 // Bootstrap data sets serialized from C# models
                 chatMessages: JSON.parse(atob('@Model.SerializeChatMessagesBase64()')),
@@ -2493,16 +2586,159 @@
                     });
                 },
 
+                get visibleChannels() {
+                    return this.channels.filter(chan => {
+                        if (chan === 'general') return true;
+                        if (!this.lockedChannels[chan] || this.lockedChannels[chan].length === 0) return true;
+                        
+                        const isOwnerOrManager = this.currentUserRole === 'Owner' || this.currentUserRole === 'Manager';
+                        if (isOwnerOrManager) return true;
+                        
+                        return this.lockedChannels[chan].includes(this.currentUserId);
+                    });
+                },
+
                 get filteredMessages() {
-                    return this.chatMessages.filter(msg => msg.channel === this.activeChannel).map(msg => {
-                        let attachment = null;
-                        const fileRegex = /\[file:([a-f0-9-]{36})\]/i;
-                        const match = msg.rawContent.match(fileRegex);
-                        if (match) {
-                            const fileId = match[1];
-                            attachment = this.workspaceFiles.find(f => f.id === fileId);
+                    return this.chatMessages
+                        .filter(msg => msg.channel === this.activeChannel && !msg.rawContent.startsWith('[system:'))
+                        .map(msg => {
+                            let attachment = null;
+                            const fileRegex = /\[file:([a-f0-9-]{36})\]/i;
+                            const match = msg.rawContent.match(fileRegex);
+                            if (match) {
+                                const fileId = match[1];
+                                attachment = this.workspaceFiles.find(f => f.id === fileId);
+                            }
+                            return { ...msg, attachment };
+                        });
+                },
+
+                parseSystemRules() {
+                    this.lockedChannels = {};
+                    this.channelOwners = {};
+                    const sorted = [...this.chatMessages].sort((a, b) => new Date(a.sentAt) - new Date(b.sentAt));
+                    sorted.forEach(msg => {
+                        if (msg.rawContent && msg.rawContent.startsWith('[system:channel_rules]')) {
+                            try {
+                                const jsonStr = msg.rawContent.substring('[system:channel_rules]'.length);
+                                const payload = JSON.parse(jsonStr);
+                                if (payload) {
+                                    if (payload.lockedChannels) {
+                                        this.lockedChannels = payload.lockedChannels;
+                                    }
+                                    if (payload.channelOwners) {
+                                        this.channelOwners = payload.channelOwners;
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("Failed to parse system channel rules:", e);
+                            }
                         }
-                        return { ...msg, attachment };
+                    });
+                    if (!this.visibleChannels.includes(this.activeChannel)) {
+                        this.activeChannel = 'general';
+                    }
+                },
+
+                toggleChannelLock() {
+                    if (this.lockedChannels[this.activeChannel]) {
+                        delete this.lockedChannels[this.activeChannel];
+                    } else {
+                        this.lockedChannels[this.activeChannel] = [this.currentUserId];
+                    }
+                    this.saveChannelRules();
+                },
+
+                openChannelInvite() {
+                    this.selectedChannelMembers = this.lockedChannels[this.activeChannel] ? [...this.lockedChannels[this.activeChannel]] : [this.currentUserId];
+                    this.inviteChannelOpen = true;
+                },
+
+                saveChannelInvite() {
+                    if (this.workspaceOwnerId && !this.selectedChannelMembers.includes(this.workspaceOwnerId)) {
+                        this.selectedChannelMembers.push(this.workspaceOwnerId);
+                    }
+                    if (this.currentUserId && !this.selectedChannelMembers.includes(this.currentUserId)) {
+                        this.selectedChannelMembers.push(this.currentUserId);
+                    }
+                    this.lockedChannels[this.activeChannel] = [...this.selectedChannelMembers];
+                    this.inviteChannelOpen = false;
+                    this.saveChannelRules();
+                },
+
+                saveChannelRules() {
+                    const payload = '[system:channel_rules]' + JSON.stringify({ 
+                        lockedChannels: this.lockedChannels,
+                        channelOwners: this.channelOwners
+                    });
+                    const formData = new FormData();
+                    formData.append('ChatContent', payload);
+                    formData.append('activeChannel', 'general');
+
+                    const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                    if (tokenInput) {
+                        formData.append('__RequestVerificationToken', tokenInput.value);
+                    }
+
+                    const joinCode = '@Model.Workspace.JoinCode';
+
+                    fetch(`/WorkspaceDetail/${joinCode}?handler=SendChatMessage`, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(async res => {
+                        if (!res.ok) {
+                            console.error('Failed to save channel rules.');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error saving channel rules:', err);
+                    });
+                },
+
+                uploadFileDirectly(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    const formData = new FormData();
+                    formData.append('UploadedFile', file);
+
+                    const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                    if (tokenInput) {
+                        formData.append('__RequestVerificationToken', tokenInput.value);
+                    }
+
+                    const joinCode = '@Model.Workspace.JoinCode';
+
+                    fetch(`/WorkspaceDetail/${joinCode}?handler=UploadFile`, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(async res => {
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data && data.success && data.file) {
+                                this.workspaceFiles.unshift(data.file);
+                                this.selectedAttachmentId = data.file.id;
+                                this.selectedAttachmentName = data.file.fileName;
+                                this.attachFileOpen = false;
+                            }
+                        } else {
+                            const errData = await res.json().catch(() => ({}));
+                            alert(errData.message || 'File upload failed. Ensure the file is not too large and the name is valid.');
+                        }
+                        event.target.value = '';
+                    })
+                    .catch(err => {
+                        console.error('Error uploading file directly:', err);
+                        alert('An error occurred during upload.');
+                        event.target.value = '';
                     });
                 },
 
@@ -2781,6 +3017,9 @@
                     }
                     this.isEditing = false;
                     this.detailOpen = true;
+                    this.$nextTick(() => {
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                    });
                 },
 
                 sendChatMessageViaAjax() {
@@ -2857,6 +3096,7 @@
                 init() {
                     this.timeSlots = this.generateTimeSlots();
                     this.scrollChatToBottom();
+                    this.parseSystemRules();
                     this.$watch('globalSearchQuery', value => this.searchQuery = value);
                     this.$watch('activeTab', value => {
                         localStorage.setItem('unigrid_workspace_tab_' + '@Model.Workspace.JoinCode', value);
@@ -2869,7 +3109,7 @@
                     // Bootstrap channels
                     const extracted = ['general'];
                     this.chatMessages.forEach(msg => {
-                        if (msg.channel && !extracted.includes(msg.channel)) {
+                        if (msg.channel && !extracted.includes(msg.channel) && !msg.rawContent.startsWith('[system:')) {
                             extracted.push(msg.channel);
                         }
                     });
@@ -2885,8 +3125,12 @@
                         console.log("SignalR Chat Msg:", payload);
                         if (!this.chatMessages.some(m => m.id === payload.id)) {
                             this.chatMessages.push(payload);
-                            if (this.activeTab === 'chat' && this.activeChannel === payload.channel) {
-                                this.scrollChatToBottom();
+                            if (payload.rawContent && payload.rawContent.startsWith('[system:channel_rules]')) {
+                                this.parseSystemRules();
+                            } else {
+                                if (this.activeTab === 'chat' && this.activeChannel === payload.channel) {
+                                    this.scrollChatToBottom();
+                                }
                             }
                         }
                     });
