@@ -22,8 +22,20 @@ builder.Services.AddControllers()
 builder.Services.AddSignalR();
 builder.Services.AddMemoryCache();
 
+// Register Unit of Work and Repositories
+builder.Services.AddScoped<unigrid.Data.Repositories.IUnitOfWork, unigrid.Data.Repositories.UnitOfWork>();
+builder.Services.AddScoped<unigrid.Data.Repositories.IWorkspaceRepository, unigrid.Data.Repositories.WorkspaceRepository>();
+builder.Services.AddScoped<unigrid.Data.Repositories.ITaskRepository, unigrid.Data.Repositories.TaskRepository>();
+builder.Services.AddScoped<unigrid.Data.Repositories.IFileRepository, unigrid.Data.Repositories.FileRepository>();
+builder.Services.AddScoped<unigrid.Data.Repositories.IMemberRepository, unigrid.Data.Repositories.MemberRepository>();
+builder.Services.AddScoped<unigrid.Data.Repositories.IChatRepository, unigrid.Data.Repositories.ChatRepository>();
+
 // Register Services
 builder.Services.AddScoped<unigrid.Services.IAuthService, unigrid.Services.AuthService>();
+builder.Services.AddScoped<unigrid.Services.IWorkspaceService, unigrid.Services.WorkspaceService>();
+builder.Services.AddScoped<unigrid.Services.ITaskService, unigrid.Services.TaskService>();
+builder.Services.AddScoped<unigrid.Services.IFileService, unigrid.Services.FileService>();
+builder.Services.AddScoped<unigrid.Services.IChatService, unigrid.Services.ChatService>();
 
 // Enable Data Protection Key Persistence to keep session states active across app executions/restarts
 builder.Services.AddDataProtection()
