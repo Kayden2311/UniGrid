@@ -70,13 +70,28 @@
 
 ## 💻 Tech Stack Architecture
 
-UniGrid implements a unified, server-rendered **SPA-hybrid** architecture leveraging Razor Pages and client-side reactive components for maximum performance and fluid transitions:
+UniGrid is built on a unified, high-performance **SPA-hybrid** architecture leveraging Razor Pages, client-side reactive components, and a decoupled **Controller-Services-Pages-Repositories** layered clean design pattern:
 
-* **Backend:** ASP.NET Core 10.0 (Razor Pages), Entity Framework Core (EF Core).
+### 🏗️ Layered Clean Architecture
+* **Presentation Layer (Razor Pages & API Controllers):**
+  * ASP.NET Core 10.0 Razor Pages serving as light view-controllers for initial HTML rendering.
+  * High-speed REST API Controllers (`api/tasks`, `api/chat`, `api/files`, `api/members`) supporting AJAX dynamic components and drag-and-drop Kanban updates.
+* **Business Logic Layer (Services):**
+  * `IWorkspaceService` & `WorkspaceService`: Controls succession, invites, plan constraints, settings virtualization, and caches.
+  * `ITaskService` & `TaskService`: Oversees task creations, comment feeds, schedules cleanup, and SignalR socket dispatches.
+  * `IFileService` & `FileService`: Governs disk I/O, filename traversals security, and tier-based quota limit checks.
+  * `IChatService` & `ChatService`: Coordinates real-time group timelines and channel moderation boundaries.
+* **Data Access Layer (Repositories & Unit of Work):**
+  * Entity Framework Core (EF Core) utilizing SQL Server connection retry policies.
+  * Strongly-typed Repositories (`IWorkspaceRepository`, `ITaskRepository`, `IFileRepository`, `IMemberRepository`, `IChatRepository`) isolating EF queries.
+  * `IUnitOfWork` (Unit of Work pattern) securing atomic transactional commits.
+
+### 🛠️ Core Technology Stack
 * **Database:** Microsoft SQL Server (LocalDB / Express).
-* **Real-time Channels:** ASP.NET Core SignalR (WebSockets fallback).
-* **Frontend Scripting:** Alpine.js (State management, tab systems, calendar nodes).
-* **Styling & Assets:** Vanilla CSS, Tailwind CSS CDN integration, Lucide Icons.
+* **Real-time Engine:** ASP.NET Core SignalR (WebSockets with fallback).
+* **Caching Layer:** `IMemoryCache` with central invalidation routines.
+* **Frontend Scripting:** Alpine.js (reactive state management, dynamic tab-swaps, calendar overlays).
+* **Styling & Assets:** Vanilla CSS, Tailwind CSS CDN responsive layouts, Lucide Icons.
 
 ---
 
