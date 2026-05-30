@@ -27,6 +27,8 @@ public partial class Workspace
     
     public Guid? FederationId { get; set; }
 
+    public string? SettingsJson { get; set; }
+
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
     public virtual ICollection<Billing> Billings { get; set; } = new List<Billing>();

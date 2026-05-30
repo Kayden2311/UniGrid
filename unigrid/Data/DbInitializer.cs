@@ -242,6 +242,13 @@ namespace unigrid.Data
                     END
                 ");
 
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Workspaces]') AND name = 'SettingsJson')
+                    BEGIN
+                        ALTER TABLE [dbo].[Workspaces] ADD [SettingsJson] NVARCHAR(MAX) NULL;
+                    END
+                ");
+
                 // WorkspaceMembers.DisplayRole
                 await context.Database.ExecuteSqlRawAsync(@"
                     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[WorkspaceMembers]') AND name = 'DisplayRole')

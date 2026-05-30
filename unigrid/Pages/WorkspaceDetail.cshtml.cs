@@ -216,8 +216,7 @@ public class WorkspaceDetailModel : PageModel
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
         
-        var memberRecord = Members.FirstOrDefault(m => m.UserId == CurrentUser.Id);
-        bool canCreate = (Workspace.OwnerId == CurrentUser.Id) || (CurrentUserRole == "Manager") || (memberRecord != null && memberRecord.CanCreateTask == true);
+        bool canCreate = IsMemberAllowed(CurrentUser.Id, "disabledCreateTaskUsers", CurrentUserRole);
         if (!canCreate) return Forbid();
 
         if (!string.IsNullOrEmpty(NewTaskTitle))
@@ -351,8 +350,7 @@ public class WorkspaceDetailModel : PageModel
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
         
-        var memberRecord = Members.FirstOrDefault(m => m.UserId == CurrentUser.Id);
-        bool canEdit = (Workspace.OwnerId == CurrentUser.Id) || (CurrentUserRole == "Manager") || (memberRecord != null && memberRecord.CanEditTask == true);
+        bool canEdit = IsMemberAllowed(CurrentUser.Id, "disabledEditTaskUsers", CurrentUserRole);
         if (!canEdit) return Forbid();
 
         var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == editTaskId && t.WorkspaceId == Workspace.Id);
@@ -581,7 +579,232 @@ public class WorkspaceDetailModel : PageModel
 
         if (!string.IsNullOrEmpty(ChatContent) && ChatRoom != null)
         {
-            ChatContent = Helpers.InputSanitizer.SanitizeInput(ChatContent);
+            if (ChatContent.StartsWith("[system:channel_rules]"))
+            {
+                try
+                {
+                    string jsonStr = ChatContent.Substring("[system:channel_rules]".Length);
+                    var incomingPayload = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(jsonStr);
+                    if (incomingPayload != null && incomingPayload["allChannels"] != null)
+                    {
+                        var incomingChannels = System.Text.Json.JsonSerializer.Deserialize<List<string>>(incomingPayload["allChannels"].ToJsonString()) ?? new List<string>();
+                        
+                        var existingChannels = new List<string> { "general" };
+                        string? currentSettings = Workspace.SettingsJson;
+                        if (!string.IsNullOrEmpty(currentSettings))
+                        {
+                            try
+                            {
+                                var existingPayload = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(currentSettings);
+                                if (existingPayload != null && existingPayload["allChannels"] != null)
+                                {
+                                    existingChannels = System.Text.Json.JsonSerializer.Deserialize<List<string>>(existingPayload["allChannels"].ToJsonString()) ?? existingChannels;
+                                }
+                            }
+                            catch {}
+                        }
+
+                        bool isAddingChannel = incomingChannels.Any(c => !existingChannels.Contains(c));
+                        if (isAddingChannel)
+                        {
+                            if (!IsMemberAllowedToCreateChannel(CurrentUser.Id))
+                            {
+                                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                                {
+                                    return new BadRequestObjectResult(new { message = "You do not have permission to create chat channels." });
+                                }
+                                TempData["ErrorMessage"] = "You do not have permission to create chat channels.";
+                                return RedirectToPage(new { joinCode });
+                            }
+                        }
+                        else
+                        {
+                            bool isManagerOrOwner = CurrentUserRole == "Manager" || Workspace.OwnerId == CurrentUser.Id;
+                            if (!isManagerOrOwner)
+                            {
+                                string ch = activeChannel ?? "general";
+                                if (ch != "general")
+                                {
+                                    var channelOwners = new Dictionary<string, string>();
+                                    var channelModerators = new Dictionary<string, List<string>>();
+                                    
+                                    if (!string.IsNullOrEmpty(currentSettings))
+                                    {
+                                        try
+                                        {
+                                            var existingPayload = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(currentSettings);
+                                            if (existingPayload != null)
+                                            {
+                                                if (existingPayload["channelOwners"] != null)
+                                                    channelOwners = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(existingPayload["channelOwners"].ToJsonString()) ?? channelOwners;
+                                                if (existingPayload["channelModerators"] != null)
+                                                    channelModerators = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(existingPayload["channelModerators"].ToJsonString()) ?? channelModerators;
+                                            }
+                                        }
+                                        catch {}
+                                    }
+
+                                    bool isChannelOwner = channelOwners.TryGetValue(ch, out var oId) && oId.ToLower() == CurrentUser.Id.ToString().ToLower();
+                                    bool isChannelMod = channelModerators.TryGetValue(ch, out var mods) && mods.Any(m => m.ToLower() == CurrentUser.Id.ToString().ToLower());
+                                    
+                                    if (!isChannelOwner && !isChannelMod)
+                                    {
+                                        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                                        {
+                                            return new BadRequestObjectResult(new { message = "You do not have permission to manage this channel's access rules." });
+                                        }
+                                        TempData["ErrorMessage"] = "You do not have permission to manage this channel's access rules.";
+                                        return RedirectToPage(new { joinCode });
+                                    }
+
+                                    // Robust self-modification check for Channel Moderators (who are not Channel Owners or Workspace Owners/Managers)
+                                    if (!isChannelOwner)
+                                    {
+                                        // 1. Verify owner of the channel did not change
+                                        string existingOwner = channelOwners.TryGetValue(ch, out var eo) ? eo.ToLower() : "";
+                                        
+                                        var incomingOwners = new Dictionary<string, string>();
+                                        if (incomingPayload["channelOwners"] != null)
+                                        {
+                                            incomingOwners = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(incomingPayload["channelOwners"].ToJsonString()) ?? incomingOwners;
+                                        }
+                                        string incomingOwner = incomingOwners.TryGetValue(ch, out var io) ? io.ToLower() : "";
+                                        
+                                        if (existingOwner != incomingOwner)
+                                        {
+                                            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                                            {
+                                                return new BadRequestObjectResult(new { message = "Only the channel owner or workspace owner/manager can transfer channel ownership." });
+                                            }
+                                            TempData["ErrorMessage"] = "Only the channel owner or workspace owner/manager can transfer channel ownership.";
+                                            return RedirectToPage(new { joinCode });
+                                        }
+
+                                        // 2. Verify their own Access did not change
+                                        var existingLocked = new Dictionary<string, List<string>>();
+                                        if (!string.IsNullOrEmpty(currentSettings))
+                                        {
+                                            try
+                                            {
+                                                var existingPayload = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(currentSettings);
+                                                if (existingPayload != null && existingPayload["lockedChannels"] != null)
+                                                {
+                                                    existingLocked = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(existingPayload["lockedChannels"].ToJsonString()) ?? existingLocked;
+                                                }
+                                            }
+                                            catch {}
+                                        }
+                                        
+                                        var incomingLocked = new Dictionary<string, List<string>>();
+                                        if (incomingPayload["lockedChannels"] != null)
+                                        {
+                                            incomingLocked = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(incomingPayload["lockedChannels"].ToJsonString()) ?? incomingLocked;
+                                        }
+
+                                        var existingAccessList = existingLocked.TryGetValue(ch, out var elist) ? elist.Select(id => id.ToLower()).ToList() : new List<string>();
+                                        var incomingAccessList = incomingLocked.TryGetValue(ch, out var ilist) ? ilist.Select(id => id.ToLower()).ToList() : new List<string>();
+
+                                        string myId = CurrentUser.Id.ToString().ToLower();
+                                        bool hadAccess = existingAccessList.Contains(myId);
+                                        bool hasAccessNow = incomingAccessList.Contains(myId);
+
+                                        if (hadAccess != hasAccessNow)
+                                        {
+                                            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                                            {
+                                                return new BadRequestObjectResult(new { message = "You cannot modify your own channel access." });
+                                            }
+                                            TempData["ErrorMessage"] = "You cannot modify your own channel access.";
+                                            return RedirectToPage(new { joinCode });
+                                        }
+
+                                        // 3. Verify their own Mod status did not change
+                                        var incomingModsDict = new Dictionary<string, List<string>>();
+                                        if (incomingPayload["channelModerators"] != null)
+                                        {
+                                            incomingModsDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(incomingPayload["channelModerators"].ToJsonString()) ?? incomingModsDict;
+                                        }
+                                        
+                                        var existingModsList = channelModerators.TryGetValue(ch, out var emods) ? emods.Select(id => id.ToLower()).ToList() : new List<string>();
+                                        var incomingModsList = incomingModsDict.TryGetValue(ch, out var imods) ? imods.Select(id => id.ToLower()).ToList() : new List<string>();
+
+                                        bool wasMod = existingModsList.Contains(myId);
+                                        bool isModNow = incomingModsList.Contains(myId);
+
+                                        if (wasMod != isModNow)
+                                        {
+                                            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                                            {
+                                                return new BadRequestObjectResult(new { message = "You cannot modify your own channel moderator status." });
+                                            }
+                                            TempData["ErrorMessage"] = "You cannot modify your own channel moderator status.";
+                                            return RedirectToPage(new { joinCode });
+                                        }
+
+                                        // 4. Verify they did not edit moderators for other users (only Channel Owners or Workspace Managers can add/remove other moderators)
+                                        var otherExistingMods = existingModsList.Where(id => id != myId).OrderBy(id => id).ToList();
+                                        var otherIncomingMods = incomingModsList.Where(id => id != myId).OrderBy(id => id).ToList();
+                                        if (!otherExistingMods.SequenceEqual(otherIncomingMods))
+                                        {
+                                            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                                            {
+                                                return new BadRequestObjectResult(new { message = "Only the channel owner or workspace owner/manager can modify moderator roles." });
+                                            }
+                                            TempData["ErrorMessage"] = "Only the channel owner or workspace owner/manager can modify moderator roles.";
+                                            return RedirectToPage(new { joinCode });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Save the system channel rules directly to Workspace settings (query from DB to avoid EF Core tracking graph conflicts)
+                    var dbWorkspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.Id == Workspace.Id);
+                    if (dbWorkspace != null)
+                    {
+                        dbWorkspace.SettingsJson = jsonStr;
+                    }
+                    await _context.SaveChangesAsync();
+
+                    // Evict Cache
+                    _cache.Remove($"Workspace_{joinCode}");
+
+                    // Broadcast real-time SignalR rules update payload to all active clients
+                    var broadcastPayload = new
+                    {
+                        id = Guid.NewGuid(),
+                        roomId = ChatRoom.Id,
+                        senderId = CurrentUser.Id,
+                        senderName = CurrentUser.FullName,
+                        content = "[system:channel_rules]",
+                        rawContent = ChatContent,
+                        sentAt = DateTime.UtcNow,
+                        channel = "general"
+                    };
+                    await _hubContext.Clients.Group(Workspace.Id.ToString()).SendAsync("ReceiveChatMessage", broadcastPayload);
+
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return new JsonResult(new { success = true });
+                    }
+                    return RedirectToPage(new { joinCode });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to validate incoming system rules payload");
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return new BadRequestObjectResult(new { message = "Invalid channel rules payload." });
+                    }
+                    return RedirectToPage(new { joinCode });
+                }
+            }
+
+            if (!ChatContent.StartsWith("[system:"))
+            {
+                ChatContent = Helpers.InputSanitizer.SanitizeInput(ChatContent);
+            }
             string contentWithChannel = ChatContent;
             if (!string.IsNullOrEmpty(activeChannel) && activeChannel != "general")
             {
@@ -1047,7 +1270,7 @@ public class WorkspaceDetailModel : PageModel
         return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateMemberRoleAsync(string joinCode, Guid memberId, string newRole, string newDisplayRole, bool canDeleteFile, bool canCreateTask, bool canEditTask)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateMemberRoleAsync(string joinCode, Guid memberId, string newRole, string newDisplayRole, bool canDeleteFile, bool canCreateTask, bool canEditTask, bool canCreateChannel, bool canDeleteTask)
     {
         var result = await LoadWorkspaceDataAsync(joinCode);
         if (!result)
@@ -1117,13 +1340,148 @@ public class WorkspaceDetailModel : PageModel
         _context.WorkspaceMembers.Update(memberToUpdate);
         await _context.SaveChangesAsync();
 
+        // -------------------------------------------------------------
+        // SCHEMA-LESS VIRTUAL PERMISSIONS MANAGEMENT
+        // Save all granular member permissions virtually in Workspace.SettingsJson
+        // -------------------------------------------------------------
+        if (ChatRoom != null)
+        {
+            string? jsonStr = Workspace.SettingsJson;
+
+            var disabledCreateChannel = new List<string>();
+            var disabledCreateTask = new List<string>();
+            var disabledEditTask = new List<string>();
+            var disabledDeleteFile = new List<string>();
+            var disabledDeleteTask = new List<string>();
+
+            var lockedChannels = new Dictionary<string, List<string>>();
+            var channelOwners = new Dictionary<string, string>();
+            var channelModerators = new Dictionary<string, List<string>>();
+            var allChannels = new List<string> { "general" };
+
+            if (!string.IsNullOrEmpty(jsonStr))
+            {
+                try
+                {
+                    var jsonNode = System.Text.Json.Nodes.JsonNode.Parse(jsonStr);
+                    if (jsonNode != null)
+                    {
+                        var lockedChannelsNode = jsonNode["lockedChannels"];
+                        if (lockedChannelsNode != null)
+                        {
+                            lockedChannels = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(lockedChannelsNode.ToJsonString()) ?? lockedChannels;
+                        }
+                        var channelOwnersNode = jsonNode["channelOwners"];
+                        if (channelOwnersNode != null)
+                        {
+                            channelOwners = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(channelOwnersNode.ToJsonString()) ?? channelOwners;
+                        }
+                        var channelModeratorsNode = jsonNode["channelModerators"];
+                        if (channelModeratorsNode != null)
+                        {
+                            channelModerators = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(channelModeratorsNode.ToJsonString()) ?? channelModerators;
+                        }
+                        var allChannelsNode = jsonNode["allChannels"];
+                        if (allChannelsNode != null)
+                        {
+                            allChannels = System.Text.Json.JsonSerializer.Deserialize<List<string>>(allChannelsNode.ToJsonString()) ?? allChannels;
+                        }
+                        
+                        // Parse all current virtual settings
+                        disabledCreateChannel = ParseListFromJsonNode(jsonNode["disabledCreateChannelUsers"]);
+                        disabledCreateTask = ParseListFromJsonNode(jsonNode["disabledCreateTaskUsers"]);
+                        disabledEditTask = ParseListFromJsonNode(jsonNode["disabledEditTaskUsers"]);
+                        disabledDeleteFile = ParseListFromJsonNode(jsonNode["disabledDeleteFileUsers"]);
+                        disabledDeleteTask = ParseListFromJsonNode(jsonNode["disabledDeleteTaskUsers"]);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to parse system channel rules inside role update.");
+                }
+            }
+
+            string targetUserGuidStr = memberId.ToString().ToLower();
+            
+            UpdateDisabledListHelper(disabledCreateChannel, targetUserGuidStr, canCreateChannel);
+            UpdateDisabledListHelper(disabledCreateTask, targetUserGuidStr, canCreateTask);
+            UpdateDisabledListHelper(disabledEditTask, targetUserGuidStr, canEditTask);
+            UpdateDisabledListHelper(disabledDeleteFile, targetUserGuidStr, canDeleteFile);
+            UpdateDisabledListHelper(disabledDeleteTask, targetUserGuidStr, canDeleteTask);
+
+            var newPayload = new
+            {
+                lockedChannels = lockedChannels,
+                channelOwners = channelOwners,
+                channelModerators = channelModerators,
+                allChannels = allChannels,
+                disabledCreateChannelUsers = disabledCreateChannel,
+                disabledCreateTaskUsers = disabledCreateTask,
+                disabledEditTaskUsers = disabledEditTask,
+                disabledDeleteFileUsers = disabledDeleteFile,
+                disabledDeleteTaskUsers = disabledDeleteTask
+            };
+
+            var serializedPayload = System.Text.Json.JsonSerializer.Serialize(newPayload);
+
+            // Save to database Workspace table (query from DB to avoid EF Core tracking graph conflicts)
+            var dbWorkspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.Id == Workspace.Id);
+            if (dbWorkspace != null)
+            {
+                dbWorkspace.SettingsJson = serializedPayload;
+            }
+            await _context.SaveChangesAsync();
+
+            // Broadcast real-time SignalR rules update payload to all active clients
+            var broadcastPayload = new
+            {
+                id = Guid.NewGuid(),
+                roomId = ChatRoom.Id,
+                senderId = CurrentUser.Id,
+                senderName = CurrentUser.FullName,
+                content = "[system:channel_rules]",
+                rawContent = "[system:channel_rules]" + serializedPayload,
+                sentAt = DateTime.UtcNow,
+                channel = "general"
+            };
+            await _hubContext.Clients.Group(Workspace.Id.ToString()).SendAsync("ReceiveChatMessage", broadcastPayload);
+        }
+
         // Evict caches
         _cache.Remove($"Workspace_{joinCode}");
         _cache.Remove($"WorkspaceMembers_{Workspace.Id}");
         EvictAllWorkspaceMembersCache(Workspace.Id);
 
-        TempData["SuccessMessage"] = "Member role and display title updated successfully.";
+        TempData["SuccessMessage"] = "Member role and permissions updated successfully.";
         return RedirectToPage("/WorkspaceDetail", new { joinCode });
+    }
+
+    private List<string> ParseListFromJsonNode(System.Text.Json.Nodes.JsonNode? node)
+    {
+        if (node == null) return new List<string>();
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<string>>(node.ToJsonString()) ?? new List<string>();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    private void UpdateDisabledListHelper(List<string> list, string userGuidStr, bool allowed)
+    {
+        if (!allowed)
+        {
+            if (!list.Contains(userGuidStr))
+            {
+                list.Add(userGuidStr);
+            }
+        }
+        else
+        {
+            list.Remove(userGuidStr);
+        }
     }
 
     public async System.Threading.Tasks.Task<IActionResult> OnPostLeaveWorkspaceAsync(string joinCode)
@@ -1169,11 +1527,14 @@ public class WorkspaceDetailModel : PageModel
                 successor.Role = "Manager";
                 _context.WorkspaceMembers.Update(successor);
 
-                // If leaving user is the database Workspace.OwnerId, transfer ownership
+                // If leaving user is the database Workspace.OwnerId, transfer ownership (query from DB to avoid EF Core tracking graph conflicts)
                 if (isWorkspaceOwner)
                 {
-                    Workspace.OwnerId = successor.UserId;
-                    _context.Workspaces.Update(Workspace);
+                    var dbWorkspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.Id == Workspace.Id);
+                    if (dbWorkspace != null)
+                    {
+                        dbWorkspace.OwnerId = successor.UserId;
+                    }
                 }
 
                 _logger.LogInformation($"Workspace Succession: User {CurrentUser.Id} is leaving. Promoted user {successor.UserId} to Manager.");
@@ -1221,8 +1582,7 @@ public class WorkspaceDetailModel : PageModel
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
         
-        var memberRecord = Members.FirstOrDefault(m => m.UserId == CurrentUser.Id);
-        bool canDelete = (Workspace.OwnerId == CurrentUser.Id) || (CurrentUserRole == "Manager") || (memberRecord != null && memberRecord.CanDeleteFile == true);
+        bool canDelete = IsMemberAllowed(CurrentUser.Id, "disabledDeleteFileUsers", CurrentUserRole);
         if (!canDelete) return Forbid();
 
         var file = await _context.WorkspaceFiles.FirstOrDefaultAsync(f => f.Id == fileId && f.WorkspaceId == Workspace.Id);
@@ -1252,6 +1612,191 @@ public class WorkspaceDetailModel : PageModel
         return RedirectToPage(new { joinCode });
     }
 
+    public async System.Threading.Tasks.Task<IActionResult> OnPostDeleteTaskAsync(string joinCode, Guid taskId)
+    {
+        if (!await LoadWorkspaceDataAsync(joinCode))
+        {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "Workspace not found or unauthorized." });
+            }
+            return RedirectToPage("/Dashboard");
+        }
+        
+        bool canDelete = IsMemberAllowed(CurrentUser.Id, "disabledDeleteTaskUsers", CurrentUserRole);
+        if (!canDelete)
+        {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "You do not have permission to delete tasks." });
+            }
+            return Forbid();
+        }
+
+        var task = await _context.Tasks
+            .Include(t => t.TaskComments)
+            .Include(t => t.WorkspaceFiles)
+            .FirstOrDefaultAsync(t => t.Id == taskId && t.WorkspaceId == Workspace.Id);
+
+        if (task != null)
+        {
+            // 1. Delete associated personal schedules to prevent foreign key errors
+            var personalSchedules = await _context.PersonalSchedules
+                .Where(ps => ps.TaskId == taskId)
+                .ToListAsync();
+            if (personalSchedules.Any())
+            {
+                _context.PersonalSchedules.RemoveRange(personalSchedules);
+            }
+
+            // 2. Delete associated task comments
+            if (task.TaskComments.Any())
+            {
+                _context.TaskComments.RemoveRange(task.TaskComments);
+            }
+
+            // 3. Clear file bindings (do not delete the files, just set TaskId = null)
+            foreach (var file in task.WorkspaceFiles)
+            {
+                file.TaskId = null;
+                _context.WorkspaceFiles.Update(file);
+            }
+
+            _context.Tasks.Remove(task);
+            await _context.SaveChangesAsync();
+
+            // Evict caches
+            _cache.Remove($"Workspace_{joinCode}");
+            _cache.Remove($"WorkspaceTasks_{Workspace.Id}");
+
+            // SignalR broadcast task deletion!
+            var payload = new { taskId = taskId };
+            await _hubContext.Clients.Group(Workspace.Id.ToString()).SendAsync("ReceiveTaskDeletion", payload);
+
+            TempData["SuccessMessage"] = $"Successfully deleted task '{task.Title}'.";
+            _logger.LogInformation("Task deleted: {TaskId} from Workspace {WorkspaceId}", taskId, Workspace.Id);
+
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new JsonResult(new { success = true, taskId = taskId });
+            }
+        }
+
+        return RedirectToPage(new { joinCode });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostDeleteChatMessageAsync(string joinCode, Guid messageId)
+    {
+        if (!await LoadWorkspaceDataAsync(joinCode))
+        {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "Workspace not found or unauthorized." });
+            }
+            return RedirectToPage("/Dashboard");
+        }
+
+        var message = await _context.ChatMessages
+            .Include(m => m.Sender)
+            .FirstOrDefaultAsync(m => m.Id == messageId && m.RoomId == ChatRoom.Id);
+
+        if (message == null)
+        {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "Message not found." });
+            }
+            return RedirectToPage(new { joinCode });
+        }
+
+        // Authorization:
+        // User must be the message sender OR Workspace Manager/Owner OR Channel Owner/Moderator of that message channel!
+        bool isSender = message.SenderId == CurrentUser.Id;
+        bool isManagerOrOwner = CurrentUserRole == "Manager" || Workspace.OwnerId == CurrentUser.Id;
+        bool isAuthorized = isSender || isManagerOrOwner;
+
+        if (!isAuthorized)
+        {
+            // Check channel ownership/moderators from latest rules message
+            string channelName = "general";
+            string cleanContent = message.Content;
+            if (message.Content.StartsWith("[channel:"))
+            {
+                var endIndex = message.Content.IndexOf("]");
+                if (endIndex > 9)
+                {
+                    channelName = message.Content.Substring(9, endIndex - 9);
+                }
+            }
+
+            if (channelName != "general")
+            {
+                var messages = await _context.ChatMessages
+                    .Where(cm => cm.RoomId == ChatRoom.Id)
+                    .OrderBy(cm => cm.SentAt)
+                    .ToListAsync();
+
+                var latestRulesMsg = messages
+                    .LastOrDefault(m => m.Content != null && m.Content.StartsWith("[system:channel_rules]"));
+
+                var channelOwners = new Dictionary<string, string>();
+                var channelModerators = new Dictionary<string, List<string>>();
+
+                if (latestRulesMsg != null)
+                {
+                    try
+                    {
+                        string jsonStr = latestRulesMsg.Content.Substring("[system:channel_rules]".Length);
+                        var existingPayload = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(jsonStr);
+                        if (existingPayload != null)
+                        {
+                            if (existingPayload["channelOwners"] != null)
+                                channelOwners = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(existingPayload["channelOwners"].ToJsonString()) ?? channelOwners;
+                            if (existingPayload["channelModerators"] != null)
+                                channelModerators = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(existingPayload["channelModerators"].ToJsonString()) ?? channelModerators;
+                        }
+                    }
+                    catch {}
+                }
+
+                bool isChannelOwner = channelOwners.TryGetValue(channelName, out var oId) && oId.ToLower() == CurrentUser.Id.ToString().ToLower();
+                bool isChannelMod = channelModerators.TryGetValue(channelName, out var mods) && mods.Any(m => m.ToLower() == CurrentUser.Id.ToString().ToLower());
+                
+                isAuthorized = isChannelOwner || isChannelMod;
+            }
+        }
+
+        if (!isAuthorized)
+        {
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new BadRequestObjectResult(new { message = "You do not have permission to revoke this message." });
+            }
+            return Forbid();
+        }
+
+        // Soft delete: mark message as deleted
+        message.IsDeleted = true;
+        message.Content = "[deleted_message]" + message.Content; // Append prefix to know it was deleted
+        _context.ChatMessages.Update(message);
+        await _context.SaveChangesAsync();
+
+        _cache.Remove($"WorkspaceChatMessages_{ChatRoom.Id}");
+
+        // Broadcast message deletion via SignalR!
+        var payload = new { messageId = messageId };
+        await _hubContext.Clients.Group(Workspace.Id.ToString()).SendAsync("ReceiveMessageDeletion", payload);
+
+        _logger.LogInformation("Chat message revoked: {MessageId} in Workspace {WorkspaceId} by {UserId}", messageId, Workspace.Id, CurrentUser.Id);
+
+        if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+        {
+            return new JsonResult(new { success = true, messageId = messageId });
+        }
+
+        return RedirectToPage(new { joinCode });
+    }
+
     public async System.Threading.Tasks.Task<IActionResult> OnPostTransferOwnershipAsync(string joinCode, Guid newOwnerId)
     {
         var result = await LoadWorkspaceDataAsync(joinCode);
@@ -1268,6 +1813,7 @@ public class WorkspaceDetailModel : PageModel
         }
 
         var targetMember = await _context.WorkspaceMembers
+            .Include(m => m.User)
             .FirstOrDefaultAsync(m => m.WorkspaceId == Workspace.Id && m.UserId == newOwnerId);
 
         if (targetMember == null)
@@ -1291,7 +1837,6 @@ public class WorkspaceDetailModel : PageModel
         {
             // Demote the current owner to Vice Manager
             currentOwnerMember.Role = "Vice Manager";
-            _context.WorkspaceMembers.Update(currentOwnerMember);
         }
 
         // 2. Promote the target member to Manager
@@ -1299,11 +1844,13 @@ public class WorkspaceDetailModel : PageModel
         targetMember.CanCreateTask = true;
         targetMember.CanEditTask = true;
         targetMember.CanDeleteFile = true;
-        _context.WorkspaceMembers.Update(targetMember);
 
-        // 3. Update Workspace OwnerId in the database
-        Workspace.OwnerId = newOwnerId;
-        _context.Workspaces.Update(Workspace);
+        // 3. Update Workspace OwnerId in the database (query from DB to avoid EF Core tracking graph conflicts)
+        var dbWorkspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.Id == Workspace.Id);
+        if (dbWorkspace != null)
+        {
+            dbWorkspace.OwnerId = newOwnerId;
+        }
 
         await _context.SaveChangesAsync();
 
@@ -1318,5 +1865,108 @@ public class WorkspaceDetailModel : PageModel
 
         TempData["SuccessMessage"] = $"Successfully transferred workspace management to {targetMember.User.FullName}.";
         return RedirectToPage("/WorkspaceDetail", new { joinCode });
+    }
+
+    public bool IsMemberAllowed(Guid memberId, string key, string role)
+    {
+        if (Workspace == null) return true;
+        if (Workspace.OwnerId == memberId) return true;
+
+        var memberRecord = Members?.FirstOrDefault(m => m.UserId == memberId);
+        if (memberRecord != null && memberRecord.Role == "Manager")
+        {
+            return true;
+        }
+
+        // Viewers are denied by default, others are allowed by default
+        bool defaultAllowed = (role != "Viewer");
+
+        if (!string.IsNullOrEmpty(Workspace.SettingsJson))
+        {
+            try
+            {
+                var payload = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(Workspace.SettingsJson);
+                if (payload != null && payload[key] != null)
+                {
+                    var disabledList = System.Text.Json.JsonSerializer.Deserialize<List<string>>(payload[key].ToJsonString());
+                    if (disabledList != null)
+                    {
+                        return !disabledList.Contains(memberId.ToString().ToLower());
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore parsing issues
+            }
+        }
+
+        return defaultAllowed;
+    }
+
+    public bool IsMemberAllowedToCreateChannel(Guid memberId)
+    {
+        var role = Members?.FirstOrDefault(m => m.UserId == memberId)?.Role ?? "Member";
+        return IsMemberAllowed(memberId, "disabledCreateChannelUsers", role);
+    }
+
+    public string GetLockedChannelsJson()
+    {
+        if (Workspace == null || string.IsNullOrEmpty(Workspace.SettingsJson)) return "{}";
+        try
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(Workspace.SettingsJson);
+            if (node != null && node["lockedChannels"] != null)
+            {
+                return node["lockedChannels"].ToJsonString();
+            }
+        }
+        catch {}
+        return "{}";
+    }
+
+    public string GetChannelOwnersJson()
+    {
+        if (Workspace == null || string.IsNullOrEmpty(Workspace.SettingsJson)) return "{}";
+        try
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(Workspace.SettingsJson);
+            if (node != null && node["channelOwners"] != null)
+            {
+                return node["channelOwners"].ToJsonString();
+            }
+        }
+        catch {}
+        return "{}";
+    }
+
+    public string GetChannelModeratorsJson()
+    {
+        if (Workspace == null || string.IsNullOrEmpty(Workspace.SettingsJson)) return "{}";
+        try
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(Workspace.SettingsJson);
+            if (node != null && node["channelModerators"] != null)
+            {
+                return node["channelModerators"].ToJsonString();
+            }
+        }
+        catch {}
+        return "{}";
+    }
+
+    public string GetChannelsJson()
+    {
+        if (Workspace == null || string.IsNullOrEmpty(Workspace.SettingsJson)) return "[\"general\"]";
+        try
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(Workspace.SettingsJson);
+            if (node != null && node["allChannels"] != null)
+            {
+                return node["allChannels"].ToJsonString();
+            }
+        }
+        catch {}
+        return "[\"general\"]";
     }
 }
