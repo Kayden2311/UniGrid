@@ -225,6 +225,12 @@ public class WorkspaceDetailModel : PageModel
             NewTaskTitle = Helpers.InputSanitizer.SanitizeInput(NewTaskTitle);
             NewTaskDescription = Helpers.InputSanitizer.SanitizeInput(NewTaskDescription);
 
+            // Default time component to 23:50 (11:50 PM) if time was omitted (Midnight 12:00 AM)
+            if (NewTaskDueDate.HasValue && NewTaskDueDate.Value.Hour == 0 && NewTaskDueDate.Value.Minute == 0 && NewTaskDueDate.Value.Second == 0)
+            {
+                NewTaskDueDate = NewTaskDueDate.Value.Date.AddHours(23).AddMinutes(50);
+            }
+
             var task = new unigrid.Models.Task
             {
                 Id = Guid.NewGuid(),
@@ -246,7 +252,7 @@ public class WorkspaceDetailModel : PageModel
                 {
                     Id = Guid.NewGuid(),
                     UserId = task.AssigneeId.Value,
-                    Message = $"Bạn được giao nhiệm vụ '{task.Title}' trong Workspace '{Workspace.Name}' bởi {CurrentUser.FullName}.",
+                    Message = $"You have been assigned the task '{task.Title}' in Workspace '{Workspace.Name}' by {CurrentUser.FullName}.",
                     Type = "TaskAssignment",
                     Link = $"/WorkspaceDetail/{Workspace.JoinCode}",
                     IsRead = false,
@@ -309,11 +315,11 @@ public class WorkspaceDetailModel : PageModel
                 string msg = "";
                 if (status == 3) // Done (Approved)
                 {
-                    msg = $"Nhiệm vụ '{task.Title}' của bạn trong Workspace '{Workspace.Name}' đã được DUYỆT (Approved) bởi {CurrentUser.FullName}.";
+                    msg = $"Your task '{task.Title}' in Workspace '{Workspace.Name}' has been APPROVED by {CurrentUser.FullName}.";
                 }
                 else if ((oldStatus == 2 || oldStatus == 3) && (status == 0 || status == 1)) // Back to Todo/In Progress (Rework)
                 {
-                    msg = $"Nhiệm vụ '{task.Title}' của bạn trong Workspace '{Workspace.Name}' đã được yêu cầu LÀM LẠI (Rework) bởi {CurrentUser.FullName}.";
+                    msg = $"Your task '{task.Title}' in Workspace '{Workspace.Name}' has been requested for REWORK by {CurrentUser.FullName}.";
                 }
 
                 if (!string.IsNullOrEmpty(msg))
@@ -360,6 +366,12 @@ public class WorkspaceDetailModel : PageModel
                 task.Title = Helpers.InputSanitizer.SanitizeInput(editTaskTitle);
                 task.Priority = editTaskPriority;
                 task.AssigneeId = editTaskAssigneeId;
+
+                // Default time component to 23:50 (11:50 PM) if time was omitted (Midnight 12:00 AM)
+                if (editTaskDueDate.HasValue && editTaskDueDate.Value.Hour == 0 && editTaskDueDate.Value.Minute == 0 && editTaskDueDate.Value.Second == 0)
+                {
+                    editTaskDueDate = editTaskDueDate.Value.Date.AddHours(23).AddMinutes(50);
+                }
                 task.DueDate = editTaskDueDate;
             }
             
@@ -381,7 +393,7 @@ public class WorkspaceDetailModel : PageModel
                 {
                     Id = Guid.NewGuid(),
                     UserId = editTaskAssigneeId.Value,
-                    Message = $"Bạn được giao nhiệm vụ '{task.Title}' trong Workspace '{Workspace.Name}' bởi {CurrentUser.FullName}.",
+                    Message = $"You have been assigned the task '{task.Title}' in Workspace '{Workspace.Name}' by {CurrentUser.FullName}.",
                     Type = "TaskAssignment",
                     Link = $"/WorkspaceDetail/{Workspace.JoinCode}",
                     IsRead = false,
@@ -781,7 +793,7 @@ public class WorkspaceDetailModel : PageModel
 
         if (Workspace.PackageTier == "Personal")
         {
-            TempData["InviteError"] = "Không thể mời thành viên trong Workspace gói Personal.";
+            TempData["InviteError"] = "Cannot invite members in a Personal plan workspace.";
             return RedirectToPage(new { joinCode });
         }
 
@@ -801,7 +813,7 @@ public class WorkspaceDetailModel : PageModel
 
                 if (alreadyMember)
                 {
-                    TempData["InviteError"] = "Người dùng này đã là thành viên của Workspace rồi.";
+                    TempData["InviteError"] = "This user is already a member of this workspace.";
                     return RedirectToPage(new { joinCode });
                 }
             }
@@ -812,7 +824,7 @@ public class WorkspaceDetailModel : PageModel
 
             if (existingInvitation != null)
             {
-                TempData["InviteError"] = "Lời mời đến email này đã được gửi và đang chờ xác nhận.";
+                TempData["InviteError"] = "An invitation has already been sent to this email and is pending confirmation.";
                 return RedirectToPage(new { joinCode });
             }
 
@@ -828,7 +840,7 @@ public class WorkspaceDetailModel : PageModel
 
             if (currentMembersCount + pendingInvitesCount >= maxMembersAllowed)
             {
-                TempData["InviteError"] = $"Không thể gửi lời mời. Workspace đã đạt giới hạn thành viên cho phép ({maxMembersAllowed}) của gói {tier}.";
+                TempData["InviteError"] = $"Cannot send invitation. The workspace has reached the member limit ({maxMembersAllowed}) of the {tier} plan.";
                 return RedirectToPage(new { joinCode });
             }
 
@@ -854,7 +866,7 @@ public class WorkspaceDetailModel : PageModel
                 {
                     Id = Guid.NewGuid(),
                     UserId = inviteeUser.Id,
-                    Message = $"{CurrentUser.FullName} đã mời bạn tham gia Workspace '{Workspace.Name}' với tư cách là '{InviteRole}'.",
+                    Message = $"{CurrentUser.FullName} has invited you to join Workspace '{Workspace.Name}' as a '{InviteRole}'.",
                     Type = "WorkspaceInvitation",
                     Link = $"/api/invitations/{invitation.Id}/accept",
                     IsRead = false,
@@ -865,7 +877,7 @@ public class WorkspaceDetailModel : PageModel
             }
 
             await _context.SaveChangesAsync();
-            TempData["InviteSuccess"] = $"Đã gửi thư mời thành công tới email {email}!";
+            TempData["InviteSuccess"] = $"Invitation successfully sent to {email}!";
             _logger.LogInformation("Invitation created for email {Email} as {Role} in Workspace {WorkspaceId}", email, InviteRole, Workspace.Id);
         }
 
@@ -874,13 +886,18 @@ public class WorkspaceDetailModel : PageModel
 
     public string SerializeTask(unigrid.Models.Task task)
     {
+        var finalDueDate = task.DueDate;
+        if (finalDueDate.HasValue && finalDueDate.Value.Hour == 0 && finalDueDate.Value.Minute == 0 && finalDueDate.Value.Second == 0)
+        {
+            finalDueDate = finalDueDate.Value.Date.AddHours(23).AddMinutes(50);
+        }
         var cleanTask = new {
             id = task.Id,
             title = task.Title,
             description = task.Description,
             status = task.Status,
             priority = task.Priority,
-            dueDate = task.DueDate,
+            dueDate = finalDueDate,
             assignee = task.Assignee != null ? new { id = task.Assignee.Id, fullName = task.Assignee.FullName } : null,
             taskComments = task.TaskComments.Select(tc => new {
                 id = tc.Id,
@@ -980,41 +997,57 @@ public class WorkspaceDetailModel : PageModel
             return RedirectToPage("/Dashboard");
         }
 
-        // Only Manager can modify roles
-        if (CurrentUserRole != "Manager")
-        {
-            TempData["ErrorMessage"] = "Bạn không có quyền thực hiện thao tác này. Chỉ quản lý (Manager) mới có quyền thay đổi vai trò.";
-            return RedirectToPage("/WorkspaceDetail", new { joinCode });
-        }
-
         var memberToUpdate = await _context.WorkspaceMembers
             .FirstOrDefaultAsync(m => m.WorkspaceId == Workspace.Id && m.UserId == memberId);
 
         if (memberToUpdate == null)
         {
-            TempData["ErrorMessage"] = "Thành viên không tồn tại trong Workspace này.";
+            TempData["ErrorMessage"] = "Member does not exist in this workspace.";
             return RedirectToPage("/WorkspaceDetail", new { joinCode });
         }
 
-        // Prevent changing own role (manager cannot demote themselves this way, they must leave or transfer ownership)
+        // PERSONAL DISPLAY ROLE EDITING:
+        // Any member can update their OWN display role/title!
+        if (memberId == CurrentUser.Id)
+        {
+            memberToUpdate.DisplayRole = Helpers.InputSanitizer.SanitizeInput(newDisplayRole);
+            _context.WorkspaceMembers.Update(memberToUpdate);
+            await _context.SaveChangesAsync();
+
+            // Evict caches
+            _cache.Remove($"Workspace_{joinCode}");
+            _cache.Remove($"WorkspaceMembers_{Workspace.Id}");
+            EvictAllWorkspaceMembersCache(Workspace.Id);
+
+            TempData["SuccessMessage"] = "Successfully updated your display role.";
+            return RedirectToPage("/WorkspaceDetail", new { joinCode });
+        }
+
+        // Only Manager can modify roles of other members
+        if (CurrentUserRole != "Manager")
+        {
+            TempData["ErrorMessage"] = "You do not have permission to perform this action. Only the Manager can modify roles.";
+            return RedirectToPage("/WorkspaceDetail", new { joinCode });
+        }
+
+        // Prevent changing own role (this is already covered by the OWN display role editing block above, but keeping it as safeguard)
         if (memberToUpdate.UserId == CurrentUser.Id)
         {
-            TempData["ErrorMessage"] = "Bạn không thể tự thay đổi vai trò của chính mình.";
+            TempData["ErrorMessage"] = "You cannot modify your own role.";
             return RedirectToPage("/WorkspaceDetail", new { joinCode });
         }
 
-        // ENFORCE SINGLE-MANAGER RULE: "chưa chặn trường hợp 2 manager hình 1"
-        // Non-owners can only be: Vice Manager, Member, Viewer
+        // ENFORCE SINGLE-MANAGER RULE
         if (newRole == "Manager")
         {
-            TempData["ErrorMessage"] = "Workspace chỉ được phép có duy nhất một Quản lý (Manager) là Chủ sở hữu. Bạn có thể bổ nhiệm thành viên này làm Phó quản lý (Vice Manager).";
+            TempData["ErrorMessage"] = "A workspace is only allowed to have a single Manager (the Owner). You can appoint this member as a Vice Manager instead.";
             return RedirectToPage("/WorkspaceDetail", new { joinCode });
         }
 
         var validRoles = new List<string> { "Vice Manager", "Member", "Viewer" };
         if (!validRoles.Contains(newRole))
         {
-            TempData["ErrorMessage"] = "Vai trò mới không hợp lệ.";
+            TempData["ErrorMessage"] = "Invalid role specified.";
             return RedirectToPage("/WorkspaceDetail", new { joinCode });
         }
 
@@ -1031,7 +1064,7 @@ public class WorkspaceDetailModel : PageModel
         _cache.Remove($"WorkspaceMembers_{Workspace.Id}");
         EvictAllWorkspaceMembersCache(Workspace.Id);
 
-        TempData["SuccessMessage"] = $"Đã cập nhật vai trò và danh hiệu của thành viên thành công.";
+        TempData["SuccessMessage"] = "Member role and display title updated successfully.";
         return RedirectToPage("/WorkspaceDetail", new { joinCode });
     }
 
@@ -1049,7 +1082,7 @@ public class WorkspaceDetailModel : PageModel
 
         if (currentMember == null)
         {
-            TempData["ErrorMessage"] = "Bạn không phải là thành viên của Workspace này.";
+            TempData["ErrorMessage"] = "You are not a member of this workspace.";
             return RedirectToPage("/WorkspaceDetail", new { joinCode });
         }
 
@@ -1101,7 +1134,7 @@ public class WorkspaceDetailModel : PageModel
         // Symmetrically clear user workspaces cache keys
         _cache.Remove($"UserWorkspaces_{CurrentUser.Id}");
 
-        TempData["SuccessMessage"] = $"Bạn đã rời khỏi Workspace '{Workspace.Name}' thành công.";
+        TempData["SuccessMessage"] = $"You have successfully left the workspace '{Workspace.Name}'.";
         return RedirectToPage("/Workspaces");
     }
 
@@ -1154,10 +1187,78 @@ public class WorkspaceDetailModel : PageModel
             _context.WorkspaceFiles.Remove(file);
             await _context.SaveChangesAsync();
             EvictAllWorkspaceMembersCache(Workspace.Id);
-            TempData["SuccessMessage"] = $"Đã xóa file '{file.FileName}' thành công.";
+            TempData["SuccessMessage"] = $"Successfully deleted file '{file.FileName}'.";
             _logger.LogInformation("File deleted: {FileName} from Workspace {WorkspaceId}", file.FileName, Workspace.Id);
         }
         
         return RedirectToPage(new { joinCode });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostTransferOwnershipAsync(string joinCode, Guid newOwnerId)
+    {
+        var result = await LoadWorkspaceDataAsync(joinCode);
+        if (!result)
+        {
+            return RedirectToPage("/Dashboard");
+        }
+
+        // Only the absolute Owner can transfer ownership
+        if (Workspace.OwnerId != CurrentUser.Id)
+        {
+            TempData["ErrorMessage"] = "Only the workspace owner can transfer ownership.";
+            return RedirectToPage("/WorkspaceDetail", new { joinCode });
+        }
+
+        var targetMember = await _context.WorkspaceMembers
+            .FirstOrDefaultAsync(m => m.WorkspaceId == Workspace.Id && m.UserId == newOwnerId);
+
+        if (targetMember == null)
+        {
+            TempData["ErrorMessage"] = "Selected member does not exist in this workspace.";
+            return RedirectToPage("/WorkspaceDetail", new { joinCode });
+        }
+
+        // Ensure we don't transfer to ourselves
+        if (newOwnerId == CurrentUser.Id)
+        {
+            TempData["ErrorMessage"] = "You are already the workspace owner.";
+            return RedirectToPage("/WorkspaceDetail", new { joinCode });
+        }
+
+        // 1. Get the current owner's membership record (if exists) or create one
+        var currentOwnerMember = await _context.WorkspaceMembers
+            .FirstOrDefaultAsync(m => m.WorkspaceId == Workspace.Id && m.UserId == CurrentUser.Id);
+
+        if (currentOwnerMember != null)
+        {
+            // Demote the current owner to Vice Manager
+            currentOwnerMember.Role = "Vice Manager";
+            _context.WorkspaceMembers.Update(currentOwnerMember);
+        }
+
+        // 2. Promote the target member to Manager
+        targetMember.Role = "Manager";
+        targetMember.CanCreateTask = true;
+        targetMember.CanEditTask = true;
+        targetMember.CanDeleteFile = true;
+        _context.WorkspaceMembers.Update(targetMember);
+
+        // 3. Update Workspace OwnerId in the database
+        Workspace.OwnerId = newOwnerId;
+        _context.Workspaces.Update(Workspace);
+
+        await _context.SaveChangesAsync();
+
+        // Evict caches
+        _cache.Remove($"Workspace_{joinCode}");
+        _cache.Remove($"WorkspaceMembers_{Workspace.Id}");
+        EvictAllWorkspaceMembersCache(Workspace.Id);
+        
+        // Clear workspaces cache keys for both users
+        _cache.Remove($"UserWorkspaces_{CurrentUser.Id}");
+        _cache.Remove($"UserWorkspaces_{newOwnerId}");
+
+        TempData["SuccessMessage"] = $"Successfully transferred workspace management to {targetMember.User.FullName}.";
+        return RedirectToPage("/WorkspaceDetail", new { joinCode });
     }
 }

@@ -14,6 +14,9 @@ function scheduleComponent() {
         ignoreNextClick: false,
         
         dialogOpen: false,
+        alertModalOpen: false,
+        alertModalTitle: 'Scheduling Conflict',
+        alertModalMessage: '',
         isEdit: false,
         isTaskForm: false,
         formWorkspaceName: '',
@@ -41,6 +44,7 @@ function scheduleComponent() {
         formDayIdx: 0,
         formStartSlot: 0,
         formDuration: 2,
+        formTimeZone: 'UTC',
 
         init() {
             // Load serialized C# Razor Page models
@@ -95,7 +99,8 @@ function scheduleComponent() {
                     isTask: isTask,
                     taskId: e.taskId,
                     workspaceName: workspaceName,
-                    workspaceJoinCode: workspaceJoinCode
+                    workspaceJoinCode: workspaceJoinCode,
+                    timeZone: e.timeZone || 'UTC'
                 };
             });
 
@@ -383,6 +388,54 @@ function scheduleComponent() {
             }
         },
 
+        slotToTimeStr(slot) {
+            let h = 7 + Math.floor(slot / 2);
+            let m = slot % 2 === 0 ? '00' : '30';
+            return `${h.toString().padStart(2, '0')}:${m}`;
+        },
+        getDisplayHour(slot) {
+            let timeStr = this.slotToTimeStr(slot);
+            const parts = timeStr.split(':');
+            let h = parseInt(parts[0]) % 12;
+            if (h === 0) h = 12;
+            return h.toString().padStart(2, '0');
+        },
+        getDisplayMinute(slot) {
+            return slot % 2 === 0 ? '00' : '30';
+        },
+        isAM(slot) {
+            let h = 7 + Math.floor(slot / 2);
+            return h < 12;
+        },
+        incrementHour() {
+            let newStart = Math.min(32, this.formStartSlot + 2);
+            this.formStartSlot = newStart;
+        },
+        decrementHour() {
+            let newStart = Math.max(0, this.formStartSlot - 2);
+            this.formStartSlot = newStart;
+        },
+        incrementMinute() {
+            let newStart = Math.min(33, this.formStartSlot + 1);
+            this.formStartSlot = newStart;
+        },
+        decrementMinute() {
+            let newStart = Math.max(0, this.formStartSlot - 1);
+            this.formStartSlot = newStart;
+        },
+        setAM() {
+            let h = 7 + Math.floor(this.formStartSlot / 2);
+            if (h >= 12) {
+                this.formStartSlot = Math.max(0, this.formStartSlot - 24);
+            }
+        },
+        setPM() {
+            let h = 7 + Math.floor(this.formStartSlot / 2);
+            if (h < 12) {
+                this.formStartSlot = Math.min(33, this.formStartSlot + 24);
+            }
+        },
+
         slotsToISOTimes(dayIdx, startSlot, duration) {
             let date = this.weekDates[dayIdx];
             let sh = 7 + Math.floor(startSlot / 2);
@@ -399,6 +452,12 @@ function scheduleComponent() {
             };
         },
 
+        showAlert(title, message) {
+            this.alertModalTitle = title;
+            this.alertModalMessage = message;
+            this.alertModalOpen = true;
+        },
+
         openAdd(dayIdx, slotIdx, durationSlotCount = 2) {
             this.isEdit = false;
             this.isTaskForm = false;
@@ -411,6 +470,7 @@ function scheduleComponent() {
             this.formDayIdx = dayIdx;
             this.formStartSlot = slotIdx;
             this.formDuration = durationSlotCount;
+            this.formTimeZone = 'UTC';
             
             let { startTime, endTime } = this.slotsToISOTimes(dayIdx, slotIdx, durationSlotCount);
             this.formStartTime = startTime;
@@ -432,15 +492,44 @@ function scheduleComponent() {
             this.formDesc = event.description;
             this.formPriority = event.priority;
             this.formColor = event.colorIdx;
-            this.formDayIdx = event.dayIdx;
-            this.formStartSlot = event.startSlot;
-            this.formDuration = event.duration;
+            this.formTimeZone = event.timeZone || 'UTC';
             
             if (event.dayIdx !== null && event.dayIdx !== undefined) {
+                this.formDayIdx = event.dayIdx;
+                this.formStartSlot = event.startSlot;
+                this.formDuration = event.duration || 2;
+                
                 let { startTime, endTime } = this.slotsToISOTimes(event.dayIdx, event.startSlot, event.duration || 2);
                 this.formStartTime = startTime;
                 this.formEndTime = endTime;
             } else {
+                // If it is unscheduled (clicked from the sidebar)
+                if (event.dueDate) {
+                    let d = new Date(event.dueDate);
+                    let foundDayIdx = -1;
+                    for (let i = 0; i < 7; i++) {
+                        if (this.weekDates[i].toDateString() === d.toDateString()) {
+                            foundDayIdx = i;
+                            break;
+                        }
+                    }
+                    if (foundDayIdx === -1) {
+                        foundDayIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+                    }
+                    this.formDayIdx = foundDayIdx;
+                    
+                    let hours = d.getHours();
+                    let minutes = d.getMinutes();
+                    if ((hours === 23 && minutes === 59) || (hours === 0 && minutes === 0)) {
+                        this.formStartSlot = 4; // 9:00 AM
+                    } else {
+                        this.formStartSlot = Math.max(0, (hours - 7) * 2 + (minutes >= 30 ? 1 : 0));
+                    }
+                } else {
+                    this.formDayIdx = 0; // Monday
+                    this.formStartSlot = 4; // 9:00 AM
+                }
+                this.formDuration = 2;
                 this.formStartTime = '';
                 this.formEndTime = '';
             }
@@ -522,6 +611,18 @@ function scheduleComponent() {
             if (!dl) return;
 
             let rawTask = this.tasks.find(x => x.id === dl.id);
+            if (rawTask && rawTask.dueDate) {
+                let { endTime } = this.slotsToISOTimes(dayIdx, slotIdx, 2);
+                let dueD = new Date(rawTask.dueDate);
+                let endD = new Date(endTime);
+                if (endD > dueD) {
+                    let formatted = dueD.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    this.showAlert("Scheduling Conflict", `You cannot schedule this task past its due date (<strong>${formatted}</strong>).`);
+                    this.draggedTask = null;
+                    return;
+                }
+            }
+
             let originalDayIdx = null;
             let originalStartSlot = null;
             if (rawTask && rawTask.dueDate) {
@@ -680,13 +781,13 @@ function scheduleComponent() {
                 origDuration: ev.duration,
                 startY: e.clientY
             };
-
+ 
             let onMove = (evMouse) => {
                 let dy = evMouse.clientY - e.clientY;
                 let slotDelta = Math.round(dy / 36);
-                let targetEv = this.events.find(x => x.id === ev.id);
+                let targetEv = this.events.find(x => x.id === ev.id) || this.workspaceTasks.find(x => x.id === ev.id);
                 if (!targetEv) return;
-
+ 
                 if (edge === 'bottom') {
                     let newDuration = Math.max(1, this.resizingTask.origDuration + slotDelta);
                     targetEv.duration = Math.min(newDuration, 34 - targetEv.startSlot);
@@ -698,18 +799,20 @@ function scheduleComponent() {
                     targetEv.duration = Math.max(1, endSlot - newStart);
                 }
             };
-
+ 
             let onUp = () => {
                 this.mode = 'idle';
-                let targetEv = this.events.find(x => x.id === ev.id);
+                let targetEv = this.events.find(x => x.id === ev.id) || this.workspaceTasks.find(x => x.id === ev.id);
                 if (targetEv) {
                     if (targetEv.startSlot !== this.resizingTask.origStartSlot || targetEv.duration !== this.resizingTask.origDuration) {
                         this.ignoreNextClick = true;
                         let { startTime, endTime } = this.slotsToISOTimes(targetEv.dayIdx, targetEv.startSlot, targetEv.duration);
                         targetEv.startDate = new Date(startTime);
                         targetEv.endDate = new Date(endTime);
-
+ 
                         this.pendingChange = {
+                            isTask: !!targetEv.isTask,
+                            taskId: targetEv.taskId || targetEv.id,
                             eventId: targetEv.id,
                             title: targetEv.title,
                             originalDayIdx: targetEv.dayIdx,
@@ -737,7 +840,23 @@ function scheduleComponent() {
             let pc = this.pendingChange;
             if (pc.isTask) {
                 let { startTime, endTime } = this.slotsToISOTimes(pc.newDayIdx, pc.newStartSlot, pc.newDuration);
-                await this.updateTaskTimeInDb(pc.taskId, startTime, endTime);
+                
+                // Strict client-side due date check
+                let rawTask = this.tasks.find(x => x.id === pc.taskId);
+                if (rawTask && rawTask.dueDate) {
+                    let dueD = new Date(rawTask.dueDate);
+                    let endD = new Date(endTime);
+                    if (endD > dueD) {
+                        let formatted = dueD.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                        this.showAlert("Scheduling Conflict", `You cannot schedule this task past its due date (<strong>${formatted}</strong>).`);
+                        this.cancelPendingChange();
+                        return;
+                    }
+                }
+
+                let existingWTask = this.workspaceTasks.find(x => x.taskId === pc.taskId);
+                let timeZone = existingWTask ? existingWTask.timeZone : 'UTC';
+                await this.updateTaskTimeInDb(pc.taskId, startTime, endTime, timeZone);
             } else {
                 let targetEv = this.events.find(x => x.id === pc.eventId);
                 if (targetEv) {
@@ -816,12 +935,13 @@ function scheduleComponent() {
             }
         },
 
-        async updateTaskTimeInDb(taskId, startTime, endTime) {
+        async updateTaskTimeInDb(taskId, startTime, endTime, timeZone) {
             let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
             let payload = new URLSearchParams();
             payload.append('taskId', taskId);
             payload.append('startTime', startTime);
             payload.append('endTime', endTime);
+            payload.append('timeZone', timeZone || 'UTC');
             payload.append('__RequestVerificationToken', token);
 
             try {
@@ -860,7 +980,8 @@ function scheduleComponent() {
                         isTask: true,
                         taskId: taskId,
                         workspaceName: wName,
-                        workspaceJoinCode: wJoinCode
+                        workspaceJoinCode: wJoinCode,
+                        timeZone: e.timeZone || 'UTC'
                     };
 
                     if (existingWTaskIdx !== -1) {
@@ -910,6 +1031,7 @@ function scheduleComponent() {
             payload.append('description', descJson);
             payload.append('startTime', this.formStartTime);
             payload.append('endTime', this.formEndTime);
+            payload.append('timeZone', this.formTimeZone);
             payload.append('__RequestVerificationToken', token);
             
             if (this.isEdit) {
@@ -953,7 +1075,8 @@ function scheduleComponent() {
                                 priority: priority,
                                 colorIdx: colorIdx,
                                 startDate: startDate,
-                                endDate: endDate
+                                endDate: endDate,
+                                timeZone: e.timeZone || 'UTC'
                             };
                         }
                         this.dialogOpen = false;
@@ -1000,7 +1123,8 @@ function scheduleComponent() {
                             priority: priority,
                             colorIdx: colorIdx,
                             startDate: startDate,
-                            endDate: endDate
+                            endDate: endDate,
+                            timeZone: e.timeZone || 'UTC'
                         });
                         this.dialogOpen = false;
                     } else {
@@ -1051,6 +1175,7 @@ function scheduleComponent() {
             payload.append('description', descJson);
             payload.append('startTime', startTime);
             payload.append('endTime', endTime);
+            payload.append('timeZone', this.formTimeZone);
             payload.append('__RequestVerificationToken', token);
 
             fetch('?handler=CreateEvent', {
@@ -1090,7 +1215,8 @@ function scheduleComponent() {
                         priority: priority,
                         colorIdx: colorIdx,
                         startDate: startDate,
-                        endDate: endDate
+                        endDate: endDate,
+                        timeZone: e.timeZone || 'UTC'
                     });
                     this.dialogOpen = false;
                 } else {
@@ -1098,6 +1224,52 @@ function scheduleComponent() {
                 }
             })
             .catch(err => console.error("Error duplicating event:", err));
+        },
+
+        async saveTaskSchedule() {
+            let { startTime, endTime } = this.slotsToISOTimes(this.formDayIdx, this.formStartSlot, this.formDuration);
+            
+            // Strict client-side due date check
+            let rawTask = this.tasks.find(x => x.id === this.formId);
+            if (rawTask && rawTask.dueDate) {
+                let dueD = new Date(rawTask.dueDate);
+                let endD = new Date(endTime);
+                if (endD > dueD) {
+                    let formatted = dueD.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    this.showAlert("Scheduling Conflict", `You cannot schedule this task past its due date (<strong>${formatted}</strong>).`);
+                    return;
+                }
+            }
+
+            await this.updateTaskTimeInDb(this.formId, startTime, endTime, this.formTimeZone);
+            this.dialogOpen = false;
+        },
+
+        async unscheduleTask() {
+            if (confirm('Are you sure you want to remove this task from your personal schedule?')) {
+                let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                let payload = new URLSearchParams();
+                payload.append('eventId', this.formId);
+                payload.append('__RequestVerificationToken', token);
+                
+                try {
+                    let response = await fetch('?handler=DeleteEvent', {
+                        method: 'POST',
+                        body: payload
+                    });
+                    let data = await response.json();
+                    if (data.success) {
+                        // Remove from workspaceTasks local list
+                        this.workspaceTasks = this.workspaceTasks.filter(t => t.id !== this.formId);
+                        this.dialogOpen = false;
+                    } else {
+                        alert(data.message || "Failed to unschedule task.");
+                    }
+                } catch (err) {
+                    console.error("Error unscheduling task:", err);
+                    alert("Network error. Failed to unschedule task.");
+                }
+            }
         }
     };
 }

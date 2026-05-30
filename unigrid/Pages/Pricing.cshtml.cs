@@ -90,7 +90,7 @@ public class PricingModel : PageModel
                         int memberCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == workspace.Id);
                         if (memberCount > 1)
                         {
-                            TempData["UpgradeError"] = "Không thể chuyển Workspace này sang gói Personal vì đang có nhiều hơn 1 thành viên. Gói Personal chỉ dành riêng cho cá nhân.";
+                            TempData["UpgradeError"] = "Cannot switch this Workspace to the Personal plan because it currently has more than 1 member. The Personal plan is for individual use only.";
                             return RedirectToPage("/Pricing", new { joinCode = JoinCode });
                         }
                     }

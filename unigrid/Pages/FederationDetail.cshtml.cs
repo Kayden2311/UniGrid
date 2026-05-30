@@ -142,19 +142,19 @@ namespace unigrid.Pages
 
             if (workspace == null)
             {
-                TempData["ErrorMessage"] = "Workspace không tồn tại hoặc bạn không phải chủ sở hữu.";
+                TempData["ErrorMessage"] = "Workspace does not exist or you are not the owner.";
                 return RedirectToPage("/FederationDetail", new { joinCode });
             }
 
             if (workspace.WorkspaceType != "Personal")
             {
-                TempData["ErrorMessage"] = "Chỉ có thể liên kết Workspace cá nhân (Personal Plan) vào Liên bang.";
+                TempData["ErrorMessage"] = "Only Personal plan Workspaces can be linked to a Federation.";
                 return RedirectToPage("/FederationDetail", new { joinCode });
             }
 
             if (workspace.FederationId != null)
             {
-                TempData["ErrorMessage"] = "Workspace này đã thuộc về một Liên bang khác.";
+                TempData["ErrorMessage"] = "This Workspace already belongs to another Federation.";
                 return RedirectToPage("/FederationDetail", new { joinCode });
             }
 
@@ -184,7 +184,7 @@ namespace unigrid.Pages
             _cache.Remove($"UserWorkspaces_{CurrentUser.Id}");
             _cache.Remove($"Workspace_{workspace.JoinCode}");
 
-            TempData["SuccessMessage"] = $"Liên kết thành công! Workspace '{workspace.Name}' đã trở thành trực thuộc Liên bang.";
+            TempData["SuccessMessage"] = $"Successfully linked! Workspace '{workspace.Name}' is now part of the Federation.";
             return RedirectToPage("/FederationDetail", new { joinCode });
         }
 
@@ -195,7 +195,7 @@ namespace unigrid.Pages
 
             if (string.IsNullOrWhiteSpace(NewChildWorkspaceName))
             {
-                TempData["ErrorMessage"] = "Tên Workspace không được để trống.";
+                TempData["ErrorMessage"] = "Workspace name cannot be empty.";
                 return RedirectToPage("/FederationDetail", new { joinCode });
             }
 
@@ -246,7 +246,7 @@ namespace unigrid.Pages
             // Evict cache to refresh workspaces and sidebar lists
             _cache.Remove($"UserWorkspaces_{CurrentUser.Id}");
 
-            TempData["SuccessMessage"] = $"Đã tạo và trực thuộc thành công Workspace nhóm '{childWorkspace.Name}' vào Liên bang.";
+            TempData["SuccessMessage"] = $"Successfully created and linked group Workspace '{childWorkspace.Name}' to the Federation.";
             return RedirectToPage("/FederationDetail", new { joinCode });
         }
     }
