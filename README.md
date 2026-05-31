@@ -5,7 +5,7 @@
 [![UI: Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind%20CSS-blue?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
 [![Interactions: Alpine.js](https://img.shields.io/badge/Interactions-Alpine.js-turquoise?style=for-the-badge&logo=alpine.js)](https://alpinejs.dev/)
 
-> **A premium, high-visibility Workspace and Task Management platform designed specifically for students, academic clubs, and small startup teams (3–10 members).**
+> **A premium, high-visibility Workspace and Task Management platform designed specifically for students, academic clubs, and agile startup teams (3–10 members).**
 
 ---
 
@@ -22,13 +22,13 @@
 
 ## 🚀 Project Overview
 
-**UniGrid** addresses the fragmentation that teams experience when working across scattered task sheets, isolated Google Docs, and messy messaging channels (Messenger, Zalo). It consolidates tasks, deadlines, shared files, and real-time chat into **one highly loveable workspace interface**, solving accountability issues and missing timeline visibility.
+**UniGrid** addresses the fragmentation that teams experience when working across scattered task sheets, isolated Google Docs, and messy messaging channels (Zalo, Messenger). It consolidates tasks, deadlines, shared files, and real-time chat into **one premium, highly loveable workspace interface**, solving accountability issues and missing timeline visibility.
 
 ### 💡 The Competitive Edge
-* **Centralized Workspaces:** Combines Kanban boards, repository storage, and real-time SignalR chat rooms.
+* **Centralized Workspaces:** Combines Kanban boards, shared file repositories, and real-time SignalR chat rooms.
 * **Native Deadline Sync:** Assigning a task inside a workspace automatically propagates that deadline directly into the assignee's personal dashboard calendar.
 * **Transparent Contribution Metrics:** Computes real-time workspace member completion rates, helping prevent unequal workloads and the "free-rider" effect.
-* **Vibrant Glassmorphic Aesthetics:** Built using premium colors, soft HSL gradients, and reactive hover animations.
+* **Vibrant Glassmorphic Aesthetics:** Built using premium color palettes, soft HSL gradients, and reactive hover animations.
 
 ---
 
@@ -42,8 +42,8 @@
 ### Core Actors
 1. **Guest:** Unauthenticated user. Can view the landing layout, read pricing comparisons, and register/login.
 2. **User (Member):** Authenticated collaborator. Joins workspaces via secure codes, acts on assigned tasks, registers schedules, and chats.
-3. **Workspace Owner (Leader):** Created elevated workspaces, manages membership, creates/assigns tasks, and controls board reviews.
-4. **Admin (System):** Manages users, locking configurations, Billing packages, and global transactions.
+3. **Workspace Owner (Leader):** Creates elevated workspaces, manages membership, creates/assigns tasks, and controls board reviews.
+4. **Admin (System):** Manages users, locking configurations, billing packages, and global transactions.
 
 ---
 
@@ -53,7 +53,7 @@
 * Core metric indicators summarizing total, overdue, and pending workloads.
 * Personalized calendar dynamically overlaying team deadlines onto personal events.
 
-### 📋 Interactive task engine & Kanban Board
+### 📋 Interactive Task Engine & Kanban Board
 * 4-state workflow board: `Todo` ➔ `In Progress` ➔ `Review` ➔ `Done`.
 * Dialog triggers displaying checkable checklists (subtasks), markdown descriptions, and collaborative comment feeds.
 * Elevates workspace leaders to review task completions, supporting **Approve & Close** or **Request Rework** pathways.
@@ -65,45 +65,41 @@
 ### 📂 Workspace File Repository
 * Shared document repository categorizing PDF Specs, Documents, Spreadsheets, and Image Assets.
 * Tracks storage metrics against standard billing limits, providing file details and click-to-download controls.
-### 🌐 Mô hình Workspace Liên bang (Federated Workspace Architecture)
 
-Mô hình Workspace Liên bang (Federated Workspace Model) là giải pháp giúp kết nối mạng lưới các không gian làm việc độc lập của các thành viên lại với nhau mà không làm mất đi tính tự chủ về lưu trữ và bảo mật.
+### 🌐 Federated Workspace Architecture (Enterprise Unified Governance)
+
+The **Federated Workspace Architecture** provides senior executives, general managers, and administrative leads with a unified, high-level administrative viewpoint over multiple agile spaces.
 
 ```mermaid
 graph TD
-    subgraph PersonalNodes["Autonomous Personal Nodes (Các Nút Workspace Tự Chủ)"]
-        WS_A["Workspace Cá nhân A<br>(User A: Gói Free 2GB)"]
-        WS_B["Workspace Cá nhân B<br>(User B: Gói Free 2GB)"]
-        WS_C["Workspace Cá nhân C<br>(User C: Gói Pro 20GB)"]
+    subgraph CorporateWorkspaces["Enterprise Workspaces (Business / Federation Tier)"]
+        WS_DeptA["Workspace Department A<br>(Agile Team A)"]
+        WS_DeptB["Workspace Department B<br>(Agile Team B)"]
+        WS_DeptC["Workspace Department C<br>(Agile Team C)"]
     end
 
-    subgraph FederationPortal["Virtual Collaboration Layer (Lớp Liên Kết Ảo)"]
-        FedWS["Workspace Liên Bang (Cổng Dự Chiếu Chung)"]
+    subgraph ExecutiveLayer["Virtual Collaboration Layer (Executive Unified Governance)"]
+        FedPortal["Workspace Federation<br>(Executive Viewpoint & Aggregator)"]
     end
 
-    subgraph PhysicalStorage["Physical Data Isolation (Cách Ly Dữ Liệu Vật Lý)"]
-        Store_A[("Disk Storage A<br>(Tính dung lượng vào quota User A)")]
-        Store_B[("Disk Storage B<br>(Tính dung lượng vào quota User B)")]
-        Store_C[("Disk Storage C<br>(Tính dung lượng vào quota User C)")]
+    subgraph ExecutiveViews["Senior Management / CEO Dashboard"]
+        MetricCards["Unified Task Progress & Burn-down"]
+        ActivityLogs["Cross-Workspace Activity Streams"]
+        ResourceAlloc["Resource Allocation & Bandwidth"]
     end
 
-    WS_A -.->|Chiếu ảo tệp tin công khai| FedWS
-    WS_B -.->|Chiếu ảo tệp tin công khai| FedWS
-    WS_C -.->|Chiếu ảo tệp tin công khai| FedWS
+    WS_DeptA -->|Link Status & Metrics| FedPortal
+    WS_DeptB -->|Link Status & Metrics| FedPortal
+    WS_DeptC -->|Link Status & Metrics| FedPortal
 
-    WS_A ===|Quản lý lưu trữ vật lý| Store_A
-    WS_B ===|Quản lý lưu trữ vật lý| Store_B
-    WS_C ===|Quản lý lưu trữ vật lý| Store_C
-
-    FedWS -->|Thành viên truy cập qua cổng ảo| WS_A
-    FedWS -->|Thành viên truy cập qua cổng ảo| WS_B
-    FedWS -->|Thành viên truy cập qua cổng ảo| WS_C
+    FedPortal -->|Aggregates| MetricCards
+    FedPortal -->|Aggregates| ActivityLogs
+    FedPortal -->|Aggregates| ResourceAlloc
 ```
 
-* **Khái niệm (Concept):** Cho phép các tài khoản sở hữu gói cá nhân (Personal Plan) liên kết các workspace độc lập của họ lại với nhau thành một "Liên bang Workspace" (Federation) thống nhất.
-* **Lưu trữ độc lập (Isolated Quota):** Mỗi thành viên vẫn lưu trữ và quản lý tài liệu trên không gian cá nhân riêng biệt, đảm bảo tính riêng tư, bảo mật, và tính phí độc lập theo từng tài khoản. Dung lượng tải lên được tính trực tiếp vào gói cá nhân của người upload thay vì trừ vào quỹ chung.
-* **Cổng chiếu ảo (Virtual Projection Portal):** Khi một thành viên đánh dấu tài liệu là công khai (`IsPublic = true`) hoặc gán vào task của liên bang, tài liệu đó sẽ lập tức được "chiếu ảo" lên cổng Liên bang. Các thành viên khác có thể đọc và đồng bộ hóa tức thì mà không cần phải nhân bản file vật lý, tránh lãng phí ổ đĩa.
-* **Bảo mật Zero-Trust & Cô lập rủi ro:** Các tệp tin riêng tư chưa chia sẻ vẫn nằm hoàn toàn an toàn trong workspace riêng của từng cá nhân và hoàn toàn vô hình trước các thành viên khác. Khi liên kết liên bang kết thúc, quyền truy cập lập tức bị hủy bỏ mà không cần thực hiện di chuyển dữ liệu phức tạp.
+* **Concept:** Connects independent workspaces of the **Federation or Business tier** into a unified workspace federation, providing a high-level viewpoint for senior management, general managers, and administrative leads.
+* **Executive Unified Governance:** Aggregates task progress metrics, workloads, resources allocation, and cross-workspace activity logs into a single centralized executive dashboard without duplicating physical file copies.
+* **Storage Regulations:** Workspaces share standard storage quotas. The "Personal Plan" functions as a single-user workspace. There are no private/non-private files functionalities in shared workspaces; all assets are visible under the workspace registry.
 
 ---
 
@@ -214,7 +210,7 @@ erDiagram
    *(Note: This seeds 5 core users (Alice, Bob, Charlie, Diana, Eve) with the password `password123`, 3 collaborative workspaces, 15 high-priority tasks, schedules, chat logs, and files).*
 
 ### 2. Configure the Backend Connection
-Ensure your connection strings in the project folder [appsettings.json](file:///e:/FPT/SE%20Semester%208/EXE201/UniGrid/unigrid/unigrid/appsettings.json) are properly configured:
+Ensure your connection strings in the inner project folder [appsettings.json](file:///e:/FPT/SE%20Semester%208/EXE201/UniGrid/unigrid/unigrid/appsettings.json) are properly configured:
 ```json
 "ConnectionStrings": {
   "DefaultConnection": "Server=localhost;Database=UniGridDb;User ID=sa;Password=123;TrustServerCertificate=True;MultipleActiveResultSets=true"
@@ -238,7 +234,7 @@ Access the application on: **`http://localhost:5181`**
 
 ## 🔒 Security & gitignore Configuration
 
-To protect database files, development environment secrets, and passwords, a robust `.gitignore` file has been added to the folder.
+To protect database files, development environment secrets, and passwords, a robust `.gitignore` file has been added to the root directory.
 
 It guarantees that the following elements are **never** committed to version control:
 * `.vs/` & `.vscode/` (user-specific workspace environments)
