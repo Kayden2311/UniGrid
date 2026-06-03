@@ -112,19 +112,51 @@ CREATE TABLE WorkspaceMembers (
     CONSTRAINT FK_Members_Users FOREIGN KEY (UserId) REFERENCES Users(Id)
 );
 
+-- 6b. TaskCategories (Custom Workspace Task Categories)
+CREATE TABLE TaskCategories (
+    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    WorkspaceId UNIQUEIDENTIFIER NOT NULL,
+    Name NVARCHAR(256) NOT NULL,
+    Description NVARCHAR(1000) NULL,
+    ColorHex NVARCHAR(7) NOT NULL DEFAULT '#3B82F6',
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    CONSTRAINT FK_TaskCategories_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE
+);
+
 -- 7. Tasks
 CREATE TABLE Tasks (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     WorkspaceId UNIQUEIDENTIFIER NOT NULL,
     AssigneeId UNIQUEIDENTIFIER NULL,
+    CategoryId UNIQUEIDENTIFIER NULL,
     Title NVARCHAR(512) NOT NULL,
     Description NVARCHAR(MAX) NULL,
     Status INT DEFAULT 0, -- 0: Todo, 1: InProgress, 2: Review, 3: Done
     Priority INT DEFAULT 1, -- 1: Low, 2: Medium, 3: High
+    IsCounterTask BIT NOT NULL DEFAULT 0,
+    TargetCount INT NOT NULL DEFAULT 1,
+    CurrentCount INT NOT NULL DEFAULT 0,
     DueDate DATETIME2 NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
     CONSTRAINT FK_Tasks_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id),
-    CONSTRAINT FK_Tasks_Users FOREIGN KEY (AssigneeId) REFERENCES Users(Id)
+    CONSTRAINT FK_Tasks_Users FOREIGN KEY (AssigneeId) REFERENCES Users(Id),
+    CONSTRAINT FK_Tasks_Categories FOREIGN KEY (CategoryId) REFERENCES TaskCategories(Id) ON DELETE SET NULL
+);
+
+-- 7b. KpiTargets (Workspace KPI Targets for users in categories)
+CREATE TABLE KpiTargets (
+    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    WorkspaceId UNIQUEIDENTIFIER NOT NULL,
+    UserId UNIQUEIDENTIFIER NOT NULL,
+    CategoryId UNIQUEIDENTIFIER NOT NULL,
+    PeriodType NVARCHAR(20) NOT NULL, -- Daily, Weekly, Monthly
+    StartDate DATETIME2 NOT NULL,
+    EndDate DATETIME2 NOT NULL,
+    TargetValue INT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    CONSTRAINT FK_KpiTargets_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_KpiTargets_Users FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_KpiTargets_Categories FOREIGN KEY (CategoryId) REFERENCES TaskCategories(Id) ON DELETE CASCADE
 );
 
 -- 9. TaskComments
@@ -259,6 +291,9 @@ CREATE INDEX IX_WorkspaceFiles_TaskId ON WorkspaceFiles(TaskId);
 CREATE INDEX IX_WorkspaceFiles_FederationId ON WorkspaceFiles(FederationId);
 CREATE INDEX IX_TaskComments_TaskId ON TaskComments(TaskId);
 CREATE INDEX IX_ChatMessages_RoomId ON ChatMessages(RoomId);
+CREATE INDEX IX_TaskCategories_WorkspaceId ON TaskCategories(WorkspaceId);
+CREATE INDEX IX_KpiTargets_Workspace_User_Category ON KpiTargets(WorkspaceId, UserId, CategoryId);
+CREATE INDEX IX_Tasks_CategoryId ON Tasks(CategoryId);
 
 GO
 
@@ -549,6 +584,40 @@ INSERT INTO Tasks (Id, WorkspaceId, AssigneeId, Title, Description, Status, Prio
 (@T32, @W_Data, @P_Noah, 'Corporate KPI Executive Dashboard', 'Assemble beautiful visual metric charts inside unified executive report.', 0, 2, DATEADD(day, 5, @CurrentMonday)),
 (@T33, @W_Data, @P_Grace, 'A/B Test Statistical Analysis', 'Execute chi-square and t-test formulations over conversion ratios.', 2, 2, DATEADD(day, 2, @CurrentMonday)),
 (@T34, @W_Data, @P_Bob, 'Migrate to Snowflake Warehouse', 'Port legacy schemas and optimize clustering keys for analytics tables.', 3, 3, DATEADD(day, -3, @CurrentMonday));
+
+-- Seed Custom Task Categories
+DECLARE @CAT_Dev UNIQUEIDENTIFIER = 'abcdefab-1111-2222-3333-444444444444';
+DECLARE @CAT_Design UNIQUEIDENTIFIER = 'abcdefab-2222-3333-4444-555555555555';
+DECLARE @CAT_Marketing UNIQUEIDENTIFIER = 'abcdefab-3333-4444-5555-666666666666';
+DECLARE @CAT_Management UNIQUEIDENTIFIER = 'abcdefab-4444-5555-6666-777777777777';
+
+INSERT INTO TaskCategories (Id, WorkspaceId, Name, Description, ColorHex) VALUES
+(@CAT_Dev, @W_SE, 'Software Development', 'Tasks related to coding, APIs, and algorithms.', '#3B82F6'),
+(@CAT_Design, @W_SE, 'UI/UX Design', 'Designing layouts, flows, and theme tokens.', '#EC4899'),
+(@CAT_Marketing, @W_SE, 'Product Marketing', 'Content creation, social media, and customer reach.', '#10B981'),
+(@CAT_Management, @W_SE, 'Project Management', 'Agile planning, milestones, and reports.', '#F59E0B'),
+('bcdefabc-1111-2222-3333-444444444444', @W_Web, 'Frontend Dev', 'React and Vite tasks.', '#3B82F6'),
+('bcdefabc-2222-3333-4444-555555555555', @W_Web, 'Backend Dev', 'Stripe, Redis, and APIs.', '#F59E0B');
+
+-- Update specific seeded tasks with categories and counter metrics for high-fidelity KPI reporting
+UPDATE Tasks SET CategoryId = @CAT_Dev WHERE Id IN (@T3, @T7, @T11, @T12, @T18);
+UPDATE Tasks SET CategoryId = @CAT_Design WHERE Id IN (@T10, @T15, @T35);
+UPDATE Tasks SET CategoryId = @CAT_Management WHERE Id IN (@T1, @T38, @T39);
+
+-- Convert some tasks to counter tasks
+UPDATE Tasks SET IsCounterTask = 1, TargetCount = 10, CurrentCount = 7 WHERE Id = @T3;
+UPDATE Tasks SET IsCounterTask = 1, TargetCount = 5, CurrentCount = 2 WHERE Id = @T10;
+UPDATE Tasks SET IsCounterTask = 1, TargetCount = 12, CurrentCount = 12 WHERE Id = @T11;
+
+-- Seed KPI Targets for this week
+DECLARE @StartOfWeek DATETIME2 = DATEADD(day, -1 * (7 + (DATEPART(weekday, GETUTCDATE()) - 2)) % 7, CAST(GETUTCDATE() AS DATE));
+DECLARE @EndOfWeek DATETIME2 = DATEADD(second, -1, DATEADD(day, 7, @StartOfWeek));
+
+INSERT INTO KpiTargets (Id, WorkspaceId, UserId, CategoryId, PeriodType, StartDate, EndDate, TargetValue) VALUES
+('f1234567-1111-2222-3333-444444444444', @W_SE, @P_Alice, @CAT_Dev, 'Weekly', @StartOfWeek, @EndOfWeek, 15),
+('f1234567-2222-3333-4444-555555555555', @W_SE, @P_Bob, @CAT_Dev, 'Weekly', @StartOfWeek, @EndOfWeek, 20),
+('f1234567-3333-4444-5555-666666666666', @W_SE, @P_Alice, @CAT_Design, 'Weekly', @StartOfWeek, @EndOfWeek, 5),
+('f1234567-4444-5555-6666-777777777777', @W_SE, @P_Bob, @CAT_Design, 'Weekly', @StartOfWeek, @EndOfWeek, 10);
 
 -- 8. Add Dynamic, Detailed Task Comments Conversations
 INSERT INTO TaskComments (TaskId, UserId, Content, CreatedAt) VALUES 

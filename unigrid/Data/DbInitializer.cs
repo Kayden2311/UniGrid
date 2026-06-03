@@ -309,6 +309,107 @@ namespace unigrid.Data
                 logger.LogError(ex, "DbInitializer: Failed to run custom column migrations.");
             }
 
+            // 1g. Custom Categories, Counter Tasks, and KPI Targets migrations
+            try
+            {
+                logger.LogInformation("DbInitializer: Performing Task Categories and KPI Targets database migrations...");
+
+                // A. Check and create TaskCategories
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TaskCategories]') AND type in (N'U'))
+                    BEGIN
+                        CREATE TABLE [dbo].[TaskCategories] (
+                            [Id] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+                            [WorkspaceId] UNIQUEIDENTIFIER NOT NULL,
+                            [Name] NVARCHAR(256) NOT NULL,
+                            [Description] NVARCHAR(1000) NULL,
+                            [ColorHex] NVARCHAR(7) NOT NULL DEFAULT '#3B82F6',
+                            [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                            CONSTRAINT [FK_TaskCategories_Workspaces] FOREIGN KEY ([WorkspaceId]) REFERENCES [dbo].[Workspaces]([Id]) ON DELETE CASCADE
+                        );
+                    END
+                ");
+
+                // B. Check and create KpiTargets
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[KpiTargets]') AND type in (N'U'))
+                    BEGIN
+                        CREATE TABLE [dbo].[KpiTargets] (
+                            [Id] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+                            [WorkspaceId] UNIQUEIDENTIFIER NOT NULL,
+                            [UserId] UNIQUEIDENTIFIER NOT NULL,
+                            [CategoryId] UNIQUEIDENTIFIER NOT NULL,
+                            [PeriodType] NVARCHAR(20) NOT NULL,
+                            [StartDate] DATETIME2 NOT NULL,
+                            [EndDate] DATETIME2 NOT NULL,
+                            [TargetValue] INT NOT NULL DEFAULT 0,
+                            [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+                            CONSTRAINT [FK_KpiTargets_Workspaces] FOREIGN KEY ([WorkspaceId]) REFERENCES [dbo].[Workspaces]([Id]) ON DELETE NO ACTION,
+                            CONSTRAINT [FK_KpiTargets_Users] FOREIGN KEY ([UserId]) REFERENCES [dbo].[Users]([Id]) ON DELETE NO ACTION,
+                            CONSTRAINT [FK_KpiTargets_Categories] FOREIGN KEY ([CategoryId]) REFERENCES [dbo].[TaskCategories]([Id]) ON DELETE CASCADE
+                        );
+                    END
+                ");
+
+                // C. Check and add CategoryId, IsCounterTask, TargetCount, CurrentCount columns to Tasks table
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Tasks]') AND name = 'CategoryId')
+                    BEGIN
+                        ALTER TABLE [dbo].[Tasks] ADD [CategoryId] UNIQUEIDENTIFIER NULL;
+                        ALTER TABLE [dbo].[Tasks] ADD CONSTRAINT [FK_Tasks_Categories] FOREIGN KEY ([CategoryId]) REFERENCES [dbo].[TaskCategories]([Id]) ON DELETE SET NULL;
+                    END
+                ");
+
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Tasks]') AND name = 'IsCounterTask')
+                    BEGIN
+                        ALTER TABLE [dbo].[Tasks] ADD [IsCounterTask] BIT NOT NULL DEFAULT 0;
+                    END
+                ");
+
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Tasks]') AND name = 'TargetCount')
+                    BEGIN
+                        ALTER TABLE [dbo].[Tasks] ADD [TargetCount] INT NOT NULL DEFAULT 1;
+                    END
+                ");
+
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Tasks]') AND name = 'CurrentCount')
+                    BEGIN
+                        ALTER TABLE [dbo].[Tasks] ADD [CurrentCount] INT NOT NULL DEFAULT 0;
+                    END
+                ");
+
+                // D. Index optimizations
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_TaskCategories_WorkspaceId' AND object_id = OBJECT_ID(N'[dbo].[TaskCategories]'))
+                    BEGIN
+                        CREATE NONCLUSTERED INDEX [IX_TaskCategories_WorkspaceId] ON [dbo].[TaskCategories]([WorkspaceId]);
+                    END
+                ");
+
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_KpiTargets_Workspace_User_Category' AND object_id = OBJECT_ID(N'[dbo].[KpiTargets]'))
+                    BEGIN
+                        CREATE NONCLUSTERED INDEX [IX_KpiTargets_Workspace_User_Category] ON [dbo].[KpiTargets]([WorkspaceId], [UserId], [CategoryId]);
+                    END
+                ");
+
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Tasks_CategoryId' AND object_id = OBJECT_ID(N'[dbo].[Tasks]'))
+                    BEGIN
+                        CREATE NONCLUSTERED INDEX [IX_Tasks_CategoryId] ON [dbo].[Tasks]([CategoryId]);
+                    END
+                ");
+
+                logger.LogInformation("DbInitializer: Task Categories and KPI Targets database migrations completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "DbInitializer: Failed to run Task Categories and KPI Targets database migrations.");
+            }
+
             // 2. Check if Alice Nguyen and her User profile exist
             bool hasAlice = false;
             try

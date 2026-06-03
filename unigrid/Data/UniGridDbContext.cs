@@ -52,6 +52,10 @@ public partial class UniGridDbContext : DbContext
 
     public virtual DbSet<WorkspaceInvitation> WorkspaceInvitations { get; set; }
 
+    public virtual DbSet<TaskCategory> TaskCategories { get; set; }
+
+    public virtual DbSet<KpiTarget> KpiTargets { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseSqlServer("Server=localhost;Database=UniGridDb;User ID=sa;Password=123;TrustServerCertificate=True;");
@@ -168,7 +172,7 @@ public partial class UniGridDbContext : DbContext
                 .HasConstraintName("FK_Moderators_Accounts");
         });
 
-        modelBuilder.Entity<unigrid.Models.Task>(entity =>
+         modelBuilder.Entity<unigrid.Models.Task>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Tasks__3214EC077E71A0AA");
 
@@ -176,12 +180,16 @@ public partial class UniGridDbContext : DbContext
             entity.HasIndex(e => e.Status, "IX_Tasks_Status");
             entity.HasIndex(e => e.WorkspaceId, "IX_Tasks_WorkspaceId");
             entity.HasIndex(e => e.AssigneeId, "IX_Tasks_AssigneeId");
+            entity.HasIndex(e => e.CategoryId, "IX_Tasks_CategoryId");
 
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
             entity.Property(e => e.Priority).HasDefaultValue(1);
             entity.Property(e => e.Status).HasDefaultValue(0);
             entity.Property(e => e.Title).HasMaxLength(512);
+            entity.Property(e => e.IsCounterTask).HasDefaultValue(false);
+            entity.Property(e => e.TargetCount).HasDefaultValue(1);
+            entity.Property(e => e.CurrentCount).HasDefaultValue(0);
 
             entity.HasOne(d => d.Assignee).WithMany(p => p.Tasks)
                 .HasForeignKey(d => d.AssigneeId)
@@ -191,6 +199,11 @@ public partial class UniGridDbContext : DbContext
                 .HasForeignKey(d => d.WorkspaceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Tasks_Workspaces");
+
+            entity.HasOne(d => d.Category).WithMany(p => p.Tasks)
+                .HasForeignKey(d => d.CategoryId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_Tasks_Categories");
         });
 
         modelBuilder.Entity<TaskComment>(entity =>
@@ -415,6 +428,47 @@ public partial class UniGridDbContext : DbContext
                 .HasForeignKey(d => d.InviterId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Invitations_Inviter");
+        });
+
+        modelBuilder.Entity<TaskCategory>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Name).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.ColorHex).HasMaxLength(7).HasDefaultValue("#3B82F6");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+
+            entity.HasOne(d => d.Workspace)
+                .WithMany(p => p.TaskCategories)
+                .HasForeignKey(d => d.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_TaskCategories_Workspaces");
+        });
+
+        modelBuilder.Entity<KpiTarget>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.PeriodType).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+
+            entity.HasOne(d => d.Workspace)
+                .WithMany()
+                .HasForeignKey(d => d.WorkspaceId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_KpiTargets_Workspaces");
+
+            entity.HasOne(d => d.User)
+                .WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_KpiTargets_Users");
+
+            entity.HasOne(d => d.Category)
+                .WithMany()
+                .HasForeignKey(d => d.CategoryId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_KpiTargets_Categories");
         });
 
         OnModelCreatingPartial(modelBuilder);
