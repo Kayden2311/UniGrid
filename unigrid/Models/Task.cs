@@ -23,7 +23,17 @@ public partial class Task
 
     public DateTime? CreatedAt { get; set; }
 
+    public Guid? CategoryId { get; set; }
+
+    public bool IsCounterTask { get; set; }
+
+    public int TargetCount { get; set; }
+
+    public int CurrentCount { get; set; }
+
     public virtual User? Assignee { get; set; }
+
+    public virtual TaskCategory? Category { get; set; }
 
     public virtual ICollection<TaskComment> TaskComments { get; set; } = new List<TaskComment>();
 
