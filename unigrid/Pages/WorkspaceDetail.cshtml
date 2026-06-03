@@ -210,6 +210,11 @@
                 class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
             <i data-lucide="folder-open" class="w-4 h-4"></i> Files
         </button>
+        <button @@click="activeTab = 'kpi'"
+                :class="activeTab === 'kpi' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
+                class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
+            <i data-lucide="bar-chart-3" class="w-4 h-4"></i> KPI & Đầu mục
+        </button>
     </div>
 
     <!-- ════════════════════════════════════════ -->
@@ -1766,6 +1771,304 @@
     </div>
 
     <!-- ════════════════════════════════════════ -->
+    <!-- ─── TAB 6: KPI & ĐẦU MỤC CÔNG VIỆC ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="activeTab === 'kpi'" class="space-y-6" x-transition x-cloak>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" x-data="{ kpiPeriod: 'Weekly' }">
+            <!-- Left 2 Columns: KPI Reports & Leaderboard -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Period Selector Header -->
+                <div class="glass p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h3 class="text-lg font-black text-slate-800 tracking-tight">Bảng Thống Kê Hiệu Suất KPI</h3>
+                        <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Phân tích thực tế vs mục tiêu qua các đầu mục công việc</p>
+                    </div>
+                    
+                    <div class="flex items-center gap-1 bg-slate-105 p-1 rounded-2xl border border-slate-200 self-start">
+                        <button type="button" @@click="kpiPeriod = 'Weekly'"
+                                :class="kpiPeriod === 'Weekly' ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-500 hover:text-slate-800'"
+                                class="px-4 py-2 text-xs font-black rounded-xl transition-all cursor-pointer">
+                            Tuần Này
+                        </button>
+                        <button type="button" @@click="kpiPeriod = 'Monthly'"
+                                :class="kpiPeriod === 'Monthly' ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-500 hover:text-slate-800'"
+                                class="px-4 py-2 text-xs font-black rounded-xl transition-all cursor-pointer">
+                            Tháng Này
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI Data Visualization Container -->
+                <div class="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8">
+                    <!-- Weekly Report View -->
+                    <div x-show="kpiPeriod === 'Weekly'" class="space-y-6">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                            <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Tiến Độ Theo Thành Viên (Tuần Này)</span>
+                            <span class="text-[10px] font-bold text-slate-500">Chu kỳ: @Model.WeeklyKpiReport.StartDate.ToString("dd/MM/yyyy") - @Model.WeeklyKpiReport.EndDate.ToString("dd/MM/yyyy")</span>
+                        </div>
+                        
+                        @if (!Model.WeeklyKpiReport.MemberPerformances.Any())
+                        {
+                            <div class="text-center py-12 text-slate-400 font-bold italic">
+                                Chưa có mục tiêu KPI tuần này. Thiết lập ngay ở thanh bên!
+                            </div>
+                        }
+                        @foreach (var perf in Model.WeeklyKpiReport.MemberPerformances)
+                        {
+                            <div class="p-5 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-3xl space-y-3.5 transition-all">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="h-8 w-8 rounded-full bg-indigo-50 border border-indigo-150 flex items-center justify-center font-black text-xs text-indigo-650">
+                                            @string.Concat(perf.FullName.Split(' ').Select(n => n[0]))
+                                        </div>
+                                        <div>
+                                            <span class="text-sm font-black text-slate-800">@perf.FullName</span>
+                                            <span class="text-[9px] font-bold text-slate-400 uppercase block tracking-wider">Đạt được: @(Math.Round(perf.TotalAchievementRate))% mục tiêu</span>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs font-black text-indigo-600">Hiệu suất: @(Math.Round(perf.TotalAchievementRate))%</span>
+                                </div>
+
+                                <!-- Progress bar for total achievement -->
+                                <div class="w-full h-2.5 bg-slate-200/80 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-indigo-500 to-indigo-650 rounded-full transition-all duration-500" style="width: @(Math.Min(100, perf.TotalAchievementRate))%"></div>
+                                </div>
+
+                                <!-- Details per category -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                    @foreach (var detail in perf.KpiDetails)
+                                    {
+                                        <div class="p-3 bg-white border border-slate-100 rounded-2xl flex items-center justify-between text-xs">
+                                            <div class="flex items-center gap-2">
+                                                <span class="h-2 w-2 rounded-full" style="background-color: @detail.CategoryId"></span>
+                                                <span class="font-bold text-slate-700">@detail.CategoryName</span>
+                                            </div>
+                                            <span class="font-black text-slate-800">@detail.ActualValue / @detail.TargetValue</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Monthly Report View -->
+                    <div x-show="kpiPeriod === 'Monthly'" class="space-y-6" style="display: none;">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                            <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Tiến Độ Theo Thành Viên (Tháng Này)</span>
+                            <span class="text-[10px] font-bold text-slate-500">Chu kỳ: @Model.MonthlyKpiReport.StartDate.ToString("dd/MM/yyyy") - @Model.MonthlyKpiReport.EndDate.ToString("dd/MM/yyyy")</span>
+                        </div>
+                        
+                        @if (!Model.MonthlyKpiReport.MemberPerformances.Any())
+                        {
+                            <div class="text-center py-12 text-slate-400 font-bold italic">
+                                Chưa có mục tiêu KPI tháng này. Thiết lập ngay ở thanh bên!
+                            </div>
+                        }
+                        @foreach (var perf in Model.MonthlyKpiReport.MemberPerformances)
+                        {
+                            <div class="p-5 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-3xl space-y-3.5 transition-all">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="h-8 w-8 rounded-full bg-indigo-50 border border-indigo-150 flex items-center justify-center font-black text-xs text-indigo-650">
+                                            @string.Concat(perf.FullName.Split(' ').Select(n => n[0]))
+                                        </div>
+                                        <div>
+                                            <span class="text-sm font-black text-slate-800">@perf.FullName</span>
+                                            <span class="text-[9px] font-bold text-slate-400 uppercase block tracking-wider">Đạt được: @(Math.Round(perf.TotalAchievementRate))% mục tiêu</span>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs font-black text-indigo-600">Hiệu suất: @(Math.Round(perf.TotalAchievementRate))%</span>
+                                </div>
+
+                                <!-- Progress bar for total achievement -->
+                                <div class="w-full h-2.5 bg-slate-200/80 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-indigo-500 to-indigo-650 rounded-full transition-all duration-500" style="width: @(Math.Min(100, perf.TotalAchievementRate))%"></div>
+                                </div>
+
+                                <!-- Details per category -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                    @foreach (var detail in perf.KpiDetails)
+                                    {
+                                        <div class="p-3 bg-white border border-slate-100 rounded-2xl flex items-center justify-between text-xs">
+                                            <div class="flex items-center gap-2">
+                                                <span class="h-2 w-2 rounded-full" style="background-color: @detail.CategoryId"></span>
+                                                <span class="font-bold text-slate-700">@detail.CategoryName</span>
+                                            </div>
+                                            <span class="font-black text-slate-800">@detail.ActualValue / @detail.TargetValue</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Leaderboard / Gamified KPI Rankings -->
+                <div class="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="crown" class="w-6 h-6 text-amber-500"></i>
+                        <h3 class="text-lg font-black text-slate-800 tracking-tight">Bảng Xếp Hạng Hiệu Suất Tuần</h3>
+                    </div>
+                    
+                    <div class="space-y-3.5">
+                        @{
+                            var rankList = (Model.WeeklyKpiReport.MemberPerformances)
+                                .OrderByDescending(p => p.TotalAchievementRate)
+                                .ToList();
+                            int rank = 1;
+                        }
+                        @if (!rankList.Any())
+                        {
+                            <div class="text-center py-6 text-slate-400 font-bold italic">
+                                Chưa có thành tích tuần này.
+                            </div>
+                        }
+                        @foreach (var item in rankList)
+                        {
+                            var rankColor = rank == 1 ? "bg-amber-100 text-amber-700 border-amber-200" : rank == 2 ? "bg-slate-100 text-slate-700 border-slate-200" : "bg-orange-100 text-orange-700 border-orange-200";
+                            <div class="p-4 bg-white/60 hover:bg-white border border-slate-150 rounded-2xl flex items-center justify-between transition-all shadow-sm">
+                                <div class="flex items-center gap-4">
+                                    <span class="h-7 w-7 rounded-xl border flex items-center justify-center font-black text-xs @rankColor">@rank</span>
+                                    <div>
+                                        <p class="text-sm font-black text-slate-800">@item.FullName</p>
+                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide"> Achievement Rate: @(Math.Round(item.TotalAchievementRate))%</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    @if (rank == 1)
+                                    {
+                                        <i data-lucide="award" class="w-5 h-5 text-amber-500"></i>
+                                    }
+                                    <span class="text-sm font-black text-indigo-650">@(Math.Round(item.TotalAchievementRate))%</span>
+                                </div>
+                            </div>
+                            rank++;
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Settings & Manager Sidebar -->
+            <div class="space-y-6">
+                <!-- Category Management Settings -->
+                <div class="glass p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="tag" class="w-5 h-5 text-indigo-600"></i>
+                        <h3 class="text-base font-black text-slate-800">Danh Sách Đầu Mục</h3>
+                    </div>
+
+                    <div class="space-y-3">
+                        @foreach (var cat in Model.WorkspaceCategories)
+                        {
+                            <div class="p-3 bg-white border border-slate-150 rounded-2xl flex items-center justify-between shadow-xs">
+                                <div class="flex items-center gap-2">
+                                    <span class="h-3.5 w-3.5 rounded-full" style="background-color: @cat.ColorHex"></span>
+                                    <div>
+                                        <p class="text-xs font-black text-slate-700">@cat.Name</p>
+                                        @if (!string.IsNullOrEmpty(cat.Description))
+                                        {
+                                            <p class="text-[9px] text-slate-400 font-bold">@cat.Description</p>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "Manager")
+                                {
+                                    <form method="post" asp-page-handler="DeleteCategory" asp-route-joinCode="@Model.Workspace.JoinCode" onsubmit="return confirm('Bạn chắc chắn muốn xóa đầu mục này? Tất cả các KPI targets liên quan cũng sẽ bị xóa.')" class="inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="categoryId" value="@cat.Id">
+                                        <button type="submit" class="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded transition-all cursor-pointer">
+                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                        </button>
+                                    </form>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Create Category Form -->
+                    @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "Manager")
+                    {
+                        <div class="border-t border-slate-150 pt-4 space-y-3">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Tạo Đầu Mục Mới</span>
+                            <form method="post" asp-page-handler="CreateCategory" asp-route-joinCode="@Model.Workspace.JoinCode" class="space-y-3">
+                                @Html.AntiForgeryToken()
+                                <div>
+                                    <input type="text" asp-for="NewCategoryName" placeholder="Tên đầu mục (e.g. Design, Coding)" required
+                                           class="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                                </div>
+                                <div>
+                                    <input type="text" asp-for="NewCategoryDescription" placeholder="Mô tả ngắn gọn"
+                                           class="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Màu sắc tag</label>
+                                    <input type="color" asp-for="NewCategoryColorHex" class="h-8 w-8 rounded-lg cursor-pointer border border-slate-200">
+                                </div>
+                                <button type="submit" class="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black shadow shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                                    <i data-lucide="plus-circle" class="w-4 h-4"></i> Tạo Đầu Mục
+                                </button>
+                            </form>
+                        </div>
+                    }
+                </div>
+
+                <!-- KPI Settings -->
+                @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "Manager")
+                {
+                    <div class="glass p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="target" class="w-5 h-5 text-indigo-600"></i>
+                            <h3 class="text-base font-black text-slate-800">Thiết Lập KPI Targets</h3>
+                        </div>
+
+                        <form method="post" asp-page-handler="CreateKpiTarget" asp-route-joinCode="@Model.Workspace.JoinCode" class="space-y-4">
+                            @Html.AntiForgeryToken()
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Thành Viên</label>
+                                <select asp-for="NewKpiUserId" required class="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                    @foreach (var m in Model.Members)
+                                    {
+                                        <option value="@m.UserId">@m.User.FullName</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Đầu Mục Công Việc</label>
+                                <select asp-for="NewKpiCategoryId" required class="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                    @foreach (var cat in Model.WorkspaceCategories)
+                                    {
+                                        <option value="@cat.Id">@cat.Name</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Chu Kỳ Báo Cáo</label>
+                                <select asp-for="NewKpiPeriodType" required class="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                    <option value="Weekly">Tuần (Weekly)</option>
+                                    <option value="Monthly">Tháng (Monthly)</option>
+                                </select>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Số Lượng Mục Tiêu (Tasks)</label>
+                                <input type="number" asp-for="NewKpiTargetValue" min="1" value="5" required
+                                       class="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            </div>
+
+                            <button type="submit" class="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black shadow shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i> Thiết Lập KPI
+                            </button>
+                        </form>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
     <!-- ─── TASK DETAIL MODAL DIALOG ─── -->
     <!-- ════════════════════════════════════════ -->
     <div x-show="detailOpen" 
@@ -1821,6 +2124,46 @@
                     <div>
                         <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date</h4>
                         <p class="text-sm font-bold text-slate-700 mt-1" x-text="selectedTask?.dueDate ? new Date(selectedTask.dueDate).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'No date set'"></p>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Đầu mục công việc</h4>
+                        <template x-if="selectedTask?.categoryId">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black text-white mt-1"
+                                  :style="'background-color: ' + (workspaceCategories.find(c => c.id === selectedTask.categoryId)?.colorHex || '#3B82F6')"
+                                  x-text="workspaceCategories.find(c => c.id === selectedTask.categoryId)?.name || 'Đầu mục'"></span>
+                        </template>
+                        <template x-if="!selectedTask?.categoryId">
+                            <p class="text-xs text-slate-400 font-bold italic mt-1.5">Không phân loại</p>
+                        </template>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Bộ đếm tiến độ</h4>
+                        <template x-if="selectedTask?.isCounterTask">
+                            <div class="flex items-center gap-3 mt-1.5" x-data="{ localCount: selectedTask?.currentCount || 0 }">
+                                <span class="text-sm font-black text-indigo-650" x-text="localCount + ' / ' + selectedTask.targetCount"></span>
+                                
+                                <template x-if="currentUserRole !== 'Viewer'">
+                                    <div class="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5 bg-slate-50">
+                                        <!-- Decrement Form -->
+                                        <form method="post" asp-page-handler="UpdateTaskCounter" class="inline">
+                                            <input type="hidden" name="taskId" :value="selectedTask?.id">
+                                            <input type="hidden" name="currentCount" :value="Math.max(0, localCount - 1)">
+                                            <button type="submit" @@click="localCount = Math.max(0, localCount - 1)" class="h-6 w-6 flex items-center justify-center rounded hover:bg-slate-200 text-slate-500 font-black">-</button>
+                                        </form>
+                                        
+                                        <!-- Increment Form -->
+                                        <form method="post" asp-page-handler="UpdateTaskCounter" class="inline">
+                                            <input type="hidden" name="taskId" :value="selectedTask?.id">
+                                            <input type="hidden" name="currentCount" :value="Math.min(selectedTask.targetCount, localCount + 1)">
+                                            <button type="submit" @@click="localCount = Math.min(selectedTask.targetCount, localCount + 1)" class="h-6 w-6 flex items-center justify-center rounded hover:bg-slate-200 text-slate-500 font-black">+</button>
+                                        </form>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <template x-if="!selectedTask?.isCounterTask">
+                            <p class="text-xs text-slate-400 font-bold italic mt-1.5">Task thông thường</p>
+                        </template>
                     </div>
                 </div>
 
@@ -1978,6 +2321,38 @@
                             <option value="@m.UserId">@m.User.FullName</option>
                         }
                     </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Đầu mục công việc</label>
+                        <select name="editCategoryId" x-model="selectedTask.categoryId"
+                                :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                            <option value="">Không phân loại</option>
+                            @foreach (var cat in Model.WorkspaceCategories)
+                            {
+                                <option value="@cat.Id">@cat.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Loại Task</label>
+                        <div class="flex items-center gap-3 py-3">
+                            <input type="checkbox" name="editIsCounterTask" id="editIsCounterTask" x-model="selectedTask.isCounterTask" value="true"
+                                   :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
+                                   class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            <input type="hidden" name="editIsCounterTask" value="false">
+                            <label for="editIsCounterTask" class="text-xs font-extrabold text-slate-600 cursor-pointer select-none">Yêu cầu bộ đếm</label>
+                        </div>
+                    </div>
+                    
+                    <div class="col-span-2 space-y-1" x-show="selectedTask.isCounterTask">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Số lượng mục tiêu (Bộ đếm)</label>
+                        <input type="number" name="editTargetCount" x-model="selectedTask.targetCount" min="1"
+                               :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'Manager'"
+                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                    </div>
                 </div>
 
                 <div class="flex gap-3 pt-2">
@@ -2200,6 +2575,34 @@
                             <option value="@m.UserId">@m.User.FullName</option>
                         }
                     </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4" x-data="{ isCounter: false }">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Đầu mục công việc</label>
+                        <select name="NewTaskCategoryId" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            <option value="">Không phân loại</option>
+                            @foreach (var cat in Model.WorkspaceCategories)
+                            {
+                                <option value="@cat.Id">@cat.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Loại Task</label>
+                        <div class="flex items-center gap-3 py-3">
+                            <input type="checkbox" name="NewTaskIsCounterTask" id="NewTaskIsCounterTask" x-model="isCounter" value="true"
+                                   class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer">
+                            <input type="hidden" name="NewTaskIsCounterTask" value="false">
+                            <label for="NewTaskIsCounterTask" class="text-xs font-extrabold text-slate-600 cursor-pointer select-none">Yêu cầu bộ đếm</label>
+                        </div>
+                    </div>
+                    
+                    <div class="col-span-2 space-y-1" x-show="isCounter">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Số lượng mục tiêu (Bộ đếm)</label>
+                        <input type="number" name="NewTaskTargetCount" min="1" value="1"
+                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
                 </div>
 
                 <button type="submit" class="w-full py-4 mt-2 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2">
@@ -2593,6 +2996,7 @@
                 workspaceMembers: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Members.Select(m => new { id = m.UserId.ToString(), fullName = m.User.FullName }).ToList())),
                 workspaceTasks: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceTasks.Select(t => new { id = t.Id.ToString(), title = t.Title, status = t.Status }).ToList())),
                 workspaceFiles: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Files.Select(f => new { id = f.Id.ToString(), fileName = f.FileName, fileUrl = f.FileUrl, fileSize = f.FileSize, fileType = f.FileType }).ToList())),
+                workspaceCategories: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceCategories.Select(c => new { id = c.Id.ToString(), name = c.Name, colorHex = c.ColorHex }).ToList())),
 
                 get canCurrentUserCreateChannel() {
                     const isOwnerOrManager = this.currentUserRole === 'Owner' || this.currentUserRole === 'Manager';

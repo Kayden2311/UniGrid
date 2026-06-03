@@ -50,7 +50,6 @@ public class WorkspaceDetailModel : PageModel
         _cache = cache;
         _logger = logger;
     }
-
     public Workspace Workspace { get; set; } = null!;
     public List<WorkspaceMember> Members { get; set; } = new();
     public List<unigrid.Models.Task> WorkspaceTasks { get; set; } = new();
@@ -63,7 +62,32 @@ public class WorkspaceDetailModel : PageModel
     public string CurrentUserRole { get; set; } = "Member";
     public bool ShowVisibilityControls { get; set; }
 
-    // Direct binding for task creation
+    public List<TaskCategory> WorkspaceCategories { get; set; } = new();
+    public KpiReportDto WeeklyKpiReport { get; set; } = null!;
+    public KpiReportDto MonthlyKpiReport { get; set; } = null!;
+
+    [BindProperty]
+    public Guid? NewTaskCategoryId { get; set; }
+    [BindProperty]
+    public bool NewTaskIsCounterTask { get; set; }
+    [BindProperty]
+    public int NewTaskTargetCount { get; set; } = 1;
+
+    [BindProperty]
+    public string NewCategoryName { get; set; } = string.Empty;
+    [BindProperty]
+    public string NewCategoryDescription { get; set; } = string.Empty;
+    [BindProperty]
+    public string NewCategoryColorHex { get; set; } = "#3B82F6";
+
+    [BindProperty]
+    public Guid NewKpiUserId { get; set; }
+    [BindProperty]
+    public Guid NewKpiCategoryId { get; set; }
+    [BindProperty]
+    public string NewKpiPeriodType { get; set; } = "Weekly";
+    [BindProperty]
+    public int NewKpiTargetValue { get; set; }    // Direct binding for task creation
     [BindProperty]
     public string NewTaskTitle { get; set; } = string.Empty;
     [BindProperty]
@@ -183,16 +207,10 @@ public class WorkspaceDetailModel : PageModel
             return await _fileRepo.GetWorkspaceFilesAsync(workspaceId);
         });
 
-        // Cache Chat Room & Messages
-        ChatRoom = await _chatService.GetRoomByWorkspaceIdAsync(workspaceId);
-
-        if (ChatRoom != null)
-        {
-            ChatMessages = await _chatService.GetRoomMessagesAsync(ChatRoom.Id);
-        }
-
-        string packageTier = Workspace.PackageTier ?? "Free";
-        ShowVisibilityControls = (packageTier == "Personal" && Members.Count >= 2);
+        // Load Categories and KPI Reports
+        WorkspaceCategories = await _taskService.GetWorkspaceCategoriesAsync(workspaceId);
+        WeeklyKpiReport = await _taskService.GetKpiReportAsync(workspaceId, "Weekly", DateTime.UtcNow);
+        MonthlyKpiReport = await _taskService.GetKpiReportAsync(workspaceId, "Monthly", DateTime.UtcNow);
 
         return true;
     }
@@ -200,29 +218,39 @@ public class WorkspaceDetailModel : PageModel
     public async System.Threading.Tasks.Task<IActionResult> OnPostCreateTaskAsync(string joinCode)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
-        
-        if (!string.IsNullOrEmpty(NewTaskTitle))
-        {
-            var error = await _taskService.CreateTaskAsync(Workspace.Id, CurrentUser.Id, NewTaskTitle, NewTaskDescription, NewTaskPriority, NewTaskAssigneeId, NewTaskDueDate, NewTaskStatus);
-            if (error != null)
-            {
-                if (error.Contains("permission")) return Forbid();
-                TempData["ErrorMessage"] = error;
-                return RedirectToPage(new { joinCode });
-            }
 
-            // Handle file attachment if any
-            if (NewTaskFile != null && NewTaskFile.Length > 0)
+        var error = await _taskService.CreateTaskAsync(
+            Workspace.Id,
+            CurrentUser.Id,
+            NewTaskTitle,
+            NewTaskDescription,
+            NewTaskPriority,
+            NewTaskAssigneeId,
+            NewTaskDueDate,
+            NewTaskStatus,
+            NewTaskCategoryId,
+            NewTaskIsCounterTask,
+            NewTaskTargetCount
+        );
+
+        if (error != null)
+        {
+            if (error.Contains("permission")) return Forbid();
+            TempData["ErrorMessage"] = error;
+            return RedirectToPage(new { joinCode });
+        }
+
+        // Handle file attachment if any
+        if (NewTaskFile != null && NewTaskFile.Length > 0)
+        {
+            var tasks = await _taskRepo.GetWorkspaceTasksAsync(Workspace.Id);
+            var createdTask = tasks.OrderByDescending(t => t.CreatedAt).FirstOrDefault(t => t.Title == NewTaskTitle);
+            if (createdTask != null)
             {
-                var tasks = await _taskRepo.GetWorkspaceTasksAsync(Workspace.Id);
-                var createdTask = tasks.OrderByDescending(t => t.CreatedAt).FirstOrDefault(t => t.Title == NewTaskTitle);
-                if (createdTask != null)
+                var uploadResult = await _fileService.UploadFileAsync(Workspace.Id, CurrentUser.Id, NewTaskFile, createdTask.Id);
+                if (uploadResult.error != null)
                 {
-                    var uploadResult = await _fileService.UploadFileAsync(Workspace.Id, CurrentUser.Id, NewTaskFile, createdTask.Id);
-                    if (uploadResult.error != null)
-                    {
-                        TempData["UploadError"] = uploadResult.error;
-                    }
+                    TempData["UploadError"] = uploadResult.error;
                 }
             }
         }
@@ -244,11 +272,11 @@ public class WorkspaceDetailModel : PageModel
         return RedirectToPage(new { joinCode });
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostEditTaskAsync(string joinCode, Guid editTaskId, string editTaskTitle, string editTaskDescription, int editTaskPriority, Guid? editTaskAssigneeId, DateTime? editTaskDueDate)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostEditTaskAsync(string joinCode, Guid editTaskId, string editTaskTitle, string editTaskDescription, int editTaskPriority, Guid? editTaskAssigneeId, DateTime? editTaskDueDate, Guid? editCategoryId, bool editIsCounterTask, int editTargetCount)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
 
-        var error = await _taskService.EditTaskAsync(Workspace.Id, CurrentUser.Id, editTaskId, editTaskTitle, editTaskDescription, editTaskPriority, editTaskAssigneeId, editTaskDueDate);
+        var error = await _taskService.EditTaskAsync(Workspace.Id, CurrentUser.Id, editTaskId, editTaskTitle, editTaskDescription, editTaskPriority, editTaskAssigneeId, editTaskDueDate, editCategoryId, editIsCounterTask, editTargetCount);
         if (error != null)
         {
             if (error.Contains("permission")) return Forbid();
@@ -660,6 +688,10 @@ public class WorkspaceDetailModel : PageModel
             status = task.Status,
             priority = task.Priority,
             dueDate = finalDueDate,
+            categoryId = task.CategoryId,
+            isCounterTask = task.IsCounterTask,
+            targetCount = task.TargetCount,
+            currentCount = task.CurrentCount,
             assignee = task.Assignee != null ? new { id = task.Assignee.Id, fullName = task.Assignee.FullName } : null,
             taskComments = task.TaskComments.Select(tc => new {
                 id = tc.Id,
@@ -748,5 +780,113 @@ public class WorkspaceDetailModel : PageModel
     {
         var json = SerializeChatMessages();
         return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostCreateCategoryAsync(string joinCode)
+    {
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+
+        var error = await _taskService.CreateCategoryAsync(Workspace.Id, CurrentUser.Id, NewCategoryName, NewCategoryDescription, NewCategoryColorHex);
+        if (error != null)
+        {
+            TempData["ErrorMessage"] = error;
+        }
+        else
+        {
+            TempData["SuccessMessage"] = "Đầu mục công việc đã được tạo thành công.";
+        }
+
+        return RedirectToPage(new { joinCode });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostDeleteCategoryAsync(string joinCode, Guid categoryId)
+    {
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+
+        var error = await _taskService.DeleteCategoryAsync(Workspace.Id, CurrentUser.Id, categoryId);
+        if (error != null)
+        {
+            TempData["ErrorMessage"] = error;
+        }
+        else
+        {
+            TempData["SuccessMessage"] = "Đầu mục công việc đã được xóa.";
+        }
+
+        return RedirectToPage(new { joinCode });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostCreateKpiTargetAsync(string joinCode)
+    {
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+
+        // Compute startDate and endDate based on periodType
+        DateTime startDate = DateTime.UtcNow;
+        DateTime endDate = DateTime.UtcNow;
+
+        if (NewKpiPeriodType == "Weekly")
+        {
+            // Start of current week (Monday)
+            int diff = (7 + (startDate.DayOfWeek - DayOfWeek.Monday)) % 7;
+            startDate = startDate.AddDays(-1 * diff).Date;
+            endDate = startDate.AddDays(7).AddTicks(-1);
+        }
+        else // Monthly
+        {
+            startDate = new DateTime(startDate.Year, startDate.Month, 1);
+            endDate = startDate.AddMonths(1).AddTicks(-1);
+        }
+
+        var error = await _taskService.CreateKpiTargetAsync(
+            Workspace.Id,
+            CurrentUser.Id,
+            NewKpiUserId,
+            NewKpiCategoryId,
+            NewKpiPeriodType,
+            startDate,
+            endDate,
+            NewKpiTargetValue
+        );
+
+        if (error != null)
+        {
+            TempData["ErrorMessage"] = error;
+        }
+        else
+        {
+            TempData["SuccessMessage"] = "Mục tiêu KPI đã được thiết lập thành công.";
+        }
+
+        return RedirectToPage(new { joinCode });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostDeleteKpiTargetAsync(string joinCode, Guid targetId)
+    {
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+
+        var error = await _taskService.DeleteKpiTargetAsync(Workspace.Id, CurrentUser.Id, targetId);
+        if (error != null)
+        {
+            TempData["ErrorMessage"] = error;
+        }
+        else
+        {
+            TempData["SuccessMessage"] = "Mục tiêu KPI đã được xóa.";
+        }
+
+        return RedirectToPage(new { joinCode });
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateTaskCounterAsync(string joinCode, Guid taskId, int currentCount)
+    {
+        if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+
+        var error = await _taskService.UpdateTaskCounterAsync(Workspace.Id, CurrentUser.Id, taskId, currentCount);
+        if (error != null)
+        {
+            TempData["ErrorMessage"] = error;
+        }
+
+        return RedirectToPage(new { joinCode });
     }
 }

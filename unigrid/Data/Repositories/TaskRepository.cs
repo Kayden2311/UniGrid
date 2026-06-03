@@ -72,4 +72,66 @@ public class TaskRepository : ITaskRepository
     {
         await _context.TaskComments.AddAsync(comment);
     }
+
+    // TaskCategory methods
+    public async System.Threading.Tasks.Task<List<TaskCategory>> GetWorkspaceCategoriesAsync(Guid workspaceId)
+    {
+        return await _context.TaskCategories
+            .Where(tc => tc.WorkspaceId == workspaceId)
+            .OrderBy(tc => tc.Name)
+            .ToListAsync();
+    }
+
+    public async System.Threading.Tasks.Task<TaskCategory?> GetCategoryByIdAsync(Guid id)
+    {
+        return await _context.TaskCategories.FindAsync(id);
+    }
+
+    public async System.Threading.Tasks.Task AddCategoryAsync(TaskCategory category)
+    {
+        await _context.TaskCategories.AddAsync(category);
+    }
+
+    public void RemoveCategory(TaskCategory category)
+    {
+        _context.TaskCategories.Remove(category);
+    }
+
+    // KpiTarget methods
+    public async System.Threading.Tasks.Task<List<KpiTarget>> GetWorkspaceTargetsAsync(Guid workspaceId)
+    {
+        return await _context.KpiTargets
+            .Include(kt => kt.Category)
+            .Include(kt => kt.User)
+            .Where(kt => kt.WorkspaceId == workspaceId)
+            .OrderBy(kt => kt.StartDate)
+            .ToListAsync();
+    }
+
+    public async System.Threading.Tasks.Task<KpiTarget?> GetTargetByIdAsync(Guid id)
+    {
+        return await _context.KpiTargets.FindAsync(id);
+    }
+
+    public async System.Threading.Tasks.Task AddTargetAsync(KpiTarget target)
+    {
+        await _context.KpiTargets.AddAsync(target);
+    }
+
+    public void RemoveTarget(KpiTarget target)
+    {
+        _context.KpiTargets.Remove(target);
+    }
+
+    public async System.Threading.Tasks.Task<List<KpiTarget>> GetUserTargetsForPeriodAsync(Guid workspaceId, Guid userId, string periodType, DateTime startDate, DateTime endDate)
+    {
+        return await _context.KpiTargets
+            .Include(kt => kt.Category)
+            .Where(kt => kt.WorkspaceId == workspaceId && 
+                         kt.UserId == userId && 
+                         kt.PeriodType == periodType && 
+                         kt.StartDate >= startDate && 
+                         kt.EndDate <= endDate)
+            .ToListAsync();
+    }
 }

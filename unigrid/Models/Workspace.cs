@@ -41,6 +41,8 @@ public partial class Workspace
 
     public virtual ICollection<Task> Tasks { get; set; } = new List<Task>();
 
+    public virtual ICollection<TaskCategory> TaskCategories { get; set; } = new List<TaskCategory>();
+
     public virtual ICollection<WorkspaceFile> WorkspaceFiles { get; set; } = new List<WorkspaceFile>();
 
     public virtual ICollection<WorkspaceMember> WorkspaceMembers { get; set; } = new List<WorkspaceMember>();
