@@ -3,6 +3,34 @@
 @{
     ViewData["Title"] = $"Joint Control Center - {Model.Federation.Name}";
     Layout = "_Layout";
+
+    // Compute Metrics across Federation and Children
+    var totalTasks = Model.FederationTasks.Count + Model.ChildTasks.Count;
+    var inProgressTasks = Model.FederationTasks.Count(t => t.Status == 1) + Model.ChildTasks.Count(t => t.Status == 1);
+    var reviewTasks = Model.FederationTasks.Count(t => t.Status == 2) + Model.ChildTasks.Count(t => t.Status == 2);
+    var completedTasks = Model.FederationTasks.Count(t => t.Status == 3) + Model.ChildTasks.Count(t => t.Status == 3);
+    var todoTasks = Model.FederationTasks.Count(t => t.Status == 0) + Model.ChildTasks.Count(t => t.Status == 0);
+    var overdueTasks = Model.FederationTasks.Count(t => t.Status != 3 && t.DueDate < DateTime.UtcNow) + Model.ChildTasks.Count(t => t.Status != 3 && t.DueDate < DateTime.UtcNow);
+
+    // Dynamic Color Palette for SVGs
+    var todoColor = "#94a3b8"; // Slate
+    var inProgressColor = "#4f46e5"; // Indigo
+    var reviewColor = "#a855f7"; // Purple
+    var doneColor = "#22c55e"; // Green
+
+    // Member data serialization for charts
+    var memberChartData = Model.FederationUsers.Select(u => {
+        var assigned = Model.FederationTasks.Count(t => t.AssigneeId == u.Id) + Model.ChildTasks.Count(t => t.AssigneeId == u.Id);
+        var completed = Model.FederationTasks.Count(t => t.AssigneeId == u.Id && t.Status == 3) + Model.ChildTasks.Count(t => t.AssigneeId == u.Id && t.Status == 3);
+        var rate = assigned > 0 ? (int)Math.Round((double)completed / assigned * 100) : 0;
+        return new {
+            Name = u.FullName.Split(' ')[0],
+            FullName = u.FullName,
+            Assigned = assigned,
+            Completed = completed,
+            Rate = rate
+        };
+    }).OrderByDescending(m => m.Completed).ToList();
 }
 
 <div class="space-y-8 py-6 px-4 md:px-8 max-w-7xl mx-auto overflow-y-auto h-[calc(100vh-4rem)] scrollbar-thin">
@@ -96,11 +124,37 @@
         </div>
     </div>
 
-    <!-- ─── Core Content Sections ─── -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- ─── Tab-Based Navigation Wrapper ─── -->
+    <div x-data="federationDetail" class="space-y-8">
         
-        <!-- Left 2 Columns: Child Portals Grid -->
-        <div class="lg:col-span-2 space-y-6">
+        <!-- Tab Navigation Buttons -->
+        <div class="flex items-center gap-2 p-1.5 glass rounded-2xl border border-slate-200/60 shadow-xs max-w-xl">
+            <button @@click="activeTab = 'overview'" :class="activeTab === 'overview' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100/50'" class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
+                <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Overview
+            </button>
+            <button @@click="activeTab = 'tasks'" :class="activeTab === 'tasks' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100/50'" class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
+                <i data-lucide="kanban" class="w-4 h-4"></i> Tasks
+            </button>
+            <button @@click="activeTab = 'kpis'" :class="activeTab === 'kpis' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100/50'" class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
+                <i data-lucide="award" class="w-4 h-4"></i> KPIs
+            </button>
+            <button @@click="activeTab = 'chat'" :class="activeTab === 'chat' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100/50'" class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
+                <i data-lucide="message-square" class="w-4 h-4"></i> Chat Hub
+            </button>
+            <button @@click="activeTab = 'members'" :class="activeTab === 'members' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100/50'" class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
+                <i data-lucide="users" class="w-4 h-4"></i> Members
+            </button>
+            @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident")
+            {
+                <button @@click="activeTab = 'settings'" :class="activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100/50'" class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
+                    <i data-lucide="settings" class="w-4 h-4"></i> Settings
+                </button>
+            }
+        </div>
+
+        <!-- ─── TAB 1: OVERVIEW ─── -->
+        <div x-show="activeTab === 'overview'" class="space-y-6" x-transition>
+            
             <div class="flex items-center justify-between">
                 <div>
                     <h3 class="text-xl font-black text-slate-800 tracking-tight">Affiliated Child Portals</h3>
@@ -108,13 +162,13 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 @if (!Model.ChildWorkspaces.Any())
                 {
-                    <div class="col-span-2 glass p-12 text-center text-slate-400 font-bold rounded-[2.5rem] border border-slate-200/50">
+                    <div class="col-span-full glass p-12 text-center text-slate-400 font-bold rounded-[2.5rem] border border-slate-200/50">
                         <i data-lucide="folder-open" class="w-12 h-12 text-slate-350 mx-auto mb-3"></i>
                         <p class="text-sm">No child portals connected yet.</p>
-                        <p class="text-xs text-slate-400 mt-1 font-medium">Use the panel on the right to link owned workspaces or create new ones.</p>
+                        <p class="text-xs text-slate-400 mt-1 font-medium">Use the settings panel to link owned workspaces or create new ones.</p>
                     </div>
                 }
                 @foreach (var ws in Model.ChildWorkspaces)
@@ -124,11 +178,9 @@
                     var badgeBg = isGroup ? "bg-indigo-50 text-indigo-600 border border-indigo-100" : "bg-teal-50 text-teal-600 border border-teal-100";
                     
                     <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between h-56 hover:shadow-lg transition-all relative overflow-hidden group">
-                        <!-- BG subtle glow -->
                         <div class="absolute -right-12 -top-12 w-28 h-28 bg-indigo-50/40 rounded-full blur-[30px] pointer-events-none group-hover:scale-110 transition-transform"></div>
                         
                         <div class="space-y-4">
-                            <!-- Top row: initial avatar and type badge -->
                             <div class="flex items-center justify-between">
                                 <div class="h-10 w-10 rounded-2xl bg-slate-100 flex items-center justify-center font-black text-slate-600 text-sm shadow-inner">
                                     @initials
@@ -138,14 +190,12 @@
                                 </span>
                             </div>
 
-                            <!-- Title and Join Code -->
                             <div>
                                 <h4 class="font-black text-slate-800 text-base truncate group-hover:text-indigo-600 transition-colors">@ws.Name</h4>
                                 <p class="text-[10px] text-slate-400 font-mono mt-1">Code: #@ws.JoinCode • @(ws.PackageTier ?? "Free") Plan</p>
                             </div>
                         </div>
 
-                        <!-- Footer Actions -->
                         <div class="flex items-center justify-between pt-4 border-t border-slate-100/50 mt-auto">
                             <span class="text-[10px] font-bold text-slate-400">Owner: @(ws.OwnerId == Model.CurrentUser.Id ? "You" : "Co-member")</span>
                             <a href="/WorkspaceDetail/@ws.JoinCode" class="h-9 px-4 bg-slate-900 text-white text-xs font-black rounded-xl hover:bg-indigo-600 shadow shadow-slate-200 hover:shadow-indigo-100 transition-all flex items-center gap-1.5 cursor-pointer">
@@ -157,7 +207,168 @@
                 }
             </div>
 
-            <!-- ─── Shared Document Portal ─── -->
+            <!-- Charts Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 1. Task Distribution Semi-Circle Donut Chart -->
+                <div class="glass p-6 rounded-[2.5rem] shadow-sm flex flex-col justify-between relative overflow-hidden transition-all duration-300 transform hover:scale-[1.03] hover:-translate-y-1 hover:shadow-lg cursor-pointer border border-transparent hover:border-indigo-200 select-none">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="bar-chart-3" class="w-5 h-5 text-indigo-600"></i>
+                        <h3 class="text-base font-black text-slate-800">Task Distribution</h3>
+                    </div>
+                    
+                    <div class="flex items-center justify-center py-4 relative">
+                        <!-- Centered Donut Pop-up Tooltip -->
+                        <div class="absolute bg-white border border-slate-150 shadow-lg px-6 py-3.5 rounded-2xl text-center z-10 text-xs font-black text-slate-800 transition-all duration-300 pointer-events-none select-none"
+                             style="top: 48%; left: 50%; transform: translate(-50%, -50%); min-width: 140px; border-radius: 1rem;"
+                             x-show="hoveredSegment !== ''" x-transition x-cloak>
+                             <span x-text="hoveredSegment"></span>
+                        </div>
+
+                        <!-- Rotated 135deg clockwise so the 25% gap is perfectly centered at the bottom -->
+                        <svg viewBox="0 0 42 42" class="w-60 h-60 transform rotate-[135deg]">
+                            <!-- Background arc (75% length, 25% gap at bottom) -->
+                            <circle cx="21" cy="21" r="15.915" fill="none" stroke="#f1f5f9" stroke-width="4.2" stroke-dasharray="75 25" stroke-dashoffset="0"></circle>
+                            
+                            @{
+                                double total = totalTasks == 0 ? 1 : totalTasks;
+                                // Scale active segments within the 75 units active arc
+                                double pTodo = ((double)todoTasks / total) * 75;
+                                double pInProg = ((double)inProgressTasks / total) * 75;
+                                double pReview = ((double)reviewTasks / total) * 75;
+                                double pDone = ((double)completedTasks / total) * 75;
+
+                                double offset = 0;
+                            }
+
+                            @if (todoTasks > 0)
+                            {
+                                <circle cx="21" cy="21" r="15.915" fill="none" stroke="@todoColor" stroke-width="4.2" 
+                                        stroke-dasharray="@pTodo @(100 - pTodo)" stroke-dashoffset="@offset"
+                                        class="cursor-pointer transition-all duration-300 hover:stroke-[5.5]"
+                                        @@mouseenter="hoveredSegment = 'To Do : @todoTasks'"
+                                        @@mouseleave="hoveredSegment = ''"></circle>
+                                offset -= pTodo;
+                            }
+                            @if (inProgressTasks > 0)
+                            {
+                                <circle cx="21" cy="21" r="15.915" fill="none" stroke="@inProgressColor" stroke-width="4.2" 
+                                        stroke-dasharray="@pInProg @(100 - pInProg)" stroke-dashoffset="@offset"
+                                        class="cursor-pointer transition-all duration-300 hover:stroke-[5.5]"
+                                        @@mouseenter="hoveredSegment = 'In Progress : @inProgressTasks'"
+                                        @@mouseleave="hoveredSegment = ''"></circle>
+                                offset -= pInProg;
+                            }
+                            @if (reviewTasks > 0)
+                            {
+                                <circle cx="21" cy="21" r="15.915" fill="none" stroke="@reviewColor" stroke-width="4.2" 
+                                        stroke-dasharray="@pReview @(100 - pReview)" stroke-dashoffset="@offset"
+                                        class="cursor-pointer transition-all duration-300 hover:stroke-[5.5]"
+                                        @@mouseenter="hoveredSegment = 'Review : @reviewTasks'"
+                                        @@mouseleave="hoveredSegment = ''"></circle>
+                                offset -= pReview;
+                            }
+                            @if (completedTasks > 0)
+                            {
+                                <circle cx="21" cy="21" r="15.915" fill="none" stroke="@doneColor" stroke-width="4.2" 
+                                        stroke-dasharray="@pDone @(100 - pDone)" stroke-dashoffset="@offset"
+                                        class="cursor-pointer transition-all duration-300 hover:stroke-[5.5]"
+                                        @@mouseenter="hoveredSegment = 'Done : @completedTasks'"
+                                        @@mouseleave="hoveredSegment = ''"></circle>
+                            }
+                        </svg>
+                    </div>
+                    
+                    <!-- Legend -->
+                    <div class="flex items-center justify-center gap-4 text-xs font-bold text-slate-500 mt-4">
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span> To Do</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> In Progress</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Review</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-green-500"></span> Done</span>
+                    </div>
+                </div>
+
+                <!-- Member Contributions Chart -->
+                <div class="glass p-6 rounded-[2.5rem] shadow-sm flex flex-col justify-between transition-all duration-300 transform hover:scale-[1.03] hover:-translate-y-1 hover:shadow-lg cursor-pointer border border-transparent hover:border-indigo-200 select-none relative">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="trending-up" class="w-5 h-5 text-indigo-600"></i>
+                        <h3 class="text-base font-black text-slate-800">Member Contributions</h3>
+                    </div>
+                    
+                    <!-- Floating tooltip pop-up style box -->
+                    <div class="absolute bg-white border border-slate-150 shadow-xl p-4 rounded-2xl transition-all duration-300 pointer-events-none z-20 w-44 flex flex-col gap-1 text-left"
+                         x-show="hoveredMemberIndex !== null"
+                         :style="'left: calc(' + ((55 + hoveredMemberIndex * 48) / 300 * 100) + '% - 88px); top: 50px; border-radius: 1rem;'"
+                         x-transition x-cloak>
+                         <p class="text-xs font-black text-slate-700" x-text="hoveredMemberText"></p>
+                         <p class="text-[11px] font-bold text-indigo-650 flex justify-between mt-1.5">
+                             <span>Assigned :</span>
+                             <span x-text="hoveredMemberAssigned"></span>
+                         </p>
+                         <p class="text-[11px] font-bold text-emerald-600 flex justify-between">
+                             <span>Completed :</span>
+                             <span x-text="hoveredMemberCompleted"></span>
+                         </p>
+                    </div>
+
+                    <div class="flex-1 flex flex-col justify-center py-2">
+                        @{
+                            int maxTasks = memberChartData.Any() ? memberChartData.Max(m => Math.Max(m.Assigned, 1)) : 5;
+                        }
+                        <svg viewBox="0 0 300 200" class="w-full h-60">
+                            <!-- Grid Lines -->
+                            <line x1="30" y1="30" x2="280" y2="30" stroke="#e2e8f0" stroke-dasharray="3" stroke-width="0.75" />
+                            <line x1="30" y1="70" x2="280" y2="70" stroke="#e2e8f0" stroke-dasharray="3" stroke-width="0.75" />
+                            <line x1="30" y1="110" x2="280" y2="110" stroke="#e2e8f0" stroke-dasharray="3" stroke-width="0.75" />
+                            <line x1="30" y1="150" x2="280" y2="150" stroke="#cbd5e1" stroke-width="1.5" />
+                            
+                            <!-- Y-Axis Labels -->
+                            <text x="20" y="34" text-anchor="end" class="text-[9px] font-bold text-slate-400 fill-current">@maxTasks</text>
+                            <text x="20" y="74" text-anchor="end" class="text-[9px] font-bold text-slate-400 fill-current">@(maxTasks * 3 / 4)</text>
+                            <text x="20" y="114" text-anchor="end" class="text-[9px] font-bold text-slate-400 fill-current">@(maxTasks / 2)</text>
+                            <text x="20" y="154" text-anchor="end" class="text-[9px] font-bold text-slate-400 fill-current">0</text>
+                            
+                            @for (int i = 0; i < Math.Min(memberChartData.Count, 5); i++)
+                            {
+                                var m = memberChartData[i];
+                                double hAssigned = ((double)m.Assigned / maxTasks) * 120;
+                                double hCompleted = ((double)m.Completed / maxTasks) * 120;
+                                
+                                double xBase = 55 + i * 48;
+                                string xLabelStr = xBase.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+                                string nameStr = m.Name;
+                                
+                                <!-- Column Hover Background (Gray highlight) -->
+                                <rect x="@(xBase - 18)" y="15" width="36" height="135" fill="#e2e8f0" rx="4"
+                                      class="transition-opacity duration-200 pointer-events-none"
+                                      :style="hoveredMemberIndex === @i ? 'opacity: 0.6;' : 'opacity: 0;'" />
+
+                                <!-- Assigned Bar (Indigo) -->
+                                <rect x="@(xBase - 8)" y="@(150 - hAssigned)" width="10" height="@hAssigned" fill="#4f46e5" rx="1.5"
+                                      class="transition-all duration-300 pointer-events-none" />
+                                
+                                <!-- Completed Bar (Green) -->
+                                <rect x="@(xBase + 4)" y="@(150 - hCompleted)" width="10" height="@hCompleted" fill="#22c55e" rx="1.5"
+                                      class="transition-all duration-300 pointer-events-none" />
+
+                                <!-- Column Hover Target (Transparent overlay for massive hover area) -->
+                                <rect x="@(xBase - 18)" y="15" width="36" height="150" fill="transparent" class="cursor-pointer"
+                                      @@mouseenter="hoveredMemberIndex = @i; hoveredMemberText = '@m.FullName'; hoveredMemberAssigned = @m.Assigned; hoveredMemberCompleted = @m.Completed"
+                                      @@mouseleave="hoveredMemberIndex = null" />
+
+                                <!-- X Axis Label (First Name) -->
+                                @Html.Raw("<text x='" + xLabelStr + "' y='166' text-anchor='middle' class='text-[9px] font-bold text-slate-500 fill-current'>" + nameStr + "</text>")
+                            }
+                        </svg>
+                    </div>
+                    <!-- Legend -->
+                    <div class="flex items-center gap-4 mt-2 justify-center text-[10px] font-bold text-slate-500">
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-600 inline-block"></span> Assigned</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-green-500 inline-block"></span> Completed</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shared Document Portal -->
             <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-150/50 pb-4">
                     <div class="flex items-center gap-2">
@@ -187,7 +398,7 @@
                                 <div class="min-w-0">
                                     <p class="text-xs font-black text-slate-700 truncate leading-snug">@file.FileName</p>
                                     <p class="text-[9px] font-bold text-slate-400 mt-0.5">
-                                        Portal: <strong class="text-slate-500 font-extrabold">@file.Workspace.Name</strong> 
+                                        Portal: <strong class="text-slate-500 font-extrabold">@(file.Workspace?.Name ?? "Federation Direct")</strong> 
                                         • By: <span class="font-extrabold text-indigo-500">@file.User.FullName</span>
                                     </p>
                                 </div>
@@ -201,101 +412,861 @@
                         </div>
                     }
                 </div>
-            </div>
-        </div>
 
-        <!-- Right 1 Column: Administration Actions Panel -->
-        <div class="space-y-6">
-            
-            <!-- Panel Header -->
-            <div>
-                <h3 class="text-xl font-black text-slate-800 tracking-tight">Joint Controls</h3>
-                <p class="text-xs text-slate-500 mt-0.5">Administrative workspace links and deployment forms.</p>
-            </div>
-
-            <!-- Form A: Link Existing Workspace -->
-            <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
-                <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
-                    <i data-lucide="link" class="w-4.5 h-4.5 text-indigo-500"></i>
-                    <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Link Existing Portal</h4>
-                </div>
-                
-                <p class="text-[10px] text-slate-400 leading-relaxed">
-                    Connect an owned Solo Personal workspace as a child workspace inside this enterprise federation.
-                </p>
-
-                @if (!Model.EligibleWorkspacesToLink.Any())
+                <!-- Direct Upload Form & Push Action -->
+                @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident" || Model.CurrentUserRole == "DepartmentManager" || (await Model.GetSettingValueAsync(Model.Federation.JoinCode, "allowMemberPushFile", true)))
                 {
-                    <div class="p-4 bg-slate-50 border border-slate-150/60 rounded-2xl text-center text-[10px] font-bold text-slate-400 italic">
-                        No eligible personal workspaces available to link. All owned personal workspaces are already affiliated.
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                        @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident" || Model.CurrentUserRole == "DepartmentManager")
+                        {
+                            <form method="post" asp-page-handler="UploadFederationFile" asp-route-joinCode="@Model.Federation.JoinCode" enctype="multipart/form-data" class="flex flex-col gap-2 p-4 bg-slate-50/50 border border-slate-150/40 rounded-2xl">
+                                @Html.AntiForgeryToken()
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Direct Upload to Federation</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="file" name="UploadedFederationFile" required class="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-slate-900 file:text-white hover:file:bg-indigo-600 transition-all cursor-pointer">
+                                    <button type="submit" class="h-8 px-3.5 bg-slate-900 text-white text-[10px] font-black rounded-xl hover:bg-indigo-600 transition-all flex items-center gap-1 cursor-pointer shrink-0">
+                                        <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i> Upload
+                                    </button>
+                                </div>
+                            </form>
+                        }
+                        else
+                        {
+                            <div class="p-4 bg-slate-50/30 border border-dashed border-slate-200 rounded-2xl flex flex-col justify-center items-center text-center">
+                                <i data-lucide="lock" class="w-5 h-5 text-slate-400 mb-1"></i>
+                                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Direct Upload Locked</h4>
+                                <p class="text-[9px] text-slate-400 mt-0.5 leading-relaxed">Direct file uploading is restricted to executives and managers.</p>
+                            </div>
+                        }
+
+                        <div class="p-4 bg-indigo-50/20 border border-indigo-100/50 rounded-2xl flex flex-col justify-between">
+                            <div>
+                                <h4 class="text-[10px] font-black text-indigo-600 uppercase tracking-wider">Push from Child Workspaces</h4>
+                                <p class="text-[10px] text-slate-400 mt-1 leading-relaxed">Share files securely from the workspaces you belong to.</p>
+                            </div>
+                            <button @@click="showPushModal = true" type="button" class="h-8 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-3">
+                                <i data-lucide="share-2" class="w-3.5 h-3.5 animate-pulse"></i> Push File
+                            </button>
+                        </div>
                     </div>
                 }
                 else
                 {
-                    <form method="post" asp-page-handler="LinkChildWorkspace" asp-route-joinCode="@Model.Federation.JoinCode" class="space-y-3.5">
-                        @Html.AntiForgeryToken()
-                        <div class="space-y-1">
-                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Select Personal Workspace</label>
-                            <select name="workspaceId" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
-                                @foreach (var ws in Model.EligibleWorkspacesToLink)
-                                {
-                                    <option value="@ws.Id">@ws.Name (Code: #@ws.JoinCode)</option>
-                                }
-                            </select>
+                    <div class="flex items-center justify-center gap-2 p-4 bg-slate-50/50 border border-dashed border-slate-200 rounded-2xl text-slate-400 text-xs font-bold mt-2">
+                        <i data-lucide="lock" class="w-4 h-4 text-slate-400"></i>
+                        <span>File push and upload operations have been disabled by the administrator.</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- ─── TAB 6: MEMBERS (ACCESSIBLE TO ALL) ─── -->
+        <div x-show="activeTab === 'members'" class="space-y-6" x-transition>
+            <div>
+                <h3 class="text-xl font-black text-slate-800 tracking-tight">Active Federation Members</h3>
+                <p class="text-xs text-slate-500 mt-0.5">List of all active accounts in this federation and their roles.</p>
+            </div>
+
+            <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4 max-w-4xl bg-white/80">
+                <div class="space-y-4">
+                    @foreach (var member in Model.ActiveFederationMembers)
+                    {
+                        var memberUserFullName = member.User?.FullName ?? "Unknown Member";
+                        var initials = string.Concat(memberUserFullName.Split(' ').Select(n => n.Length > 0 ? n[0].ToString() : "U")).ToUpper();
+                        var isOwner = member.UserId == Model.Federation.OwnerId;
+                        
+                        <div class="p-4 bg-slate-50/50 border border-slate-100 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+                            <div class="flex items-center gap-3">
+                                <div class="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs shrink-0">
+                                    @initials
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h4 class="text-sm font-bold text-slate-800">@memberUserFullName</h4>
+                                        @if (isOwner)
+                                        {
+                                            <span class="px-1.5 py-0.2 bg-amber-50 text-amber-600 border border-amber-100 rounded text-[9px] font-black uppercase">Owner</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="px-1.5 py-0.2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded text-[9px] font-black uppercase">@member.Role</span>
+                                        }
+                                    </div>
+                                    <p class="text-[10px] text-slate-400 font-medium mt-0.5">Email: @(member.User?.Account?.Email ?? "No email") • Linked Portal: <span class="font-bold text-indigo-500">@(member.PersonalWorkspace?.Name ?? "N/A")</span></p>
+                                </div>
+                            </div>
+
+                            @if (!isOwner && (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident"))
+                            {
+                                <div class="flex items-center gap-3 self-end md:self-auto flex-row">
+                                    <!-- Change Role Form -->
+                                    <form method="post" asp-page-handler="UpdateFederationMemberRole" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-userId="@member.UserId" class="flex items-center gap-1.5 inline">
+                                        @Html.AntiForgeryToken()
+                                        <select name="role" onchange="this.form.submit()" class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                            <option value="Member" selected="@(member.Role == "Member" ? "selected" : null)">Member</option>
+                                            <option value="DepartmentManager" selected="@(member.Role == "DepartmentManager" ? "selected" : null)">DepartmentManager</option>
+                                            <option value="HeadPresident" selected="@(member.Role == "HeadPresident" ? "selected" : null)">HeadPresident</option>
+                                        </select>
+                                    </form>
+
+                                    <!-- Remove Member Form -->
+                                    <form method="post" asp-page-handler="RemoveFederationMember" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-userId="@member.UserId" onsubmit="return confirm('Are you sure you want to remove this member from the federation? All of their linked child workspaces will be disconnected.')" class="inline">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="h-8 w-8 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center border-0 cursor-pointer transition-colors" title="Remove Member">
+                                            <i data-lucide="user-minus" class="w-4 h-4"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            }
                         </div>
-                        <button type="submit" class="w-full py-3.5 bg-slate-900 text-white rounded-2xl text-xs font-black shadow hover:bg-indigo-600 transition-all flex items-center justify-center gap-1.5">
-                            <i data-lucide="plus-circle" class="w-4 h-4"></i> Link Selected Workspace
-                        </button>
-                    </form>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- ─── TAB 5: SETTINGS (ONLY OWNER & HEADPRESIDENT) ─── -->
+        @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident")
+        {
+            <div x-show="activeTab === 'settings'" class="grid grid-cols-1 lg:grid-cols-3 gap-8" x-transition>
+                
+                <!-- Left 2 Columns: Requests & Deployments -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Pending Requests -->
+                    <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="clock" class="w-5 h-5 text-amber-500"></i>
+                                <h3 class="text-base font-black text-slate-800 tracking-tight">Pending Workspace Link Requests</h3>
+                            </div>
+                            <span class="px-2.5 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-black rounded-md uppercase tracking-wider">Awaiting Action</span>
+                        </div>
+
+                        <div class="space-y-3">
+                            @if (!Model.PendingFederationLinks.Any())
+                            {
+                                <div class="text-center py-6 text-slate-450 font-bold text-xs italic">
+                                    No pending link requests.
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var req in Model.PendingFederationLinks)
+                                {
+                                    <div class="p-4 bg-white/80 border border-slate-100 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+                                        <div class="flex items-center gap-3">
+                                            <div class="h-9 w-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-black">
+                                                <i data-lucide="folder-lock" class="w-5 h-5"></i>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-bold text-slate-800">@req.PersonalWorkspace?.Name</h4>
+                                                <p class="text-[10px] text-slate-400 font-medium">Owner: <strong class="text-slate-500">@req.User.FullName</strong> (@req.User.Account?.Email)</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2 self-end sm:self-auto flex-row">
+                                            <form method="post" asp-page-handler="ApprovePersonalWorkspace" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-personalWorkspaceId="@req.PersonalWorkspaceId" class="inline">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="h-8 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all flex items-center gap-1 cursor-pointer border-0">
+                                                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Approve
+                                                </button>
+                                            </form>
+                                            <form method="post" asp-page-handler="RejectPersonalWorkspace" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-personalWorkspaceId="@req.PersonalWorkspaceId" class="inline">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="h-8 px-3.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-black rounded-xl transition-all flex items-center gap-1 cursor-pointer border-0">
+                                                    <i data-lucide="x" class="w-3.5 h-3.5"></i> Reject
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Manage Federation Members -->
+                    <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="users" class="w-5 h-5 text-indigo-500"></i>
+                                <h3 class="text-base font-black text-slate-800 tracking-tight">Manage Federation Members</h3>
+                            </div>
+                            <span class="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 text-[9px] font-black rounded-md uppercase tracking-wider">Active Members</span>
+                        </div>
+
+                        <div class="space-y-4">
+                            @foreach (var member in Model.ActiveFederationMembers)
+                            {
+                                var memberUserFullName = member.User?.FullName ?? "Unknown Member";
+                                var initials = string.Concat(memberUserFullName.Split(' ').Select(n => n.Length > 0 ? n[0].ToString() : "U")).ToUpper();
+                                var isOwner = member.UserId == Model.Federation.OwnerId;
+                                
+                                <div class="p-4 bg-white/80 border border-slate-100 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+                                    <div class="flex items-center gap-3">
+                                        <div class="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs shrink-0">
+                                            @initials
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center gap-2">
+                                                <h4 class="text-sm font-bold text-slate-800">@memberUserFullName</h4>
+                                                @if (isOwner)
+                                                {
+                                                    <span class="px-1.5 py-0.2 bg-amber-50 text-amber-600 border border-amber-100 rounded text-[9px] font-black uppercase">Owner</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="px-1.5 py-0.2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded text-[9px] font-black uppercase">@member.Role</span>
+                                                }
+                                            </div>
+                                            <p class="text-[10px] text-slate-400 font-medium mt-0.5">Email: @(member.User?.Account?.Email ?? "No account info") • Linked Portal: <span class="font-bold text-indigo-500">@(member.PersonalWorkspace?.Name ?? "N/A")</span></p>
+                                        </div>
+                                    </div>
+
+                                    @if (!isOwner)
+                                    {
+                                        <div class="flex items-center gap-3 self-end md:self-auto">
+                                            <!-- Change Role Form -->
+                                            <form method="post" asp-page-handler="UpdateFederationMemberRole" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-userId="@member.UserId" class="flex items-center gap-1.5">
+                                                @Html.AntiForgeryToken()
+                                                <select name="role" onchange="this.form.submit()" class="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                                    <option value="Member" selected="@(member.Role == "Member" ? "selected" : null)">Member</option>
+                                                    <option value="DepartmentManager" selected="@(member.Role == "DepartmentManager" ? "selected" : null)">DepartmentManager</option>
+                                                    <option value="HeadPresident" selected="@(member.Role == "HeadPresident" ? "selected" : null)">HeadPresident</option>
+                                                </select>
+                                            </form>
+
+                                            <!-- Remove Member Form -->
+                                            <form method="post" asp-page-handler="RemoveFederationMember" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-userId="@member.UserId" onsubmit="return confirm('Are you sure you want to remove this member from the federation? All of their child workspaces will be unlinked.')">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="h-8 w-8 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center border-0 cursor-pointer transition-colors" title="Remove Member">
+                                                    <i data-lucide="user-minus" class="w-4 h-4"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Deploy Child Workspace -->
+                    <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
+                        <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+                            <i data-lucide="plus" class="w-4.5 h-4.5 text-violet-500"></i>
+                            <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Deploy New Child Portal</h4>
+                        </div>
+                        <p class="text-[10px] text-slate-400 leading-relaxed">Deploy a clean Group workspace directly affiliated with this federation. ProPlus package limits will apply.</p>
+
+                        <form method="post" asp-page-handler="AddChildWorkspace" asp-route-joinCode="@Model.Federation.JoinCode" class="space-y-3.5">
+                            @Html.AntiForgeryToken()
+                            <div class="space-y-1">
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Workspace Name</label>
+                                <input type="text" asp-for="NewChildWorkspaceName" placeholder="e.g. BA Department, Marketing Branch" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            </div>
+                            <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-2xl text-xs font-black shadow-lg shadow-indigo-150 hover:from-violet-750 hover:to-indigo-750 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0">
+                                <i data-lucide="arrow-right-circle" class="w-4 h-4 animate-pulse"></i> Deploy Child Workspace
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Right 1 Column: Linking Forms & Info -->
+                <div class="space-y-6">
+                    <!-- Federation Permissions Configuration -->
+                    <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
+                        <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+                            <i data-lucide="sliders" class="w-4.5 h-4.5 text-indigo-500"></i>
+                            <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Federation Permissions</h4>
+                        </div>
+                        <p class="text-[10px] text-slate-400 leading-relaxed">Configure virtual constraints and action locks across the federation portal.</p>
+
+                        @{
+                            var currentSettings = await Model.GetFederationSettingsAsync(Model.Federation.JoinCode);
+                            bool allowMemberCreateTask = currentSettings["allowMemberCreateTask"]?.GetValue<bool>() ?? false;
+                            bool allowManagerSetKpi = currentSettings["allowManagerSetKpi"]?.GetValue<bool>() ?? true;
+                            bool allowMemberPushFile = currentSettings["allowMemberPushFile"]?.GetValue<bool>() ?? true;
+                            bool allowMemberChat = currentSettings["allowMemberChat"]?.GetValue<bool>() ?? true;
+                        }
+
+                        <form method="post" asp-page-handler="UpdateFederationSettings" asp-route-joinCode="@Model.Federation.JoinCode" class="space-y-4">
+                            @Html.AntiForgeryToken()
+                            
+                            <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded-xl transition-all">
+                                <div class="space-y-0.5">
+                                    <label class="text-xs font-bold text-slate-700 select-none cursor-pointer" for="allowMemberCreateTask">Create Tasks</label>
+                                    <p class="text-[9px] text-slate-400">Allow standard members to create federation tasks.</p>
+                                </div>
+                                <input type="checkbox" name="allowMemberCreateTask" id="allowMemberCreateTask" value="true" checked="@(allowMemberCreateTask ? "checked" : null)" class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
+                                <input type="hidden" name="allowMemberCreateTask" value="false">
+                            </div>
+
+                            <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded-xl transition-all">
+                                <div class="space-y-0.5">
+                                    <label class="text-xs font-bold text-slate-700 select-none cursor-pointer" for="allowManagerSetKpi">Set KPIs</label>
+                                    <p class="text-[9px] text-slate-400">Allow department managers to set child KPI targets.</p>
+                                </div>
+                                <input type="checkbox" name="allowManagerSetKpi" id="allowManagerSetKpi" value="true" checked="@(allowManagerSetKpi ? "checked" : null)" class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
+                                <input type="hidden" name="allowManagerSetKpi" value="false">
+                            </div>
+
+                            <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded-xl transition-all">
+                                <div class="space-y-0.5">
+                                    <label class="text-xs font-bold text-slate-700 select-none cursor-pointer" for="allowMemberPushFile">Push Files</label>
+                                    <p class="text-[9px] text-slate-400">Allow child portal members to push files to federation.</p>
+                                </div>
+                                <input type="checkbox" name="allowMemberPushFile" id="allowMemberPushFile" value="true" checked="@(allowMemberPushFile ? "checked" : null)" class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
+                                <input type="hidden" name="allowMemberPushFile" value="false">
+                            </div>
+
+                            <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded-xl transition-all">
+                                <div class="space-y-0.5">
+                                    <label class="text-xs font-bold text-slate-700 select-none cursor-pointer" for="allowMemberChat">Real-time Chat</label>
+                                    <p class="text-[9px] text-slate-400">Allow standard members to participate in the chat room.</p>
+                                </div>
+                                <input type="checkbox" name="allowMemberChat" id="allowMemberChat" value="true" checked="@(allowMemberChat ? "checked" : null)" class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
+                                <input type="hidden" name="allowMemberChat" value="false">
+                            </div>
+
+                            <button type="submit" class="w-full py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black shadow hover:bg-indigo-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0">
+                                <i data-lucide="save" class="w-4 h-4"></i> Save Settings
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Link Group Workspace by Invite Code -->
+                    <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
+                        <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+                            <i data-lucide="link" class="w-4.5 h-4.5 text-indigo-500"></i>
+                            <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Link Group Workspace</h4>
+                        </div>
+                        <p class="text-[10px] text-slate-400 leading-relaxed">Connect an owned Group workspace by entering its secret invite code.</p>
+
+                        <form method="post" asp-page-handler="LinkChildWorkspace" asp-route-joinCode="@Model.Federation.JoinCode" class="space-y-3.5">
+                            @Html.AntiForgeryToken()
+                            <div class="space-y-1">
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Workspace Invite Code</label>
+                                <input type="text" name="inviteCode" required placeholder="Paste group workspace invite code (UUID)" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            </div>
+                            <button type="submit" class="w-full py-3.5 bg-slate-900 text-white rounded-2xl text-xs font-black shadow hover:bg-indigo-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i> Link Workspace
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Link Personal Workspace by Invite Code -->
+                    <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
+                        <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+                            <i data-lucide="key" class="w-4.5 h-4.5 text-emerald-500"></i>
+                            <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Link Personal Portal</h4>
+                        </div>
+                        <p class="text-[10px] text-slate-400 leading-relaxed">Personal plan workspaces must be connected by manually entering their private invite code. Requires approval from the Federation Owner.</p>
+
+                        <form method="post" asp-page-handler="LinkPersonalWorkspaceByCode" asp-route-joinCode="@Model.Federation.JoinCode" class="space-y-3.5">
+                            @Html.AntiForgeryToken()
+                            <div class="space-y-1">
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Workspace Invite Code</label>
+                                <input type="text" name="inviteCode" required placeholder="Paste invite code (UUID)" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            </div>
+                            <button type="submit" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black shadow transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0">
+                                <i data-lucide="link" class="w-4 h-4"></i> Send Linking Request
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Compliance Info Card -->
+                    <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm bg-gradient-to-br from-violet-50/30 to-indigo-50/20 space-y-4">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="shield-check" class="w-4.5 h-4.5 text-emerald-500"></i>
+                            <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Enterprise Compliance</h4>
+                        </div>
+                        <ul class="space-y-3 text-[10px] text-slate-500 font-bold">
+                            <li class="flex items-start gap-2">
+                                <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5"></i>
+                                <span>Unified Document Indexing operates under encrypted storage protocols.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5"></i>
+                                <span>High-level managers maintain supreme visibility controls.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5"></i>
+                                <span>Personal collaboration is completely isolated to secure workspace child environments.</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- ─── TAB 2: TASKS (KANBAN BOARD) ─── -->
+        <div x-show="activeTab === 'tasks'" class="space-y-6" x-transition>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-xl font-black text-slate-800 tracking-tight">Federation Kanban Board</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Manage tasks and assignments assigned directly to federation levels.</p>
+                </div>
+                @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident" || (await Model.GetSettingValueAsync(Model.Federation.JoinCode, "allowMemberCreateTask", false)))
+                {
+                    <button @@click="showTaskModal = true" class="h-10 px-4 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl text-xs font-black shadow hover:from-violet-750 hover:to-indigo-750 transition-all flex items-center gap-1.5 cursor-pointer border-0">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i> Create Task
+                    </button>
+                }
+                else
+                {
+                    <button disabled class="h-10 px-4 bg-slate-100 text-slate-400 rounded-xl text-xs font-black flex items-center gap-1.5 border-0 opacity-60 cursor-not-allowed">
+                        <i data-lucide="lock" class="w-4 h-4"></i> Create Task (Restricted)
+                    </button>
                 }
             </div>
 
-            <!-- Form B: Create New Child Workspace -->
-            <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
-                <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
-                    <i data-lucide="plus" class="w-4.5 h-4.5 text-violet-500"></i>
-                    <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Deploy New Child Portal</h4>
-                </div>
-                
-                <p class="text-[10px] text-slate-400 leading-relaxed">
-                    Deploy a clean Group workspace directly affiliated with this federation. ProPlus package limits will apply.
-                </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                @for (int colIndex = 0; colIndex < 4; colIndex++)
+                {
+                    var statusLabel = colIndex == 0 ? "To Do" : colIndex == 1 ? "In Progress" : colIndex == 2 ? "In Review" : "Done";
+                    var statusColor = colIndex == 0 ? "bg-slate-100 text-slate-700" : colIndex == 1 ? "bg-indigo-50 text-indigo-600 border border-indigo-100" : colIndex == 2 ? "bg-purple-50 text-purple-600 border border-purple-100" : "bg-emerald-50 text-emerald-600 border border-emerald-100";
+                    var tasksInCol = Model.FederationTasks.Where(t => t.Status == colIndex).ToList();
 
-                <form method="post" asp-page-handler="AddChildWorkspace" asp-route-joinCode="@Model.Federation.JoinCode" class="space-y-3.5">
-                    @Html.AntiForgeryToken()
-                    <div class="space-y-1">
-                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Workspace Name</label>
-                        <input type="text" asp-for="NewChildWorkspaceName" placeholder="e.g. BA Department, Marketing Branch" required
-                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    <div class="glass p-5 rounded-[2.5rem] border border-slate-200/50 shadow-sm flex flex-col h-[600px] overflow-hidden bg-slate-50/20">
+                        <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-150/40 shrink-0">
+                            <span class="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider @statusColor">@statusLabel</span>
+                            <span class="text-xs font-extrabold text-slate-450 bg-white px-2.5 py-0.5 rounded-lg border border-slate-100">@tasksInCol.Count</span>
+                        </div>
+
+                        <div class="flex-1 overflow-y-auto space-y-4 pr-1.5 scrollbar-thin">
+                            @if (!tasksInCol.Any())
+                            {
+                                <div class="text-center py-12 text-slate-400 font-bold text-xs select-none">
+                                    No tasks in this column
+                                </div>
+                            }
+                            @foreach (var task in tasksInCol)
+                            {
+                                var priorityLabel = task.Priority == 1 ? "Low" : task.Priority == 2 ? "Medium" : "High";
+                                var priorityColor = task.Priority == 1 ? "bg-slate-100 text-slate-500" : task.Priority == 2 ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600";
+                                bool canEdit = Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident" || task.AssigneeId == Model.CurrentUser.Id;
+
+                                <div class="glass p-4 rounded-[2rem] border border-slate-200/60 shadow-xs relative overflow-hidden group hover:shadow transition-all space-y-3.5 bg-white/80">
+                                    <div class="absolute -right-6 -top-6 w-16 h-16 bg-slate-50 rounded-full blur-xl pointer-events-none"></div>
+                                    
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider @priorityColor">@priorityLabel</span>
+                                            @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident")
+                                            {
+                                                <form method="post" asp-page-handler="DeleteFederationTask" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-taskId="@task.Id" class="inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="text-slate-400 hover:text-rose-500 transition-colors border-0 bg-transparent cursor-pointer" onclick="return confirm('Are you sure you want to delete this task?')">
+                                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                                    </button>
+                                                </form>
+                                            }
+                                        </div>
+                                        <h4 class="text-xs font-black text-slate-800 leading-snug">@task.Title</h4>
+                                        <p class="text-[10px] text-slate-500 mt-1 line-clamp-3 leading-relaxed">@task.Description</p>
+                                    </div>
+
+                                    <div class="space-y-2 pt-2 border-t border-slate-100/50 mt-auto">
+                                        <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold">
+                                            <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3 text-slate-350"></i> @(task.Assignee?.FullName ?? "Unassigned")</span>
+                                            @if (task.DueDate.HasValue)
+                                            {
+                                                <span class="flex items-center gap-1 @(task.Status != 3 && task.DueDate.Value < DateTime.UtcNow ? "text-rose-500" : "")">
+                                                    <i data-lucide="calendar" class="w-3 h-3 text-slate-350"></i> @task.DueDate.Value.ToString("dd MMM")
+                                                </span>
+                                            }
+                                        </div>
+
+                                        @if (canEdit)
+                                        {
+                                            <form method="post" asp-page-handler="UpdateFederationTaskStatus" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-taskId="@task.Id" class="flex items-center gap-1.5 mt-1 shrink-0">
+                                                @Html.AntiForgeryToken()
+                                                <select name="status" class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 outline-none transition-all cursor-pointer" onchange="this.form.submit()">
+                                                    <option value="0" selected="@(task.Status == 0)">To Do</option>
+                                                    <option value="1" selected="@(task.Status == 1)">In Progress</option>
+                                                    <option value="2" selected="@(task.Status == 2)">In Review</option>
+                                                    <option value="3" selected="@(task.Status == 3)">Done</option>
+                                                </select>
+                                            </form>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
                     </div>
-                    <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-2xl text-xs font-black shadow-lg shadow-indigo-150 hover:from-violet-750 hover:to-indigo-750 transition-all flex items-center justify-center gap-1.5">
-                        <i data-lucide="arrow-right-circle" class="w-4 h-4 animate-pulse"></i> Deploy Child Workspace
+                }
+            </div>
+        </div>
+
+        <!-- ─── TAB 3: KPIS ─── -->
+        <div x-show="activeTab === 'kpis'" class="grid grid-cols-1 lg:grid-cols-3 gap-8" x-transition>
+            
+            <!-- KPI Target Cards -->
+            <div class="lg:col-span-2 space-y-6">
+                <div>
+                    <h3 class="text-xl font-black text-slate-800 tracking-tight">Child Portals KPI Targets</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Aggregate performance metrics and achievement values from child portals.</p>
+                </div>
+
+                <div class="space-y-4">
+                    @if (!Model.ChildKpiTargets.Any())
+                    {
+                        <div class="glass p-12 text-center text-slate-400 font-bold rounded-[2.5rem] border border-slate-200/50">
+                            <i data-lucide="bar-chart-3" class="w-12 h-12 text-slate-350 mx-auto mb-3 animate-pulse"></i>
+                            <p class="text-sm">No child KPI targets set yet.</p>
+                            @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident")
+                            {
+                                <p class="text-xs text-slate-400 mt-1 font-medium">Use the panel on the right to set strategic targets.</p>
+                            }
+                        </div>
+                    }
+                    @foreach (var target in Model.ChildKpiTargets)
+                    {
+                        int actualVal = Model.GetKpiActualValue(target);
+                        double progressPct = target.TargetValue > 0 ? ((double)actualVal / target.TargetValue) * 100 : 0;
+                        if (progressPct > 100) progressPct = 100;
+                        var progressColor = progressPct >= 100 ? "bg-emerald-500" : progressPct >= 50 ? "bg-indigo-500" : "bg-amber-500";
+                        var periodBadgeBg = target.PeriodType == "Weekly" ? "bg-violet-50 text-violet-600 border border-violet-100" : "bg-indigo-50 text-indigo-600 border border-indigo-100";
+
+                        <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-lg transition-all relative overflow-hidden bg-white/65">
+                            <div class="absolute -right-12 -top-12 w-28 h-28 bg-indigo-50/40 rounded-full blur-[30px] pointer-events-none"></div>
+
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between pb-3 border-b border-slate-100/50">
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="h-9 w-9 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-600 text-xs">
+                                            @string.Concat(target.User.FullName.Split(' ').Select(n => n[0]))
+                                        </div>
+                                        <div>
+                                            <h4 class="text-xs font-black text-slate-800 truncate">@target.User.FullName</h4>
+                                            <p class="text-[10px] text-slate-450 font-bold">Category: <span class="text-indigo-500">@target.Category.Name</span></p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider @periodBadgeBg">@target.PeriodType</span>
+                                        @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident")
+                                        {
+                                            <form method="post" asp-page-handler="DeleteChildKpiTarget" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-targetId="@target.Id" class="inline">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="text-slate-400 hover:text-rose-500 transition-colors border-0 bg-transparent cursor-pointer" onclick="return confirm('Are you sure you want to delete this KPI target?')">
+                                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                                </button>
+                                            </form>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between text-xs">
+                                        <span class="font-extrabold text-slate-500">Performance Progress</span>
+                                        <span class="font-black text-slate-800">@actualVal / @target.TargetValue (@((int)progressPct)%)</span>
+                                    </div>
+                                    <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden shadow-inner">
+                                        <div class="h-full rounded-full transition-all duration-500 @progressColor" style="width: @progressPct%"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between pt-3 border-t border-slate-100/50 mt-4 text-[9px] font-extrabold text-slate-400">
+                                <span>Portal: @target.Category.Workspace.Name</span>
+                                <span>@target.StartDate.ToString("dd MMM") - @target.EndDate.ToString("dd MMM yyyy")</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- KPI Setting Form (Only for Owners/Presidents) -->
+            <div class="space-y-6">
+                <div>
+                    <h3 class="text-xl font-black text-slate-800 tracking-tight">KPI Controls</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Assign goals to child portals and members.</p>
+                </div>
+
+                @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident" || (Model.CurrentUserRole == "DepartmentManager" && (await Model.GetSettingValueAsync(Model.Federation.JoinCode, "allowManagerSetKpi", true))))
+                {
+                    <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
+                        <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
+                            <i data-lucide="award" class="w-4.5 h-4.5 text-indigo-500 animate-pulse"></i>
+                            <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Assign KPI Goal</h4>
+                        </div>
+
+                        <form method="post" asp-page-handler="CreateChildKpiTarget" asp-route-joinCode="@Model.Federation.JoinCode" class="space-y-3.5">
+                            @Html.AntiForgeryToken()
+                            
+                            <div class="space-y-1">
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Target Workspace</label>
+                                <select name="targetWorkspaceId" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                    @foreach (var ws in Model.ChildWorkspaces)
+                                    {
+                                        <option value="@ws.Id">@ws.Name</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Target User</label>
+                                <select name="targetUserId" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                    @foreach (var m in Model.ChildWorkspaceMembers.GroupBy(m => m.UserId).Select(g => g.First()))
+                                    {
+                                        <option value="@m.UserId">@m.User.FullName (@m.Workspace.Name)</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Task Category</label>
+                                <select name="targetCategoryId" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                    @foreach (var cat in Model.ChildCategories)
+                                    {
+                                        <option value="@cat.Id">@cat.Name (@cat.Workspace.Name)</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Period Type</label>
+                                <select name="periodType" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                    <option value="Weekly">Weekly</option>
+                                    <option value="Monthly">Monthly</option>
+                                </select>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="space-y-1">
+                                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Start Date</label>
+                                    <input type="date" name="startDate" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">End Date</label>
+                                    <input type="date" name="endDate" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                                </div>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Target Value</label>
+                                <input type="number" name="targetValue" min="1" required placeholder="e.g. 5 tasks" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            </div>
+
+                            <button type="submit" class="w-full py-3.5 bg-slate-900 text-white rounded-2xl text-xs font-black shadow hover:bg-indigo-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i> Establish KPI Target
+                            </button>
+                        </form>
+                    </div>
+                }
+                else
+                {
+                    <div class="glass p-6 rounded-[2.5rem] border border-amber-200 bg-amber-50/10 shadow-sm text-center space-y-4">
+                        <div class="h-12 w-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto shadow-inner">
+                            <i data-lucide="lock" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-black text-slate-800">Goal Settings Locked</h4>
+                            <p class="text-xs text-slate-400 leading-relaxed mt-1">
+                                🔒 KPI Target settings and creation tools are restricted. Only authorized owners or managers with active settings permission can configure targets.
+                            </p>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- ─── TAB 4: CHAT HUB ─── -->
+        <div x-show="activeTab === 'chat'" class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col h-[600px] overflow-hidden bg-white/80" x-transition>
+            <div class="flex items-center justify-between pb-3 border-b border-slate-150/40 shrink-0 mb-4">
+                <div class="flex items-center gap-2">
+                    <div class="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+                        <i data-lucide="message-square" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black text-slate-800 tracking-tight">Federation Chat Hub</h3>
+                        <p class="text-[10px] text-slate-400 font-bold mt-0.5">Secure coordination channel for Managers & Executives</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Messages Container -->
+            <div class="flex-1 overflow-y-auto space-y-4 pr-1.5 scrollbar-thin scroll-smooth flex flex-col h-[350px]" id="fed-chat-container">
+                <template x-for="msg in chatMessages" :key="msg.id">
+                    <div :class="msg.senderId === '@Model.CurrentUser.Id' ? 'justify-end' : 'justify-start'" class="flex items-start gap-2.5">
+                        
+                        <template x-if="msg.senderId !== '@Model.CurrentUser.Id'">
+                            <div class="h-8 w-8 rounded-xl bg-slate-150 flex items-center justify-center text-[10px] font-black text-slate-600 shrink-0 shadow-sm">
+                                <span x-text="msg.senderName.split(' ').map(n => n[0]).join('')"></span>
+                            </div>
+                        </template>
+
+                        <div class="max-w-[70%] flex flex-col" :class="msg.senderId === '@Model.CurrentUser.Id' ? 'items-end' : 'items-start'">
+                            <div class="flex items-center gap-1.5 mb-1 text-[9px] font-bold text-slate-400">
+                                <span x-text="msg.senderName"></span>
+                                <span x-text="formatTime(msg.sentAt)"></span>
+                            </div>
+                            
+                            <div :class="msg.rawContent.startsWith('[deleted_message]') ? 'bg-slate-50 border border-slate-150/50 text-slate-400 italic' : (msg.senderId === '@Model.CurrentUser.Id' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700')" class="px-4 py-2.5 rounded-2xl text-xs font-medium leading-relaxed break-words relative group/bubble">
+                                <span x-text="msg.rawContent.startsWith('[deleted_message]') ? 'This message was recalled' : msg.content"></span>
+                                
+                                <template x-if="!msg.rawContent.startsWith('[deleted_message]') && (msg.senderId === '@Model.CurrentUser.Id' || '@Model.CurrentUserRole' === 'Owner' || '@Model.CurrentUserRole' === 'HeadPresident')">
+                                    <button @@click="deleteChatMessage(msg.id)" class="absolute -top-2.5 -right-2.5 h-6 w-6 rounded-full bg-rose-50 border border-rose-100 text-rose-500 items-center justify-center shadow-md opacity-0 group-hover/bubble:opacity-100 transition-opacity flex cursor-pointer hover:bg-rose-100 border-0 outline-none">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Chat Input Form -->
+            @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident" || Model.CurrentUserRole == "DepartmentManager" || (await Model.GetSettingValueAsync(Model.Federation.JoinCode, "allowMemberChat", true)))
+            {
+                <form @@submit.prevent="sendChatMessage" class="flex items-center gap-3 border-t border-slate-150/40 pt-4 mt-4 shrink-0">
+                    <input type="text" x-model="chatInput" placeholder="Type a message..." class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    <button type="submit" class="h-11 w-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 shrink-0 cursor-pointer border-0">
+                        <i data-lucide="send" class="w-5 h-5"></i>
                     </button>
                 </form>
-            </div>
-            
-            <!-- Premium Federation Information Card -->
-            <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm bg-gradient-to-br from-violet-50/30 to-indigo-50/20 space-y-4">
-                <div class="flex items-center gap-2">
-                    <i data-lucide="shield-check" class="w-4.5 h-4.5 text-emerald-500"></i>
-                    <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Enterprise Compliance</h4>
+            }
+            else
+            {
+                <div class="flex items-center justify-center gap-2 border-t border-slate-150/40 pt-4 mt-4 shrink-0 text-slate-400 text-xs font-bold py-3 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 w-full">
+                    <i data-lucide="lock" class="w-4 h-4 text-slate-400"></i>
+                    <span>Chat is currently disabled for standard members by the administrator.</span>
                 </div>
-                <ul class="space-y-3 text-[10px] text-slate-500 font-bold">
-                    <li class="flex items-start gap-2">
-                        <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5"></i>
-                        <span>Unified Document Indexing operates under encrypted storage protocols.</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5"></i>
-                        <span>High-level managers maintain supreme visibility controls.</span>
-                    </li>
-                    <li class="flex items-start gap-2">
-                        <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5"></i>
-                        <span>Personal collaboration is completely isolated to secure workspace child environments.</span>
-                    </li>
-                </ul>
-            </div>
+            }
+        </div>
 
+        <!-- ─── PUSH FILE MODAL ─── -->
+        <div x-show="showPushModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" x-transition>
+            <div class="glass p-8 rounded-[2.5rem] border border-slate-200/60 shadow-2xl max-w-xl w-full bg-white relative max-h-[85vh] flex flex-col" @@click.away="showPushModal = false">
+                <div class="flex items-center justify-between pb-4 border-b border-slate-100 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
+                            <i data-lucide="share-2" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-black text-slate-800 tracking-tight">Push File to Federation</h3>
+                            <p class="text-xs text-slate-450 mt-0.5">Select a file from your child workspaces to project it into the enterprise document hub.</p>
+                        </div>
+                    </div>
+                    <button @@click="showPushModal = false" class="h-8 w-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors border-0 bg-transparent cursor-pointer">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto py-6 space-y-3 pr-1 scrollbar-thin">
+                    @if (!Model.PushableFiles.Any())
+                    {
+                        <div class="text-center py-10 text-slate-400 font-bold text-xs select-none">
+                            No pushable files found in workspaces you belong to.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var file in Model.PushableFiles)
+                        {
+                            var fileIcon = file.FileType == "pdf" ? "file-text" : file.FileType == "doc" ? "file-text" : file.FileType == "spreadsheet" ? "file-spreadsheet" : "image";
+                            var fileIconColor = file.FileType == "pdf" ? "text-rose-500 bg-rose-50 border-rose-100" : file.FileType == "doc" ? "text-indigo-600 bg-indigo-50 border-indigo-100" : file.FileType == "spreadsheet" ? "text-green-600 bg-green-50 border-green-100" : "text-purple-500 bg-purple-50 border-purple-100";
+
+                            <div class="p-3.5 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between transition-all group">
+                                <div class="flex items-center gap-3.5 min-w-0">
+                                    <div class="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 border @fileIconColor">
+                                        <i data-lucide="@fileIcon" class="w-4.5 h-4.5"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-black text-slate-700 truncate leading-snug">@file.FileName</p>
+                                        <p class="text-[9px] font-bold text-slate-400 mt-0.5">
+                                            From: <strong class="text-slate-500 font-extrabold">@file.Workspace.Name</strong>
+                                        </p>
+                                    </div>
+                                </div>
+                                <form method="post" asp-page-handler="PushFileToFederation" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-fileId="@file.Id" class="shrink-0">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="h-8 px-3.5 bg-slate-900 hover:bg-indigo-600 text-white text-xs font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-sm border-0">
+                                        Push File <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- ─── CREATE TASK MODAL ─── -->
+        <div x-show="showTaskModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" x-transition>
+            <div class="glass p-8 rounded-[2.5rem] border border-slate-200/60 shadow-2xl max-w-lg w-full bg-white relative" @@click.away="showTaskModal = false">
+                <div class="flex items-center justify-between pb-4 border-b border-slate-100 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
+                            <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-black text-slate-800 tracking-tight">Create Federation Task</h3>
+                            <p class="text-xs text-slate-400 mt-0.5">Assign a high-level strategic task at the Federation level.</p>
+                        </div>
+                    </div>
+                    <button @@click="showTaskModal = false" class="h-8 w-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors border-0 bg-transparent cursor-pointer">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <form method="post" asp-page-handler="CreateFederationTask" asp-route-joinCode="@Model.Federation.JoinCode" class="py-6 space-y-4">
+                    @Html.AntiForgeryToken()
+                    
+                    <div class="space-y-1">
+                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Title</label>
+                        <input type="text" name="title" required placeholder="e.g. Prepare Enterprise Strategy Q4" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Description</label>
+                        <textarea name="description" placeholder="Provide strategic description..." rows="3" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Priority</label>
+                            <select name="priority" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                <option value="1">Low</option>
+                                <option value="2" selected>Medium</option>
+                                <option value="3">High</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Assignee</label>
+                            <select name="assigneeId" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                <option value="">Unassigned</option>
+                                @foreach (var user in Model.FederationUsers)
+                                {
+                                    <option value="@user.Id">@user.FullName</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Due Date</label>
+                            <input type="date" name="dueDate" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Status</label>
+                            <select name="status" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                                <option value="0">To Do</option>
+                                <option value="1">In Progress</option>
+                                <option value="2">In Review</option>
+                                <option value="3">Done</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+                        <button type="button" @@click="showTaskModal = false" class="px-4 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-655 rounded-xl text-xs font-black transition-all border-solid bg-transparent cursor-pointer">Cancel</button>
+                        <button type="submit" class="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black shadow hover:bg-indigo-600 transition-all flex items-center gap-1.5 cursor-pointer border-0">
+                            <i data-lucide="check" class="w-4 h-4"></i> Create Task
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
 
     </div>
@@ -303,6 +1274,136 @@
 </div>
 
 <script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('federationDetail', () => ({
+            activeTab: '@(string.IsNullOrEmpty(Model.ActiveTab) ? "overview" : Model.ActiveTab)',
+            showPushModal: false,
+            showTaskModal: false,
+            chatInput: '',
+            chatMessages: JSON.parse(decodeURIComponent(escape(atob('@Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(Model.SerializeFederationChatMessages()))')))),
+            signalrConnection: null,
+            hoveredSegment: '',
+            hoveredMemberIndex: null,
+            hoveredMemberText: '',
+            hoveredMemberAssigned: 0,
+            hoveredMemberCompleted: 0,
+
+            init() {
+                this.scrollChatToBottom();
+                this.$watch('activeTab', value => {
+                    if (value === 'chat') {
+                        this.scrollChatToBottom();
+                    }
+                });
+
+                // Start SignalR Connection
+                const connection = new signalR.HubConnectionBuilder()
+                    .withUrl("/chatHub")
+                    .withAutomaticReconnect()
+                    .build();
+
+                connection.on("ReceiveChatMessage", (payload) => {
+                    console.log("Fed SignalR Chat Msg:", payload);
+                    if (payload.roomId === '@Model.FederationChatRoom?.Id') {
+                        if (!this.chatMessages.some(m => m.id === payload.id)) {
+                            this.chatMessages.push(payload);
+                            if (this.activeTab === 'chat') {
+                                this.scrollChatToBottom();
+                            }
+                        }
+                    }
+                });
+
+                connection.on("ReceiveMessageDeletion", (payload) => {
+                    console.log("Fed SignalR Msg Deletion:", payload);
+                    const index = this.chatMessages.findIndex(m => m.id === payload.messageId);
+                    if (index !== -1) {
+                        this.chatMessages[index].rawContent = '[deleted_message]';
+                        this.chatMessages[index].content = '[deleted_message]';
+                    }
+                });
+
+                connection.start()
+                    .then(() => {
+                        console.log("Federation SignalR connected!");
+                        connection.invoke("JoinWorkspace", "@Model.Federation.Id.ToString()")
+                            .catch(err => console.error("Error joining federation group:", err));
+                    })
+                    .catch(err => console.error("Federation SignalR Connection Error: ", err));
+
+                this.signalrConnection = connection;
+            },
+
+            scrollChatToBottom() {
+                this.$nextTick(() => {
+                    const chatContainer = document.getElementById('fed-chat-container');
+                    if (chatContainer) {
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                    }
+                });
+            },
+
+            formatTime(sentAtStr) {
+                const date = new Date(sentAtStr);
+                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + date.toLocaleDateString([], { day: '2-digit', month: 'short' });
+            },
+
+            async sendChatMessage() {
+                if (!this.chatInput.trim()) return;
+                
+                const formData = new FormData();
+                formData.append('content', this.chatInput);
+                formData.append('__RequestVerificationToken', document.querySelector('input[name="__RequestVerificationToken"]').value);
+
+                const response = await fetch('?handler=SendFederationChatMessage&joinCode=@Model.Federation.JoinCode', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                if (response.ok) {
+                    const payload = await response.json();
+                    this.chatInput = '';
+                    if (!this.chatMessages.some(m => m.id === payload.id)) {
+                        this.chatMessages.push(payload);
+                        this.scrollChatToBottom();
+                    }
+                } else {
+                    const err = await response.json();
+                    alert(err.message || 'Error sending message');
+                }
+            },
+
+            async deleteChatMessage(messageId) {
+                if (!confirm('Do you want to recall this message?')) return;
+
+                const formData = new FormData();
+                formData.append('messageId', messageId);
+                formData.append('__RequestVerificationToken', document.querySelector('input[name="__RequestVerificationToken"]').value);
+
+                const response = await fetch('?handler=DeleteFederationChatMessage&joinCode=@Model.Federation.JoinCode', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                if (response.ok) {
+                    const index = this.chatMessages.findIndex(m => m.id === messageId);
+                    if (index !== -1) {
+                        this.chatMessages[index].rawContent = '[deleted_message]';
+                        this.chatMessages[index].content = '[deleted_message]';
+                    }
+                } else {
+                    alert('Failed to recall message.');
+                }
+            }
+        }));
+    });
+
     setTimeout(() => {
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }, 100);

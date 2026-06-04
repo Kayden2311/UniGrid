@@ -147,7 +147,7 @@ To support the "Loveable Frontend" and core logic, the database is structured as
 ## 10. Federated Workspace Architecture (Enterprise & Academic Collaboration)
 
 ### A. Architectural Overview
-The **Federated Workspace Model** (Mô hình Workspace Liên bang) represents a shift from central-controlled team spaces to a decentralized network of autonomous workspaces. 
+The **Federated Workspace Model** represents a shift from central-controlled team spaces to a decentralized network of autonomous workspaces. 
 * **Autonomous Workspaces (Nodes):** Each user maintains a private workspace under their own individual subscription (e.g., Personal Plan with 2 GB storage).
 * **Virtual Portals (Federations):** A shared collaborative space ("Workspace To") created logically to connect independent workspaces. No files are copied or physically merged.
 * **Metadata Projections:** Uploaders selectively project file records and tasks onto the Virtual Portal. The physical files and storage quotas remain isolated within the uploader's Personal workspace, ensuring zero-trust security and department-level budgeting.
@@ -189,14 +189,14 @@ CREATE INDEX IX_WorkspaceFiles_FederationId ON WorkspaceFiles(FederationId);
 ```
 
 ### C. Core Logic & Queries
-1. **Querying Federated Files (Cổng thông tin chung):**
+1. **Querying Federated Files (Joint Portal):**
    When viewing a federated workspace, members retrieve files projected to the portal:
    ```sql
    SELECT * FROM WorkspaceFiles 
    WHERE FederationId = @FederationId AND IsPublic = 1
    ORDER BY CreatedAt DESC;
    ```
-2. **Quota Calculation (Tự chủ dung lượng):**
+2. **Quota Calculation (Autonomous Quota):**
    An uploader's file consumption is tracked globally, regardless of whether a file is kept private or projected to federations:
    ```sql
    SELECT SUM(FileSize) FROM WorkspaceFiles 

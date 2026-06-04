@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace unigrid.Models;
@@ -7,7 +7,9 @@ public partial class AuditLog
 {
     public Guid Id { get; set; }
 
-    public Guid WorkspaceId { get; set; }
+    public Guid? WorkspaceId { get; set; }
+
+    public Guid? FederationId { get; set; }
 
     public Guid UserId { get; set; }
 
@@ -23,5 +25,7 @@ public partial class AuditLog
 
     public virtual User User { get; set; } = null!;
 
-    public virtual Workspace Workspace { get; set; } = null!;
+    public virtual Workspace? Workspace { get; set; }
+
+    public virtual WorkspaceFederation? Federation { get; set; }
 }

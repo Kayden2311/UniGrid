@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using unigrid.Data.Repositories;
@@ -21,6 +22,7 @@ public class TaskService : ITaskService
     private readonly IMemoryCache _cache;
     private readonly IHubContext<ChatHub> _hubContext;
     private readonly ILogger<TaskService> _logger;
+    private readonly unigrid.Data.UniGridDbContext _context;
 
     public TaskService(
         IWorkspaceRepository workspaceRepo,
@@ -30,7 +32,8 @@ public class TaskService : ITaskService
         IUnitOfWork unitOfWork,
         IMemoryCache cache,
         IHubContext<ChatHub> hubContext,
-        ILogger<TaskService> logger)
+        ILogger<TaskService> logger,
+        unigrid.Data.UniGridDbContext context)
     {
         _workspaceRepo = workspaceRepo;
         _memberRepo = memberRepo;
@@ -40,6 +43,7 @@ public class TaskService : ITaskService
         _cache = cache;
         _hubContext = hubContext;
         _logger = logger;
+        _context = context;
     }
 
     public async Task<string?> CreateTaskAsync(Guid workspaceId, Guid creatorId, string title, string description, int priority, Guid? assigneeId, DateTime? dueDate, int status, Guid? categoryId = null, bool isCounterTask = false, int targetCount = 1)
@@ -110,77 +114,120 @@ public class TaskService : ITaskService
         return null; // Success
     }
 
-    public async Task<string?> UpdateTaskStatusAsync(Guid workspaceId, Guid userId, Guid taskId, int status)
+    public async Task<string?> UpdateTaskStatusAsync(Guid? workspaceId, Guid userId, Guid taskId, int status)
     {
-        var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
-        if (workspace == null) return "Workspace not found.";
-
-        var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
-        var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
-
-        if (userRole == "Viewer") return "Viewer role cannot update task statuses.";
-
         var task = await _taskRepo.GetByIdAsync(taskId);
-        if (task == null || task.WorkspaceId != workspaceId) return "Task not found.";
+        if (task == null) return "Task not found.";
 
-        // Role Transition Governance:
-        if (userRole != "Manager" && userRole != "Vice Manager")
+        Guid? resolvedWorkspaceId = workspaceId ?? task.WorkspaceId;
+
+        if (resolvedWorkspaceId.HasValue)
         {
-            if (task.AssigneeId != userId)
-            {
-                return "You can only move tasks assigned specifically to yourself!";
-            }
-            if (status == 3)
-            {
-                return "Only Managers or Vice Managers have permission to approve and complete tasks!";
-            }
-            if (task.Status == 3)
-            {
-                return "Only Managers or Vice Managers have permission to rework completed tasks!";
-            }
-        }
+            var workspace = await _workspaceRepo.GetByIdAsync(resolvedWorkspaceId.Value);
+            if (workspace == null) return "Workspace not found.";
 
-        int oldStatus = task.Status ?? 0;
-        task.Status = status;
+            var members = await _memberRepo.GetWorkspaceMembersAsync(resolvedWorkspaceId.Value);
+            var userRecord = members.FirstOrDefault(m => m.UserId == userId);
+            string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
 
-        var operatorUser = await _memberRepo.GetUserByIdAsync(userId);
+            if (userRole == "Viewer") return "Viewer role cannot update task statuses.";
+            if (task.WorkspaceId != resolvedWorkspaceId.Value) return "Task not found in workspace.";
 
-        if (task.AssigneeId.HasValue && task.AssigneeId.Value != userId)
-        {
-            string msg = "";
-            if (status == 3)
+            // Role Transition Governance:
+            if (userRole != "Manager" && userRole != "Vice Manager")
             {
-                msg = $"Your task '{task.Title}' in Workspace '{workspace.Name}' has been APPROVED by {operatorUser?.FullName ?? "Manager"}.";
-            }
-            else if ((oldStatus == 2 || oldStatus == 3) && (status == 0 || status == 1))
-            {
-                msg = $"Your task '{task.Title}' in Workspace '{workspace.Name}' has been requested for REWORK by {operatorUser?.FullName ?? "Manager"}.";
-            }
-
-            if (!string.IsNullOrEmpty(msg))
-            {
-                var notification = new Notification
+                if (task.AssigneeId != userId)
                 {
-                    Id = Guid.NewGuid(),
-                    UserId = task.AssigneeId.Value,
-                    Message = msg,
-                    Type = status == 3 ? "TaskApproved" : "TaskRework",
-                    Link = $"/WorkspaceDetail/{workspace.JoinCode}",
-                    IsRead = false,
-                    CreatedAt = DateTime.UtcNow,
-                    RelatedId = task.Id
-                };
-                await _taskRepo.AddNotificationAsync(notification);
+                    return "You can only move tasks assigned specifically to yourself!";
+                }
+                if (status == 3)
+                {
+                    return "Only Managers or Vice Managers have permission to approve and complete tasks!";
+                }
+                if (task.Status == 3)
+                {
+                    return "Only Managers or Vice Managers have permission to rework completed tasks!";
+                }
             }
+
+            int oldStatus = task.Status ?? 0;
+            task.Status = status;
+
+            var operatorUser = await _memberRepo.GetUserByIdAsync(userId);
+
+            if (task.AssigneeId.HasValue && task.AssigneeId.Value != userId)
+            {
+                string msg = "";
+                if (status == 3)
+                {
+                    msg = $"Your task '{task.Title}' in Workspace '{workspace.Name}' has been APPROVED by {operatorUser?.FullName ?? "Manager"}.";
+                }
+                else if ((oldStatus == 2 || oldStatus == 3) && (status == 0 || status == 1))
+                {
+                    msg = $"Your task '{task.Title}' in Workspace '{workspace.Name}' has been requested for REWORK by {operatorUser?.FullName ?? "Manager"}.";
+                }
+
+                if (!string.IsNullOrEmpty(msg))
+                {
+                    var notification = new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = task.AssigneeId.Value,
+                        Message = msg,
+                        Type = status == 3 ? "TaskApproved" : "TaskRework",
+                        Link = $"/WorkspaceDetail/{workspace.JoinCode}",
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow,
+                        RelatedId = task.Id
+                    };
+                    await _taskRepo.AddNotificationAsync(notification);
+                }
+            }
+
+            _taskRepo.Update(task);
+            await _unitOfWork.SaveChangesAsync();
+
+            _workspaceService.EvictWorkspaceCache(resolvedWorkspaceId.Value, members.Select(m => m.UserId).ToList());
+        }
+        else if (task.FederationId.HasValue)
+        {
+            // Federation-level task
+            var federation = await _context.WorkspaceFederations
+                .Include(f => f.WorkspaceFederationMembers)
+                .FirstOrDefaultAsync(f => f.Id == task.FederationId.Value);
+
+            if (federation == null) return "Federation not found.";
+
+            var fedMember = federation.WorkspaceFederationMembers.FirstOrDefault(m => m.UserId == userId);
+            bool isOwner = federation.OwnerId == userId;
+            bool isActiveMember = fedMember != null && fedMember.Status == "Active";
+
+            if (!isOwner && !isActiveMember)
+            {
+                return "You are not an active member of this Federation.";
+            }
+
+            string userRole = isOwner ? "Owner" : fedMember.Role;
+
+            // Restrict status changes for managers/presidents vs normal members
+            if (userRole != "Owner" && userRole != "HeadPresident" && userRole != "DepartmentManager")
+            {
+                if (task.AssigneeId != userId)
+                {
+                    return "You can only update tasks assigned to yourself.";
+                }
+            }
+
+            task.Status = status;
+            _taskRepo.Update(task);
+            await _unitOfWork.SaveChangesAsync();
+        }
+        else
+        {
+            return "Task is not associated with any workspace or federation.";
         }
 
-        _taskRepo.Update(task);
-        await _unitOfWork.SaveChangesAsync();
-
-        _workspaceService.EvictWorkspaceCache(workspaceId, members.Select(m => m.UserId).ToList());
         _logger.LogInformation("Task status updated. TaskId: {TaskId}, NewStatus: {Status} by User {UserId}", taskId, status, userId);
-
         return null; // Success
     }
 
@@ -380,52 +427,85 @@ public class TaskService : ITaskService
     }
 
     // Counter task counter update
-    public async Task<string?> UpdateTaskCounterAsync(Guid workspaceId, Guid userId, Guid taskId, int currentCount)
+    public async Task<string?> UpdateTaskCounterAsync(Guid? workspaceId, Guid userId, Guid taskId, int currentCount)
     {
-        var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
-        if (workspace == null) return "Workspace not found.";
-
-        var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
-        var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
-
-        if (userRole == "Viewer") return "Viewer role cannot update task counters.";
-
         var task = await _taskRepo.GetByIdAsync(taskId);
-        if (task == null || task.WorkspaceId != workspaceId) return "Task not found.";
+        if (task == null) return "Task not found.";
 
-        if (!task.IsCounterTask) return "This task is not a counter task.";
+        Guid? resolvedWorkspaceId = workspaceId ?? task.WorkspaceId;
 
-        if (currentCount < 0) return "Counter value cannot be negative.";
-        if (currentCount > task.TargetCount) return $"Counter value cannot exceed target count of {task.TargetCount}.";
-
-        int oldCount = task.CurrentCount;
-        task.CurrentCount = currentCount;
-
-        // Auto transition status: if currentCount == targetCount, we can set status to Done (3) if it's not already.
-        // Wait, normally only managers can approve/complete tasks (Status = 3). But for counter tasks, it is extremely nice if they hit target to set status to Done, or keep it in InProgress (1) or Review (2).
-        // Let's keep status update manual or auto-move to InProgress (1) if it's currently Todo (0).
-        if (currentCount > 0 && task.Status == 0)
+        if (resolvedWorkspaceId.HasValue)
         {
-            task.Status = 1; // Move to Doing/InProgress
+            var workspace = await _workspaceRepo.GetByIdAsync(resolvedWorkspaceId.Value);
+            if (workspace == null) return "Workspace not found.";
+
+            var members = await _memberRepo.GetWorkspaceMembersAsync(resolvedWorkspaceId.Value);
+            var userRecord = members.FirstOrDefault(m => m.UserId == userId);
+            string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+
+            if (userRole == "Viewer") return "Viewer role cannot update task counters.";
+            if (task.WorkspaceId != resolvedWorkspaceId.Value) return "Task not found in workspace.";
+            if (!task.IsCounterTask) return "This task is not a counter task.";
+            if (currentCount < 0) return "Counter value cannot be negative.";
+            if (currentCount > task.TargetCount) return $"Counter value cannot exceed target count of {task.TargetCount}.";
+
+            task.CurrentCount = currentCount;
+            if (currentCount > 0 && task.Status == 0)
+            {
+                task.Status = 1;
+            }
+
+            _taskRepo.Update(task);
+            await _unitOfWork.SaveChangesAsync();
+
+            _workspaceService.EvictWorkspaceCache(resolvedWorkspaceId.Value, members.Select(m => m.UserId).ToList());
+            _cache.Remove($"WorkspaceTasks_{resolvedWorkspaceId.Value}");
+
+            // Real-time broadcast
+            var payload = new
+            {
+                taskId = task.Id,
+                currentCount = task.CurrentCount,
+                targetCount = task.TargetCount,
+                status = task.Status,
+                userId = userId
+            };
+            await _hubContext.Clients.Group(resolvedWorkspaceId.Value.ToString()).SendAsync("ReceiveTaskCounterUpdate", payload);
         }
-
-        _taskRepo.Update(task);
-        await _unitOfWork.SaveChangesAsync();
-
-        _workspaceService.EvictWorkspaceCache(workspaceId, members.Select(m => m.UserId).ToList());
-        _cache.Remove($"WorkspaceTasks_{workspaceId}");
-
-        // Real-time broadcast!
-        var payload = new
+        else if (task.FederationId.HasValue)
         {
-            taskId = task.Id,
-            currentCount = task.CurrentCount,
-            targetCount = task.TargetCount,
-            status = task.Status,
-            userId = userId
-        };
-        await _hubContext.Clients.Group(workspaceId.ToString()).SendAsync("ReceiveTaskCounterUpdate", payload);
+            var federation = await _context.WorkspaceFederations
+                .Include(f => f.WorkspaceFederationMembers)
+                .FirstOrDefaultAsync(f => f.Id == task.FederationId.Value);
+
+            if (federation == null) return "Federation not found.";
+
+            var fedMember = federation.WorkspaceFederationMembers.FirstOrDefault(m => m.UserId == userId);
+            bool isOwner = federation.OwnerId == userId;
+            bool isActiveMember = fedMember != null && fedMember.Status == "Active";
+
+            if (!isOwner && !isActiveMember)
+            {
+                return "You are not an active member of this Federation.";
+            }
+
+            if (!task.IsCounterTask) return "This task is not a counter task.";
+            if (currentCount < 0) return "Counter value cannot be negative.";
+            if (currentCount > task.TargetCount) return $"Counter value cannot exceed target count of {task.TargetCount}.";
+
+            task.CurrentCount = currentCount;
+            if (currentCount > 0 && task.Status == 0)
+            {
+                task.Status = 1;
+            }
+
+            _taskRepo.Update(task);
+            await _unitOfWork.SaveChangesAsync();
+        }
+        else
+        {
+            return "Task is not associated with any workspace or federation.";
+        }
 
         _logger.LogInformation("Task counter updated. TaskId: {TaskId}, Count: {Count}/{Target} by User {UserId}", taskId, currentCount, task.TargetCount, userId);
         return null;

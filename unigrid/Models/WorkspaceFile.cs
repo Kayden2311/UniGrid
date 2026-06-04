@@ -7,7 +7,7 @@ public partial class WorkspaceFile
 {
     public Guid Id { get; set; }
 
-    public Guid WorkspaceId { get; set; }
+    public Guid? WorkspaceId { get; set; }
 
     public Guid? TaskId { get; set; }
 
@@ -31,7 +31,7 @@ public partial class WorkspaceFile
 
     public virtual User User { get; set; } = null!;
 
-    public virtual Workspace Workspace { get; set; } = null!;
+    public virtual Workspace? Workspace { get; set; }
 
     public virtual WorkspaceFederation? Federation { get; set; }
 }
