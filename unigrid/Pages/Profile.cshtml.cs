@@ -49,6 +49,32 @@ namespace unigrid.Pages
                 .Include(u => u.Account)
                 .FirstOrDefaultAsync(u => u.AccountId == accountId);
 
+            if (user == null)
+            {
+                var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+                if (accountRecord != null)
+                {
+                    var fallbackName = User.FindFirst("FullName")?.Value ?? User.Identity?.Name ?? "User";
+                    var parts = accountRecord.Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+                    var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
+                    var parsedName = string.Join(" ", fullNameParts);
+                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = fallbackName;
+                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
+
+                    user = new User
+                    {
+                        Id = Guid.NewGuid(),
+                        AccountId = accountId,
+                        FullName = parsedName,
+                        SubscriptionTier = "Free"
+                    };
+                    await _context.Users.AddAsync(user);
+                    await _context.SaveChangesAsync();
+                    
+                    _cache.Remove($"User_{accountId}");
+                }
+            }
+
             if (user == null) return RedirectToPage("/Login");
 
             FullName = user.FullName;
@@ -82,6 +108,32 @@ namespace unigrid.Pages
             var user = await _context.Users
                 .Include(u => u.Account)
                 .FirstOrDefaultAsync(u => u.AccountId == accountId);
+
+            if (user == null)
+            {
+                var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+                if (accountRecord != null)
+                {
+                    var fallbackName = User.FindFirst("FullName")?.Value ?? User.Identity?.Name ?? "User";
+                    var parts = accountRecord.Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+                    var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
+                    var parsedName = string.Join(" ", fullNameParts);
+                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = fallbackName;
+                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
+
+                    user = new User
+                    {
+                        Id = Guid.NewGuid(),
+                        AccountId = accountId,
+                        FullName = parsedName,
+                        SubscriptionTier = "Free"
+                    };
+                    await _context.Users.AddAsync(user);
+                    await _context.SaveChangesAsync();
+                    
+                    _cache.Remove($"User_{accountId}");
+                }
+            }
 
             if (user == null) return RedirectToPage("/Login");
 

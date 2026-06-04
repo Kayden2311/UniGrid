@@ -85,6 +85,7 @@ CREATE TABLE WorkspaceFederations (
     JoinCode NVARCHAR(20) NOT NULL UNIQUE,
     OwnerId UNIQUEIDENTIFIER NOT NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
+    SettingsJson NVARCHAR(MAX) NULL,
     CONSTRAINT FK_WorkspaceFederations_Users FOREIGN KEY (OwnerId) REFERENCES Users(Id)
 );
 

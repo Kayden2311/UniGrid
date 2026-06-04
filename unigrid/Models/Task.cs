@@ -7,7 +7,9 @@ public partial class Task
 {
     public Guid Id { get; set; }
 
-    public Guid WorkspaceId { get; set; }
+    public Guid? WorkspaceId { get; set; }
+
+    public Guid? FederationId { get; set; }
 
     public Guid? AssigneeId { get; set; }
 
@@ -37,7 +39,9 @@ public partial class Task
 
     public virtual ICollection<TaskComment> TaskComments { get; set; } = new List<TaskComment>();
 
-    public virtual Workspace Workspace { get; set; } = null!;
+    public virtual Workspace? Workspace { get; set; }
+
+    public virtual WorkspaceFederation? Federation { get; set; }
 
     public virtual ICollection<WorkspaceFile> WorkspaceFiles { get; set; } = new List<WorkspaceFile>();
 }

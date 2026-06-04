@@ -45,6 +45,31 @@ public class DashboardModel : PageModel
             return await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
         });
         
+        if (userProfile == null)
+        {
+            var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+            if (accountRecord != null)
+            {
+                var parts = accountRecord.Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+                var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
+                var parsedName = string.Join(" ", fullNameParts);
+                if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
+
+                userProfile = new User
+                {
+                    Id = Guid.NewGuid(),
+                    AccountId = accountId,
+                    FullName = parsedName,
+                    SubscriptionTier = "Free"
+                };
+                await _context.Users.AddAsync(userProfile);
+                await _context.SaveChangesAsync();
+                
+                // Evict cache to refresh profile
+                _cache.Remove($"User_{accountId}");
+            }
+        }
+        
         if (userProfile != null)
         {
             CurrentUserName = userProfile.FullName;

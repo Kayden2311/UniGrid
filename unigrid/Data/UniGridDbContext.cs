@@ -96,6 +96,8 @@ public partial class UniGridDbContext : DbContext
             entity.Property(e => e.TargetType).HasMaxLength(100);
             entity.Property(e => e.Timestamp).HasDefaultValueSql("(getutcdate())");
 
+            entity.Property(e => e.WorkspaceId).IsRequired(false);
+
             entity.HasOne(d => d.User).WithMany(p => p.AuditLogs)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -103,8 +105,13 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.Workspace).WithMany(p => p.AuditLogs)
                 .HasForeignKey(d => d.WorkspaceId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+                .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_Audit_Workspaces");
+
+            entity.HasOne(d => d.Federation).WithMany(p => p.AuditLogs)
+                .HasForeignKey(d => d.FederationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_Audit_WorkspaceFederations");
         });
 
         modelBuilder.Entity<Billing>(entity =>
@@ -149,14 +156,21 @@ public partial class UniGridDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PK__ChatRoom__3214EC07C4EF6540");
 
             entity.HasIndex(e => e.WorkspaceId, "UQ__ChatRoom__C84765D0B210A582").IsUnique();
+            entity.HasIndex(e => e.FederationId).IsUnique();
 
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.WorkspaceId).IsRequired(false);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
 
             entity.HasOne(d => d.Workspace).WithOne(p => p.ChatRoom)
                 .HasForeignKey<ChatRoom>(d => d.WorkspaceId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+                .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_Chat_Workspaces");
+
+            entity.HasOne(d => d.Federation).WithOne(p => p.ChatRoom)
+                .HasForeignKey<ChatRoom>(d => d.FederationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_Chat_WorkspaceFederations");
         });
 
         modelBuilder.Entity<Moderator>(entity =>
@@ -191,14 +205,21 @@ public partial class UniGridDbContext : DbContext
             entity.Property(e => e.TargetCount).HasDefaultValue(1);
             entity.Property(e => e.CurrentCount).HasDefaultValue(0);
 
+            entity.Property(e => e.WorkspaceId).IsRequired(false);
+
             entity.HasOne(d => d.Assignee).WithMany(p => p.Tasks)
                 .HasForeignKey(d => d.AssigneeId)
                 .HasConstraintName("FK_Tasks_Users");
 
             entity.HasOne(d => d.Workspace).WithMany(p => p.Tasks)
                 .HasForeignKey(d => d.WorkspaceId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+                .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_Tasks_Workspaces");
+
+            entity.HasOne(d => d.Federation).WithMany(p => p.Tasks)
+                .HasForeignKey(d => d.FederationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_Tasks_WorkspaceFederations");
 
             entity.HasOne(d => d.Category).WithMany(p => p.Tasks)
                 .HasForeignKey(d => d.CategoryId)
@@ -248,10 +269,12 @@ public partial class UniGridDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PK__Workspac__3214EC07B6F57A39");
 
             entity.HasIndex(e => e.JoinCode, "UQ__Workspac__FF7C6BA0DA037DCA").IsUnique();
+            entity.HasIndex(e => e.InviteCode).IsUnique();
 
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
             entity.Property(e => e.JoinCode).HasMaxLength(20);
+            entity.Property(e => e.InviteCode).HasDefaultValueSql("(newid())");
             entity.Property(e => e.Name).HasMaxLength(256);
             entity.Property(e => e.PackageTier)
                 .HasMaxLength(50)
@@ -296,9 +319,11 @@ public partial class UniGridDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Files_Users");
 
+            entity.Property(e => e.WorkspaceId).IsRequired(false);
+
             entity.HasOne(d => d.Workspace).WithMany(p => p.WorkspaceFiles)
                 .HasForeignKey(d => d.WorkspaceId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+                .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_Files_Workspaces");
 
             entity.HasIndex(e => e.FederationId, "IX_WorkspaceFiles_FederationId");
@@ -355,6 +380,9 @@ public partial class UniGridDbContext : DbContext
             entity.HasKey(e => new { e.FederationId, e.UserId }).HasName("PK_WorkspaceFederationMembers");
 
             entity.Property(e => e.JoinedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.PersonalWorkspaceId).IsRequired(false);
+            entity.Property(e => e.Role).HasMaxLength(50).HasDefaultValue("Member");
+            entity.Property(e => e.Status).HasMaxLength(50).HasDefaultValue("Active");
 
             entity.HasOne(d => d.Federation).WithMany(p => p.WorkspaceFederationMembers)
                 .HasForeignKey(d => d.FederationId)
@@ -419,6 +447,8 @@ public partial class UniGridDbContext : DbContext
             entity.Property(e => e.DisplayRole).HasMaxLength(100);
             entity.Property(e => e.Status).HasMaxLength(50).HasDefaultValue("Pending");
 
+            entity.Property(e => e.WorkspaceId).IsRequired(false);
+
             entity.HasOne(d => d.Workspace).WithMany()
                 .HasForeignKey(d => d.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade)
@@ -428,6 +458,11 @@ public partial class UniGridDbContext : DbContext
                 .HasForeignKey(d => d.InviterId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Invitations_Inviter");
+
+            entity.HasOne(d => d.Federation).WithMany(p => p.WorkspaceInvitations)
+                .HasForeignKey(d => d.FederationId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_Invitations_WorkspaceFederations");
         });
 
         modelBuilder.Entity<TaskCategory>(entity =>

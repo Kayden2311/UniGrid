@@ -35,6 +35,9 @@ public class WorkspacesModel : PageModel
     [BindProperty]
     public Guid SelectedPersonalWorkspaceId { get; set; }
 
+    [BindProperty]
+    public string WorkspaceInviteCodeInput { get; set; } = string.Empty;
+
     public async System.Threading.Tasks.Task<IActionResult> OnGetAsync()
     {
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
@@ -49,6 +52,31 @@ public class WorkspacesModel : PageModel
                 entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
                 return await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
             });
+            
+            if (profile == null)
+            {
+                var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+                if (accountRecord != null)
+                {
+                    var parts = accountRecord.Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+                    var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
+                    var parsedName = string.Join(" ", fullNameParts);
+                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
+
+                    profile = new User
+                    {
+                        Id = Guid.NewGuid(),
+                        AccountId = accountId,
+                        FullName = parsedName,
+                        SubscriptionTier = "Free"
+                    };
+                    await _context.Users.AddAsync(profile);
+                    await _context.SaveChangesAsync();
+                    
+                    // Evict cache to refresh profile
+                    _cache.Remove($"User_{accountId}");
+                }
+            }
             
             if (profile != null)
             {
@@ -100,7 +128,7 @@ public class WorkspacesModel : PageModel
         }
 
         var accountId = Guid.Parse(accountIdClaim);
-        var profile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        var profile = await GetOrCreateUserProfileAsync(accountId);
         if (profile == null)
         {
             return RedirectToPage("/Login");
@@ -166,7 +194,7 @@ public class WorkspacesModel : PageModel
         }
 
         var accountId = Guid.Parse(accountIdClaim);
-        var profile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        var profile = await GetOrCreateUserProfileAsync(accountId);
         if (profile == null)
         {
             return RedirectToPage("/Login");
@@ -248,5 +276,129 @@ public class WorkspacesModel : PageModel
 
         TempData["SuccessMessage"] = $"Successfully connected! Workspace '{personalWorkspace.Name}' has been integrated into Federation '{federation.Name}'.";
         return RedirectToPage("/Workspaces");
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnPostJoinWorkspaceByInviteCodeAsync()
+    {
+        var accountIdClaim = User.FindFirst("AccountId")?.Value;
+        if (string.IsNullOrEmpty(accountIdClaim)) return RedirectToPage("/Login");
+
+        var accountId = Guid.Parse(accountIdClaim);
+        var profile = await GetOrCreateUserProfileAsync(accountId);
+        if (profile == null) return RedirectToPage("/Login");
+
+        if (string.IsNullOrWhiteSpace(WorkspaceInviteCodeInput))
+        {
+            TempData["ErrorMessage"] = "Please enter a valid invite code.";
+            return RedirectToPage("/Workspaces");
+        }
+
+        if (!Guid.TryParse(WorkspaceInviteCodeInput.Trim(), out var inviteGuid))
+        {
+            TempData["ErrorMessage"] = "Invalid invite code format.";
+            return RedirectToPage("/Workspaces");
+        }
+
+        return await JoinWorkspaceByGuidAsync(inviteGuid, profile.Id);
+    }
+
+    public async System.Threading.Tasks.Task<IActionResult> OnGetJoinByInviteCodeAsync(Guid inviteCode)
+    {
+        var accountIdClaim = User.FindFirst("AccountId")?.Value;
+        if (string.IsNullOrEmpty(accountIdClaim)) return RedirectToPage("/Login");
+
+        var accountId = Guid.Parse(accountIdClaim);
+        var profile = await GetOrCreateUserProfileAsync(accountId);
+        if (profile == null) return RedirectToPage("/Login");
+
+        return await JoinWorkspaceByGuidAsync(inviteCode, profile.Id);
+    }
+
+    private async System.Threading.Tasks.Task<IActionResult> JoinWorkspaceByGuidAsync(Guid inviteCode, Guid userId)
+    {
+        var workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.InviteCode == inviteCode);
+        if (workspace == null)
+        {
+            TempData["ErrorMessage"] = "The invite code does not exist or has expired.";
+            return RedirectToPage("/Workspaces");
+        }
+
+        // Check if user is already owner or member
+        if (workspace.OwnerId == userId)
+        {
+            TempData["SuccessMessage"] = $"You are the owner of Workspace '{workspace.Name}'.";
+            return RedirectToPage($"/WorkspaceDetail/{workspace.JoinCode}");
+        }
+
+        var alreadyMember = await _context.WorkspaceMembers
+            .AnyAsync(m => m.WorkspaceId == workspace.Id && m.UserId == userId);
+
+        if (alreadyMember)
+        {
+            TempData["SuccessMessage"] = $"You have already joined Workspace '{workspace.Name}'.";
+            return RedirectToPage($"/WorkspaceDetail/{workspace.JoinCode}");
+        }
+
+        // Add user as a Member
+        var newMember = new WorkspaceMember
+        {
+            WorkspaceId = workspace.Id,
+            UserId = userId,
+            Role = "Member",
+            JoinedAt = DateTime.UtcNow
+        };
+
+        await _context.WorkspaceMembers.AddAsync(newMember);
+
+        // Add a default ChatRoom if it does not exist
+        var hasChatRoom = await _context.ChatRooms.AnyAsync(r => r.WorkspaceId == workspace.Id);
+        if (!hasChatRoom)
+        {
+            var chatRoom = new ChatRoom
+            {
+                Id = Guid.NewGuid(),
+                WorkspaceId = workspace.Id,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _context.ChatRooms.AddAsync(chatRoom);
+        }
+
+        await _context.SaveChangesAsync();
+
+        _cache.Remove($"UserWorkspaces_{userId}");
+
+        TempData["SuccessMessage"] = $"Successfully joined Workspace '{workspace.Name}'!";
+        return RedirectToPage($"/WorkspaceDetail/{workspace.JoinCode}");
+    }
+
+    private async System.Threading.Tasks.Task<User?> GetOrCreateUserProfileAsync(Guid accountId)
+    {
+        var profile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        if (profile == null)
+        {
+            var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+            if (accountRecord != null)
+            {
+                var fallbackName = User.FindFirst("FullName")?.Value ?? User.Identity?.Name ?? "User";
+                var parts = accountRecord.Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+                var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
+                var parsedName = string.Join(" ", fullNameParts);
+                if (string.IsNullOrWhiteSpace(parsedName)) parsedName = fallbackName;
+                if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
+
+                profile = new User
+                {
+                    Id = Guid.NewGuid(),
+                    AccountId = accountId,
+                    FullName = parsedName,
+                    SubscriptionTier = "Free"
+                };
+                await _context.Users.AddAsync(profile);
+                await _context.SaveChangesAsync();
+                
+                _cache.Remove($"User_{accountId}");
+            }
+        }
+        return profile;
     }
 }

@@ -8,13 +8,13 @@ namespace unigrid.Services;
 public interface ITaskService
 {
     Task<string?> CreateTaskAsync(Guid workspaceId, Guid creatorId, string title, string description, int priority, Guid? assigneeId, DateTime? dueDate, int status, Guid? categoryId = null, bool isCounterTask = false, int targetCount = 1);
-    Task<string?> UpdateTaskStatusAsync(Guid workspaceId, Guid userId, Guid taskId, int status);
+    Task<string?> UpdateTaskStatusAsync(Guid? workspaceId, Guid userId, Guid taskId, int status);
     Task<string?> EditTaskAsync(Guid workspaceId, Guid userId, Guid editTaskId, string editTaskTitle, string editTaskDescription, int editTaskPriority, Guid? editTaskAssigneeId, DateTime? editTaskDueDate, Guid? editCategoryId = null, bool editIsCounterTask = false, int editTargetCount = 1);
     Task<string?> DeleteTaskAsync(Guid workspaceId, Guid userId, Guid taskId);
     Task<string?> AddTaskCommentAsync(Guid workspaceId, Guid userId, Guid taskId, string content);
 
     // Counter task counter update
-    Task<string?> UpdateTaskCounterAsync(Guid workspaceId, Guid userId, Guid taskId, int currentCount);
+    Task<string?> UpdateTaskCounterAsync(Guid? workspaceId, Guid userId, Guid taskId, int currentCount);
 
     // TaskCategory methods
     Task<List<TaskCategory>> GetWorkspaceCategoriesAsync(Guid workspaceId);
