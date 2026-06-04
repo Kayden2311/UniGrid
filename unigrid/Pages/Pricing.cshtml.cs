@@ -122,7 +122,7 @@ public class PricingModel : PageModel
             {
                 Id = Guid.NewGuid(),
                 UserId = userProfile.Id,
-                Message = $"Yêu cầu đăng ký Enterprise Federation cho '{businessName}' (SĐT: {contactPhone}) đã được gửi thành công và đang chờ Quản trị viên xử lý.",
+                Message = $"The Enterprise Federation registration request for '{businessName}' (Phone: {contactPhone}) has been successfully submitted and is awaiting administrator review.",
                 Type = "FederationRequest",
                 Link = "/workspaces",
                 IsRead = false,

@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.EntityFrameworkCore;
+using unigrid.Data;
 using unigrid.Services;
 using unigrid.Models;
 using Microsoft.Extensions.Logging;
@@ -13,11 +15,13 @@ namespace unigrid.Pages;
 public class LoginModel : PageModel
 {
     private readonly IAuthService _authService;
+    private readonly UniGridDbContext _context;
     private readonly ILogger<LoginModel> _logger;
 
-    public LoginModel(IAuthService authService, ILogger<LoginModel> logger)
+    public LoginModel(IAuthService authService, UniGridDbContext context, ILogger<LoginModel> logger)
     {
         _authService = authService;
+        _context = context;
         _logger = logger;
     }
 
@@ -56,6 +60,35 @@ public class LoginModel : PageModel
 
         if (account != null)
         {
+            if (account.Role == 2)
+            {
+                var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == account.Id);
+                if (userProfile == null)
+                {
+                    var parts = Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+                    var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
+                    var parsedName = string.Join(" ", fullNameParts);
+                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
+
+                    userProfile = new User
+                    {
+                        Id = Guid.NewGuid(),
+                        AccountId = account.Id,
+                        FullName = parsedName,
+                        SubscriptionTier = "Free"
+                    };
+                    await _context.Users.AddAsync(userProfile);
+                    await _context.SaveChangesAsync();
+
+                    // Reload account relationships
+                    account = await _context.Accounts
+                        .Include(a => a.Users)
+                        .Include(a => a.Admins)
+                        .Include(a => a.Moderators)
+                        .FirstOrDefaultAsync(a => a.Id == account.Id);
+                }
+            }
+
             var fullName = "System User";
             if (account.Role == 1) fullName = account.Admins.FirstOrDefault()?.FullName ?? "Admin";
             else if (account.Role == 2) fullName = account.Users.FirstOrDefault()?.FullName ?? "User";

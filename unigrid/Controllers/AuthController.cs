@@ -218,11 +218,11 @@ namespace unigrid.Controllers
                         window.location.href = '/Dashboard';
                     }
                 } else {
-                    alert('Đăng nhập Google thất bại: ' + result.message);
+                    alert('Google sign-in failed: ' + result.message);
                 }
             } catch (err) {
                 console.error(err);
-                alert('Có lỗi xảy ra trong quá trình đăng nhập.');
+                alert('An error occurred during sign-in.');
             }
         }
 

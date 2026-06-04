@@ -93,8 +93,20 @@ namespace unigrid.Data
                             [JoinCode] NVARCHAR(20) NOT NULL UNIQUE,
                             [OwnerId] UNIQUEIDENTIFIER NOT NULL,
                             [CreatedAt] DATETIME2 DEFAULT GETUTCDATE(),
+                            [SettingsJson] NVARCHAR(MAX) NULL,
                             CONSTRAINT [FK_WorkspaceFederations_Users] FOREIGN KEY ([OwnerId]) REFERENCES [dbo].[Users]([Id])
                         );
+                    END
+                ");
+
+                // A1. Check and add SettingsJson column to WorkspaceFederations if missing
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[WorkspaceFederations]') AND type in (N'U'))
+                    BEGIN
+                        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[WorkspaceFederations]') AND name = 'SettingsJson')
+                        BEGIN
+                            ALTER TABLE [dbo].[WorkspaceFederations] ADD [SettingsJson] NVARCHAR(MAX) NULL;
+                        END
                     END
                 ");
 
@@ -105,12 +117,14 @@ namespace unigrid.Data
                         CREATE TABLE [dbo].[WorkspaceFederationMembers] (
                             [FederationId] UNIQUEIDENTIFIER NOT NULL,
                             [UserId] UNIQUEIDENTIFIER NOT NULL,
-                            [PersonalWorkspaceId] UNIQUEIDENTIFIER NOT NULL,
+                            [PersonalWorkspaceId] UNIQUEIDENTIFIER NULL,
                             [JoinedAt] DATETIME2 DEFAULT GETUTCDATE(),
+                            [Role] NVARCHAR(50) NOT NULL DEFAULT 'Member',
+                            [Status] NVARCHAR(50) NOT NULL DEFAULT 'Active',
                             PRIMARY KEY ([FederationId], [UserId]),
                             CONSTRAINT [FK_FedMembers_Federations] FOREIGN KEY ([FederationId]) REFERENCES [dbo].[WorkspaceFederations]([Id]) ON DELETE CASCADE,
                             CONSTRAINT [FK_FedMembers_Users] FOREIGN KEY ([UserId]) REFERENCES [dbo].[Users]([Id]),
-                            CONSTRAINT [FK_FedMembers_Workspaces] FOREIGN KEY ([PersonalWorkspaceId]) REFERENCES [dbo].[Workspaces]([Id])
+                            CONSTRAINT [FK_FedMembers_Workspaces] FOREIGN KEY ([PersonalWorkspaceId]) REFERENCES [dbo].[Workspaces]([Id]) ON DELETE SET NULL
                         );
                     END
                 ");
@@ -984,7 +998,7 @@ namespace unigrid.Data
                 await context.WorkspaceFiles.AddRangeAsync(file1, file2, file3, file4, file5, file6, file7, file8, file9, file10, file11, file12, file13, file14, file15, file16);
                 await context.SaveChangesAsync();
 
-                // 15. Seed Workspace Federations (Mô hình Liên bang)
+                // 15. Seed Workspace Federations (Federation Model)
                 var fedId = Guid.Parse("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF");
                 var fedAcademicId = Guid.Parse("EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE");
                 var fedCloudId = Guid.Parse("DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD");
@@ -1018,17 +1032,19 @@ namespace unigrid.Data
                 await context.SaveChangesAsync();
 
                 // 16. Seed Workspace Federation Members
-                var fedMember1 = new WorkspaceFederationMember { FederationId = fedId, UserId = userAlice.Id, PersonalWorkspaceId = workspaceWeb.Id, JoinedAt = DateTime.UtcNow };
-                var fedMember2 = new WorkspaceFederationMember { FederationId = fedId, UserId = userBob.Id, PersonalWorkspaceId = workspaceCalc.Id, JoinedAt = DateTime.UtcNow };
+                var fedMember1 = new WorkspaceFederationMember { FederationId = fedId, UserId = userAlice.Id, PersonalWorkspaceId = workspaceWeb.Id, JoinedAt = DateTime.UtcNow, Role = "HeadPresident", Status = "Active" };
+                var fedMember2 = new WorkspaceFederationMember { FederationId = fedId, UserId = userBob.Id, PersonalWorkspaceId = workspaceCalc.Id, JoinedAt = DateTime.UtcNow, Role = "Member", Status = "PendingOwnerApproval" };
+                var fedMemberManager = new WorkspaceFederationMember { FederationId = fedId, UserId = userFrank.Id, PersonalWorkspaceId = null, JoinedAt = DateTime.UtcNow, Role = "DepartmentManager", Status = "Active" };
+                var fedMemberManager2 = new WorkspaceFederationMember { FederationId = fedId, UserId = userGrace.Id, PersonalWorkspaceId = null, JoinedAt = DateTime.UtcNow, Role = "DepartmentManager", Status = "Active" };
                 
-                var fedMember3 = new WorkspaceFederationMember { FederationId = fedAcademicId, UserId = userBob.Id, PersonalWorkspaceId = workspaceDesign.Id, JoinedAt = DateTime.UtcNow };
-                var fedMember4 = new WorkspaceFederationMember { FederationId = fedAcademicId, UserId = userCharlie.Id, PersonalWorkspaceId = workspaceMobile.Id, JoinedAt = DateTime.UtcNow };
+                var fedMember3 = new WorkspaceFederationMember { FederationId = fedAcademicId, UserId = userBob.Id, PersonalWorkspaceId = workspaceDesign.Id, JoinedAt = DateTime.UtcNow, Role = "HeadPresident", Status = "Active" };
+                var fedMember4 = new WorkspaceFederationMember { FederationId = fedAcademicId, UserId = userCharlie.Id, PersonalWorkspaceId = workspaceMobile.Id, JoinedAt = DateTime.UtcNow, Role = "Member", Status = "Active" };
 
-                var fedMember5 = new WorkspaceFederationMember { FederationId = fedCloudId, UserId = userBob.Id, PersonalWorkspaceId = workspaceCalc.Id, JoinedAt = DateTime.UtcNow };
-                var fedMember6 = new WorkspaceFederationMember { FederationId = fedCloudId, UserId = userCharlie.Id, PersonalWorkspaceId = workspaceMobile.Id, JoinedAt = DateTime.UtcNow };
-                var fedMember7 = new WorkspaceFederationMember { FederationId = fedCloudId, UserId = userOlivia.Id, PersonalWorkspaceId = workspaceDesign.Id, JoinedAt = DateTime.UtcNow };
+                var fedMember5 = new WorkspaceFederationMember { FederationId = fedCloudId, UserId = userBob.Id, PersonalWorkspaceId = workspaceCalc.Id, JoinedAt = DateTime.UtcNow, Role = "HeadPresident", Status = "Active" };
+                var fedMember6 = new WorkspaceFederationMember { FederationId = fedCloudId, UserId = userCharlie.Id, PersonalWorkspaceId = workspaceMobile.Id, JoinedAt = DateTime.UtcNow, Role = "Member", Status = "Active" };
+                var fedMember7 = new WorkspaceFederationMember { FederationId = fedCloudId, UserId = userOlivia.Id, PersonalWorkspaceId = workspaceDesign.Id, JoinedAt = DateTime.UtcNow, Role = "Member", Status = "Active" };
 
-                await context.WorkspaceFederationMembers.AddRangeAsync(fedMember1, fedMember2, fedMember3, fedMember4, fedMember5, fedMember6, fedMember7);
+                await context.WorkspaceFederationMembers.AddRangeAsync(fedMember1, fedMember2, fedMemberManager, fedMemberManager2, fedMember3, fedMember4, fedMember5, fedMember6, fedMember7);
                 
                 // Symmetrically map seeded workspaces to their respective federations
                 workspaceWeb.FederationId = fedId;
@@ -1040,9 +1056,10 @@ namespace unigrid.Data
 
                 await context.SaveChangesAsync();
 
-                // 17. Seed projected files
+                // 17. Seed projected and direct files
                 var fedFile1 = new WorkspaceFile { Id = Guid.NewGuid(), WorkspaceId = workspaceWeb.Id, UserId = userAlice.Id, FileName = "Storefront_Mockups_V1.pdf", FileUrl = $"files/{workspaceWeb.Id}/storefront_mockups_v1.pdf", FileType = "pdf", FileSize = 2202010, IsPublic = true, FederationId = fedId, CreatedAt = DateTime.UtcNow.AddHours(-2) };
                 var fedFile2 = new WorkspaceFile { Id = Guid.NewGuid(), WorkspaceId = workspaceCalc.Id, UserId = userBob.Id, FileName = "Payment_Gateway_Specs.docx", FileUrl = $"files/{workspaceCalc.Id}/payment_gateway_specs.docx", FileType = "doc", FileSize = 1258291, IsPublic = true, FederationId = fedId, CreatedAt = DateTime.UtcNow.AddHours(-1) };
+                var fedFileDirect = new WorkspaceFile { Id = Guid.NewGuid(), WorkspaceId = null, UserId = userAlice.Id, FileName = "Federation_Strategy_Q3.pdf", FileUrl = "files/federations/strategy_q3.pdf", FileType = "pdf", FileSize = 5489222, IsPublic = true, FederationId = fedId, CreatedAt = DateTime.UtcNow.AddHours(-4) };
                 
                 var fedFile3 = new WorkspaceFile { Id = Guid.NewGuid(), WorkspaceId = workspaceDesign.Id, UserId = userBob.Id, FileName = "Personas_Virt_Export.pdf", FileUrl = $"files/{workspaceDesign.Id}/personas_virt.pdf", FileType = "pdf", FileSize = 3145728, IsPublic = true, FederationId = fedAcademicId, CreatedAt = DateTime.UtcNow.AddHours(-5) };
                 var fedFile4 = new WorkspaceFile { Id = Guid.NewGuid(), WorkspaceId = workspaceMobile.Id, UserId = userCharlie.Id, FileName = "iOS_Architecture_Draft.docx", FileUrl = $"files/{workspaceMobile.Id}/ios_arch.docx", FileType = "doc", FileSize = 1572864, IsPublic = true, FederationId = fedAcademicId, CreatedAt = DateTime.UtcNow.AddHours(-3) };
@@ -1050,7 +1067,7 @@ namespace unigrid.Data
                 var fedFile5 = new WorkspaceFile { Id = Guid.NewGuid(), WorkspaceId = workspaceAI.Id, UserId = userBob.Id, FileName = "GPU_Architecture_Plan.pdf", FileUrl = $"files/{workspaceAI.Id}/gpu_arch_plan.pdf", FileType = "pdf", FileSize = 4194304, IsPublic = true, FederationId = fedCloudId, CreatedAt = DateTime.UtcNow.AddHours(-4) };
                 var fedFile6 = new WorkspaceFile { Id = Guid.NewGuid(), WorkspaceId = workspaceDesign.Id, UserId = userOlivia.Id, FileName = "UI_Dark_Layout_Grid.png", FileUrl = $"files/{workspaceDesign.Id}/ui_dark_grid.png", FileType = "image", FileSize = 1048576, IsPublic = true, FederationId = fedCloudId, CreatedAt = DateTime.UtcNow.AddHours(-3) };
 
-                await context.WorkspaceFiles.AddRangeAsync(fedFile1, fedFile2, fedFile3, fedFile4, fedFile5, fedFile6);
+                await context.WorkspaceFiles.AddRangeAsync(fedFile1, fedFile2, fedFileDirect, fedFile3, fedFile4, fedFile5, fedFile6);
                 await context.SaveChangesAsync();
 
                 // Associate projected federation files
@@ -1058,11 +1075,31 @@ namespace unigrid.Data
                 file2.FederationId = fedId;
                 await context.SaveChangesAsync();
 
+                // 17b. Seed Federation tasks
+                var fedTask1 = new unigrid.Models.Task { Id = Guid.NewGuid(), WorkspaceId = null, FederationId = fedId, AssigneeId = userFrank.Id, Title = "Review Q3 Cross-Department Progress", Description = "Analyze metrics and reports from WEB-DEV and MATH-101.", Status = 1, Priority = 3, DueDate = DateTime.UtcNow.AddDays(7), CreatedAt = DateTime.UtcNow };
+                var fedTask2 = new unigrid.Models.Task { Id = Guid.NewGuid(), WorkspaceId = null, FederationId = fedId, AssigneeId = userAlice.Id, Title = "Authorize Personal Plan Workspace Connections", Description = "Verify secure invite links and approve Bob Tran's math planner connection.", Status = 0, Priority = 2, DueDate = DateTime.UtcNow.AddDays(3), CreatedAt = DateTime.UtcNow };
+                await context.Tasks.AddRangeAsync(fedTask1, fedTask2);
+                await context.SaveChangesAsync();
+
+                // 17c. Seed Federation ChatRoom and Messages
+                var fedChatRoom = new ChatRoom { Id = Guid.NewGuid(), WorkspaceId = null, FederationId = fedId, CreatedAt = DateTime.UtcNow };
+                await context.ChatRooms.AddAsync(fedChatRoom);
+                await context.SaveChangesAsync();
+
+                await context.ChatMessages.AddRangeAsync(
+                    new ChatMessage { RoomId = fedChatRoom.Id, SenderId = userAlice.Id, Content = "Welcome to the Store Integration Federation Hub! Managers can discuss high-level tasks here.", SentAt = DateTime.UtcNow.AddHours(-5) },
+                    new ChatMessage { RoomId = fedChatRoom.Id, SenderId = userFrank.Id, Content = "Reporting in. I have started reviewing the progress reports for the e-commerce branch.", SentAt = DateTime.UtcNow.AddHours(-4) },
+                    new ChatMessage { RoomId = fedChatRoom.Id, SenderId = userBob.Id, Content = "Hi Alice, I submitted an integration request for my personal planner. Please authorize it.", SentAt = DateTime.UtcNow.AddHours(-3) },
+                    new ChatMessage { RoomId = fedChatRoom.Id, SenderId = userAlice.Id, Content = "@Bob I see your request. Personal workspaces require validation. I will approve it shortly.", SentAt = DateTime.UtcNow.AddHours(-2) }
+                );
+                await context.SaveChangesAsync();
+
                 // 18. Seed invitations and notifications
                 await context.WorkspaceInvitations.AddRangeAsync(
-                    new WorkspaceInvitation { Id = Guid.NewGuid(), WorkspaceId = workspaceAI.Id, InviterId = userAlice.Id, InviteeEmail = "grace@student.edu", Role = "Member", Status = "Pending", CreatedAt = DateTime.UtcNow },
-                    new WorkspaceInvitation { Id = Guid.NewGuid(), WorkspaceId = workspaceData.Id, InviterId = userBob.Id, InviteeEmail = "liam@student.edu", Role = "Member", Status = "Pending", CreatedAt = DateTime.UtcNow },
-                    new WorkspaceInvitation { Id = Guid.NewGuid(), WorkspaceId = workspaceWeb.Id, InviterId = userAlice.Id, InviteeEmail = "olivia@student.edu", Role = "Member", Status = "Accepted", CreatedAt = DateTime.UtcNow }
+                    new WorkspaceInvitation { Id = Guid.NewGuid(), WorkspaceId = workspaceAI.Id, FederationId = null, InviterId = userAlice.Id, InviteeEmail = "grace@student.edu", Role = "Member", Status = "Pending", CreatedAt = DateTime.UtcNow },
+                    new WorkspaceInvitation { Id = Guid.NewGuid(), WorkspaceId = workspaceData.Id, FederationId = null, InviterId = userBob.Id, InviteeEmail = "liam@student.edu", Role = "Member", Status = "Pending", CreatedAt = DateTime.UtcNow },
+                    new WorkspaceInvitation { Id = Guid.NewGuid(), WorkspaceId = workspaceWeb.Id, FederationId = null, InviterId = userAlice.Id, InviteeEmail = "olivia@student.edu", Role = "Member", Status = "Accepted", CreatedAt = DateTime.UtcNow },
+                    new WorkspaceInvitation { Id = Guid.NewGuid(), WorkspaceId = null, FederationId = fedId, InviterId = userAlice.Id, InviteeEmail = "frank@student.edu", Role = "DepartmentManager", Status = "Accepted", CreatedAt = DateTime.UtcNow }
                 );
 
                 await context.Notifications.AddRangeAsync(

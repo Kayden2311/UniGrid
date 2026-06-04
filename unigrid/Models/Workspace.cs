@@ -11,6 +11,8 @@ public partial class Workspace
 
     public string JoinCode { get; set; } = null!;
 
+    public Guid InviteCode { get; set; } = Guid.NewGuid();
+
     public Guid OwnerId { get; set; }
 
     public string? PackageTier { get; set; }

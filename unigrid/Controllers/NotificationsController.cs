@@ -77,6 +77,7 @@ namespace unigrid.Controllers
 
             var invitation = await _context.WorkspaceInvitations
                 .Include(i => i.Workspace)
+                .Include(i => i.Federation)
                 .FirstOrDefaultAsync(i => i.Id == id && i.Status == "Pending");
 
             if (invitation == null)
@@ -92,60 +93,108 @@ namespace unigrid.Controllers
                 return Forbid();
             }
 
-            // Create member link
-            var alreadyMember = await _context.WorkspaceMembers
-                .AnyAsync(wm => wm.WorkspaceId == invitation.WorkspaceId && wm.UserId == user.Id);
+            string targetName = "";
+            string? returnJoinCode = "";
 
-            if (!alreadyMember)
+            if (invitation.WorkspaceId.HasValue)
             {
-                // Verify plan member limits
-                int currentMembersCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == invitation.WorkspaceId);
-                int maxMembersAllowed = 5; // Default for Free/Personal
-                string tier = invitation.Workspace.PackageTier ?? "Free";
-                if (tier == "Pro") maxMembersAllowed = 10;
-                else if (tier == "ProPlus") maxMembersAllowed = 15;
-                else if (tier == "Business") maxMembersAllowed = 30;
+                var workspaceIdVal = invitation.WorkspaceId.Value;
+                targetName = invitation.Workspace?.Name ?? "Workspace";
+                returnJoinCode = invitation.Workspace?.JoinCode;
 
-                if (currentMembersCount >= maxMembersAllowed)
+                // Create member link
+                var alreadyMember = await _context.WorkspaceMembers
+                    .AnyAsync(wm => wm.WorkspaceId == workspaceIdVal && wm.UserId == user.Id);
+
+                if (!alreadyMember)
                 {
-                    return BadRequest(new { message = $"Không thể đồng ý. Workspace này đã đạt giới hạn thành viên ({maxMembersAllowed}) của gói {tier}." });
+                    // Verify plan member limits
+                    int currentMembersCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == workspaceIdVal);
+                    int maxMembersAllowed = 5; // Default for Free/Personal
+                    string tier = invitation.Workspace?.PackageTier ?? "Free";
+                    if (tier == "Pro") maxMembersAllowed = 10;
+                    else if (tier == "ProPlus") maxMembersAllowed = 15;
+                    else if (tier == "Business") maxMembersAllowed = 30;
+
+                    if (currentMembersCount >= maxMembersAllowed)
+                    {
+                        return BadRequest(new { message = $"Cannot accept. This workspace has reached the member limit ({maxMembersAllowed}) of the {tier} tier." });
+                    }
+
+                    var member = new WorkspaceMember
+                    {
+                        WorkspaceId = workspaceIdVal,
+                        UserId = user.Id,
+                        Role = invitation.Role,
+                        DisplayRole = invitation.DisplayRole,
+                        JoinedAt = DateTime.UtcNow
+                    };
+                    await _context.WorkspaceMembers.AddAsync(member);
                 }
 
-                var member = new WorkspaceMember
+                // Add notification to inviter
+                var inviterNotification = new Notification
                 {
-                    WorkspaceId = invitation.WorkspaceId,
-                    UserId = user.Id,
-                    Role = invitation.Role,
-                    DisplayRole = invitation.DisplayRole,
-                    JoinedAt = DateTime.UtcNow
+                    Id = Guid.NewGuid(),
+                    UserId = invitation.InviterId,
+                    Message = $"{user.FullName} has accepted the invitation to join Workspace '{targetName}' as '{invitation.Role}'.",
+                    Type = "InvitationAccepted",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow,
+                    RelatedId = workspaceIdVal
                 };
-                await _context.WorkspaceMembers.AddAsync(member);
+                await _context.Notifications.AddAsync(inviterNotification);
+
+                // Clear cache keys
+                _cache.Remove($"WorkspaceMembers_{workspaceIdVal}");
+            }
+            else if (invitation.FederationId.HasValue)
+            {
+                var federationIdVal = invitation.FederationId.Value;
+                targetName = invitation.Federation?.Name ?? "Federation";
+                returnJoinCode = invitation.Federation?.JoinCode;
+
+                // Create federation member link
+                var alreadyFedMember = await _context.WorkspaceFederationMembers
+                    .AnyAsync(wfm => wfm.FederationId == federationIdVal && wfm.UserId == user.Id);
+
+                if (!alreadyFedMember)
+                {
+                    var fedMember = new WorkspaceFederationMember
+                    {
+                        FederationId = federationIdVal,
+                        UserId = user.Id,
+                        PersonalWorkspaceId = null, // federation invitation joins directly
+                        JoinedAt = DateTime.UtcNow,
+                        Role = invitation.Role ?? "Member",
+                        Status = "Active"
+                    };
+                    await _context.WorkspaceFederationMembers.AddAsync(fedMember);
+                }
+
+                // Add notification to inviter
+                var inviterNotification = new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = invitation.InviterId,
+                    Message = $"{user.FullName} has accepted the invitation to join Federation '{targetName}' as '{invitation.Role}'.",
+                    Type = "InvitationAccepted",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow,
+                    RelatedId = federationIdVal
+                };
+                await _context.Notifications.AddAsync(inviterNotification);
             }
 
             // Update invitation status
             invitation.Status = "Accepted";
-
-            // Add notification to inviter
-            var inviterNotification = new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = invitation.InviterId,
-                Message = $"{user.FullName} đã chấp nhận lời mời tham gia Workspace '{invitation.Workspace.Name}' với tư cách là '{invitation.Role}'.",
-                Type = "InvitationAccepted",
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow,
-                RelatedId = invitation.WorkspaceId
-            };
-            await _context.Notifications.AddAsync(inviterNotification);
-
             await _context.SaveChangesAsync();
 
-            // Clear cache keys
-            _cache.Remove($"WorkspaceMembers_{invitation.WorkspaceId}");
+            // Clear general workspaces cache keys
             _cache.Remove($"UserWorkspaces_{user.Id}");
             _cache.Remove($"UserWorkspaces_{invitation.InviterId}");
 
-            return Ok(new { success = true, joinCode = invitation.Workspace.JoinCode });
+            return Ok(new { success = true, joinCode = returnJoinCode });
         }
 
         [HttpPost("invitations/{id}/decline")]

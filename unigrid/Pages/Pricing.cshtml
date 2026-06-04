@@ -430,12 +430,12 @@
                     <div class="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col justify-between hover:border-indigo-200 transition-all shadow-sm">
                         <div class="space-y-3">
                             <span class="px-2.5 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black rounded-full uppercase tracking-wider">Choice 1: Group Workspace</span>
-                            <h4 class="text-lg font-black text-slate-850">Nâng cấp Workspace Group trực tiếp</h4>
-                            <p class="text-xs text-slate-500 leading-relaxed font-semibold">Tự động nâng cấp workspace hiện tại thành Workspace Group (Pro/Pro Plus) với chi phí <span class="text-indigo-600 font-bold">899,000 VND / tháng</span>. Cho phép lên tới 30 thành viên, 80 GB dung lượng, và các tính năng Premium tức thì.</p>
+                            <h4 class="text-lg font-black text-slate-850">Direct Upgrade to Group Workspace</h4>
+                            <p class="text-xs text-slate-500 leading-relaxed font-semibold">Automatically upgrade the current workspace to a Group Workspace (Pro/Pro Plus) for <span class="text-indigo-600 font-bold">899,000 VND / month</span>. Includes up to 30 members, 80 GB of storage, and instant access to premium features.</p>
                         </div>
                         <button @@click="showBusinessModal = false; triggerUpgrade('Business', '899K', '8.9M', ['1 Workspace', '30 Members', '80 GB Storage', 'Unlimited Chat', 'Unlimited Task Branches', 'Advanced Analytics', 'Role Permissions', 'Priority Support'])" 
                                 class="w-full mt-6 py-3 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all cursor-pointer">
-                            Nâng cấp ngay (899K/tháng)
+                            Upgrade Now (899K/month)
                         </button>
                     </div>
 
@@ -443,26 +443,26 @@
                     <div class="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col justify-between hover:border-violet-200 transition-all shadow-sm">
                         <div class="space-y-3">
                             <span class="px-2.5 py-0.5 bg-violet-100 text-violet-700 text-[9px] font-black rounded-full uppercase tracking-wider">Choice 2: Corporate Fed</span>
-                            <h4 class="text-lg font-black text-slate-850">Đăng ký Enterprise Federation</h4>
-                            <p class="text-xs text-slate-500 leading-relaxed font-semibold">Enterprise Federation đại diện cho một tổ chức hoặc doanh nghiệp đã đăng ký chính thức, cho phép kết nối liên thông và điều hướng chéo qua nhiều Workspace con. <span class="text-violet-600 font-bold">Yêu cầu thiết lập bởi Quản trị viên hệ thống.</span></p>
+                            <h4 class="text-lg font-black text-slate-850">Register Enterprise Federation</h4>
+                            <p class="text-xs text-slate-500 leading-relaxed font-semibold">Enterprise Federation represents a formally registered organization or enterprise, allowing interconnectivity and cross-navigation across multiple child workspaces. <span class="text-violet-600 font-bold">Setup by System Administrator is required.</span></p>
                         </div>
                         
                         <!-- Mini Contact form -->
                         <div class="mt-4 space-y-2 border-t border-slate-200/60 pt-4">
                             <div>
-                                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Tên doanh nghiệp / tổ chức</label>
-                                <input type="text" x-model="businessName" placeholder="Ví dụ: FPT Software" 
+                                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Business / Organization Name</label>
+                                <input type="text" x-model="businessName" placeholder="e.g., FPT Software" 
                                        class="w-full mt-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
                             </div>
                             <div>
-                                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Số điện thoại liên hệ</label>
-                                <input type="text" x-model="contactPhone" placeholder="Ví dụ: 0987654321" 
+                                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Contact Phone Number</label>
+                                <input type="text" x-model="contactPhone" placeholder="e.g., +84987654321" 
                                        class="w-full mt-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
                             </div>
                             <button @@click="submitFederationRequest()" 
                                     :disabled="!businessName || !contactPhone"
                                     class="w-full mt-2 py-3 bg-violet-600 text-white text-xs font-black rounded-xl hover:bg-violet-700 shadow-md shadow-violet-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer">
-                                Gửi yêu cầu liên kết Federation
+                                Send Federation Connection Request
                             </button>
                         </div>
                     </div>
@@ -475,11 +475,11 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                     </div>
-                    <h4 class="text-xl font-black text-slate-800">Yêu cầu đã được gửi tới Admin!</h4>
-                    <p class="text-xs text-slate-500 max-w-md mx-auto leading-relaxed font-semibold">Cảm ơn bạn đã quan tâm đến giải pháp Enterprise Federation của UniGrid. Doanh nghiệp <span class="text-indigo-600 font-bold" x-text="businessName"></span> (SĐT: <span x-text="contactPhone"></span>) đã được ghi nhận trên hệ thống. Quản trị viên của UniGrid sẽ liên hệ để xác minh doanh nghiệp và cấu hình liên kết Federation gồm nhiều phòng ban/workspaces của bạn trong vòng 24 giờ.</p>
+                    <h4 class="text-xl font-black text-slate-800">Request Sent to Admin Successfully!</h4>
+                    <p class="text-xs text-slate-500 max-w-md mx-auto leading-relaxed font-semibold">Thank you for your interest in UniGrid's Enterprise Federation solution. The registration request for <span class="text-indigo-600 font-bold" x-text="businessName"></span> (Phone: <span x-text="contactPhone"></span>) has been recorded. UniGrid's support team will contact you to verify your organization and configure the department/workspace linkages within 24 hours.</p>
                     <button @@click="showBusinessModal = false; federationSubmitted = false; businessName = ''; contactPhone = ''" 
                             class="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black rounded-xl transition-all cursor-pointer">
-                        Đóng
+                        Close
                     </button>
                 </div>
             </div>
@@ -624,9 +624,7 @@
     <footer class="border-t border-slate-100 bg-slate-50 py-12 rounded-[3rem] reveal-on-scroll">
         <div class="max-w-7xl mx-auto px-6 flex flex-col items-center justify-between gap-6 sm:flex-row">
             <div class="flex items-center gap-3">
-                <div class="h-9 w-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                    <i data-lucide="sparkles" class="h-4 w-4"></i>
-                </div>
+                <img src="/assets/official-logo-64.png" alt="UniGrid Logo" class="h-9 w-9 rounded-xl object-contain shadow-lg shadow-indigo-100" />
                 <span class="font-display text-lg font-bold text-slate-800">UniGrid</span>
             </div>
             <p class="text-sm text-slate-400">© 2026 UniGrid. Team productivity platform for students.</p>

@@ -307,7 +307,7 @@
                     title = t.Title, 
                     status = t.Status, 
                     workspaceId = t.WorkspaceId,
-                    workspaceName = t.Workspace.Name,
+                    workspaceName = t.Workspace != null ? t.Workspace.Name : "Federation Direct",
                     priority = t.Priority,
                     dueDate = t.DueDate.HasValue ? t.DueDate.Value.ToString("yyyy-MM-dd") : "" 
                 }))),
