@@ -313,6 +313,126 @@ namespace unigrid.Pages
             return defaultValue;
         }
 
+        public string GetChannelsJson()
+        {
+            if (Federation != null && !string.IsNullOrEmpty(Federation.SettingsJson))
+            {
+                try {
+                    var node = System.Text.Json.Nodes.JsonNode.Parse(Federation.SettingsJson);
+                    if (node != null && node["allChannels"] != null)
+                    {
+                        return node["allChannels"].ToJsonString();
+                    }
+                } catch {}
+            }
+            return "[\"general\"]";
+        }
+
+        public string GetLockedChannelsJson()
+        {
+            if (Federation != null && !string.IsNullOrEmpty(Federation.SettingsJson))
+            {
+                try {
+                    var node = System.Text.Json.Nodes.JsonNode.Parse(Federation.SettingsJson);
+                    if (node != null && node["lockedChannels"] != null)
+                    {
+                        return node["lockedChannels"].ToJsonString();
+                    }
+                } catch {}
+            }
+            return "{}";
+        }
+
+        public string GetChannelOwnersJson()
+        {
+            if (Federation != null && !string.IsNullOrEmpty(Federation.SettingsJson))
+            {
+                try {
+                    var node = System.Text.Json.Nodes.JsonNode.Parse(Federation.SettingsJson);
+                    if (node != null && node["channelOwners"] != null)
+                    {
+                        return node["channelOwners"].ToJsonString();
+                    }
+                } catch {}
+            }
+            return "{}";
+        }
+
+        public string GetChannelModeratorsJson()
+        {
+            if (Federation != null && !string.IsNullOrEmpty(Federation.SettingsJson))
+            {
+                try {
+                    var node = System.Text.Json.Nodes.JsonNode.Parse(Federation.SettingsJson);
+                    if (node != null && node["channelModerators"] != null)
+                    {
+                        return node["channelModerators"].ToJsonString();
+                    }
+                } catch {}
+            }
+            return "{}";
+        }
+
+        public bool IsMemberAllowed(Guid userId, string key, string role)
+        {
+            if (Federation == null) return true;
+            if (userId == Federation.OwnerId) return true;
+
+            if (!string.IsNullOrEmpty(Federation.SettingsJson))
+            {
+                try
+                {
+                    var node = System.Text.Json.Nodes.JsonNode.Parse(Federation.SettingsJson);
+                    if (node != null && node[key] != null)
+                    {
+                        var list = node[key].AsArray();
+                        if (list.Any(item => item != null && item.GetValue<string>().ToLower() == userId.ToString().ToLower()))
+                        {
+                            return false;
+                        }
+                    }
+                }
+                catch {}
+            }
+
+            if (key == "disabledCreateTaskUsers")
+            {
+                if (role == "Owner" || role == "HeadPresident") return true;
+                bool allowMemberCreateTask = false;
+                try {
+                    var node = System.Text.Json.Nodes.JsonNode.Parse(Federation.SettingsJson);
+                    allowMemberCreateTask = node?["allowMemberCreateTask"]?.GetValue<bool>() ?? false;
+                } catch {}
+                return allowMemberCreateTask;
+            }
+            else if (key == "disabledPushFileUsers")
+            {
+                if (role == "Owner" || role == "HeadPresident" || role == "DepartmentManager") return true;
+                bool allowMemberPushFile = true;
+                try {
+                    var node = System.Text.Json.Nodes.JsonNode.Parse(Federation.SettingsJson);
+                    allowMemberPushFile = node?["allowMemberPushFile"]?.GetValue<bool>() ?? true;
+                } catch {}
+                return allowMemberPushFile;
+            }
+            else if (key == "disabledChatUsers")
+            {
+                if (role == "Owner" || role == "HeadPresident" || role == "DepartmentManager") return true;
+                bool allowMemberChat = true;
+                try {
+                    var node = System.Text.Json.Nodes.JsonNode.Parse(Federation.SettingsJson);
+                    allowMemberChat = node?["allowMemberChat"]?.GetValue<bool>() ?? true;
+                } catch {}
+                return allowMemberChat;
+            }
+            else if (key == "disabledCreateChannelUsers")
+            {
+                return role == "Owner" || role == "HeadPresident";
+            }
+
+            return true;
+        }
+
         public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateFederationSettingsAsync(string joinCode, bool allowMemberCreateTask, bool allowManagerSetKpi, bool allowMemberPushFile, bool allowMemberChat)
         {
             var success = await LoadFederationDataAsync(joinCode);
@@ -370,16 +490,31 @@ namespace unigrid.Pages
 
         public string SerializeFederationChatMessages()
         {
-            var cleanMessages = FederationChatMessages.Select(cm => new
-            {
-                id = cm.Id,
-                roomId = cm.RoomId,
-                senderId = cm.SenderId,
-                senderName = cm.Sender.FullName,
-                content = cm.Content,
-                rawContent = cm.Content,
-                sentAt = cm.SentAt,
-                channel = "general"
+            var cleanMessages = FederationChatMessages.Select(cm => {
+                string channel = "general";
+                string cleanContent = cm.Content;
+                
+                if (cm.Content.StartsWith("[channel:"))
+                {
+                    var endIndex = cm.Content.IndexOf("]");
+                    if (endIndex > 9)
+                    {
+                        channel = cm.Content.Substring(9, endIndex - 9);
+                        cleanContent = cm.Content.Substring(endIndex + 1);
+                    }
+                }
+                
+                return new
+                {
+                    id = cm.Id,
+                    roomId = cm.RoomId,
+                    senderId = cm.SenderId,
+                    senderName = cm.Sender.FullName,
+                    content = cleanContent,
+                    rawContent = cm.Content,
+                    sentAt = cm.SentAt,
+                    channel = channel
+                };
             }).ToList();
 
             return System.Text.Json.JsonSerializer.Serialize(cleanMessages, new System.Text.Json.JsonSerializerOptions
@@ -667,9 +802,7 @@ namespace unigrid.Pages
             var success = await LoadFederationDataAsync(joinCode);
             if (!success) return RedirectToPage("/Workspaces");
 
-            var settings = await GetFederationSettingsAsync(joinCode);
-            bool canCreate = CurrentUserRole == "Owner" || CurrentUserRole == "HeadPresident" ||
-                             (settings["allowMemberCreateTask"]?.GetValue<bool>() == true);
+            bool canCreate = IsMemberAllowed(CurrentUser.Id, "disabledCreateTaskUsers", CurrentUserRole);
             if (!canCreate)
             {
                 TempData["ErrorMessage"] = "You do not have permission to assign tasks in this federation.";
@@ -824,14 +957,12 @@ namespace unigrid.Pages
             return RedirectToPage("/FederationDetail", new { joinCode });
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> OnPostSendFederationChatMessageAsync(string joinCode, string content)
+        public async System.Threading.Tasks.Task<IActionResult> OnPostSendFederationChatMessageAsync(string joinCode, string content, string activeChannel)
         {
             var success = await LoadFederationDataAsync(joinCode);
             if (!success) return RedirectToPage("/Workspaces");
 
-            var settings = await GetFederationSettingsAsync(joinCode);
-            bool canChat = CurrentUserRole == "Owner" || CurrentUserRole == "HeadPresident" || CurrentUserRole == "DepartmentManager" ||
-                           (settings["allowMemberChat"]?.GetValue<bool>() == true);
+            bool canChat = IsMemberAllowed(CurrentUser.Id, "disabledChatUsers", CurrentUserRole);
             if (!canChat)
             {
                 return new BadRequestObjectResult(new { message = "Chat has been disabled for members in this federation." });
@@ -848,12 +979,50 @@ namespace unigrid.Pages
                 return new BadRequestObjectResult(new { message = "Federation chat room does not exist." });
             }
 
+            if (content.StartsWith("[system:channel_rules]"))
+            {
+                if (CurrentUserRole != "Owner" && CurrentUserRole != "HeadPresident")
+                {
+                    return new BadRequestObjectResult(new { message = "You do not have permission to manage channel rules." });
+                }
+
+                try
+                {
+                    string jsonStr = content.Substring("[system:channel_rules]".Length);
+                    var incomingPayload = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(jsonStr);
+                    if (incomingPayload != null)
+                    {
+                        var currentSettings = await GetFederationSettingsAsync(joinCode);
+                        if (incomingPayload["allChannels"] != null) currentSettings["allChannels"] = incomingPayload["allChannels"]?.DeepClone();
+                        if (incomingPayload["lockedChannels"] != null) currentSettings["lockedChannels"] = incomingPayload["lockedChannels"]?.DeepClone();
+                        if (incomingPayload["channelOwners"] != null) currentSettings["channelOwners"] = incomingPayload["channelOwners"]?.DeepClone();
+                        if (incomingPayload["channelModerators"] != null) currentSettings["channelModerators"] = incomingPayload["channelModerators"]?.DeepClone();
+
+                        Federation.SettingsJson = currentSettings.ToJsonString();
+                        _context.WorkspaceFederations.Update(Federation);
+                        await _context.SaveChangesAsync();
+
+                        _cache.Remove($"FedSettings_{joinCode.Trim().ToUpper()}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return new BadRequestObjectResult(new { message = $"Invalid channel rules payload: {ex.Message}" });
+                }
+            }
+
+            string contentWithChannel = content;
+            if (!string.IsNullOrEmpty(activeChannel) && activeChannel != "general" && !content.StartsWith("[system:channel_rules]"))
+            {
+                contentWithChannel = $"[channel:{activeChannel}]{content}";
+            }
+
             var message = new ChatMessage
             {
                 Id = Guid.NewGuid(),
                 RoomId = chatRoom.Id,
                 SenderId = CurrentUser.Id,
-                Content = Helpers.InputSanitizer.SanitizeInput(content),
+                Content = Helpers.InputSanitizer.SanitizeInput(contentWithChannel),
                 SentAt = DateTime.UtcNow,
                 IsDeleted = false
             };
@@ -867,10 +1036,10 @@ namespace unigrid.Pages
                 roomId = message.RoomId,
                 senderId = message.SenderId,
                 senderName = CurrentUser.FullName,
-                content = message.Content,
+                content = content,
                 rawContent = message.Content,
                 sentAt = message.SentAt,
-                channel = "general"
+                channel = string.IsNullOrEmpty(activeChannel) ? "general" : activeChannel
             };
 
             var hubContext = (IHubContext<ChatHub>)HttpContext.RequestServices.GetService(typeof(IHubContext<ChatHub>));
@@ -1006,9 +1175,7 @@ namespace unigrid.Pages
             var success = await LoadFederationDataAsync(joinCode);
             if (!success) return RedirectToPage("/Workspaces");
 
-            var settings = await GetFederationSettingsAsync(joinCode);
-            bool canPush = CurrentUserRole == "Owner" || CurrentUserRole == "HeadPresident" || CurrentUserRole == "DepartmentManager" ||
-                           (settings["allowMemberPushFile"]?.GetValue<bool>() == true);
+            bool canPush = IsMemberAllowed(CurrentUser.Id, "disabledPushFileUsers", CurrentUserRole);
             if (!canPush)
             {
                 TempData["ErrorMessage"] = "You do not have permission to push files to the federation.";
@@ -1045,22 +1212,22 @@ namespace unigrid.Pages
             return RedirectToPage("/FederationDetail", new { joinCode });
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateFederationMemberRoleAsync(string joinCode, Guid userId, string role)
+        public async System.Threading.Tasks.Task<IActionResult> OnPostUpdateFederationMemberRoleAsync(
+            string joinCode, Guid userId, string role, bool canCreateTask, bool canPushFile, bool canChat, bool canCreateChannel)
         {
             var success = await LoadFederationDataAsync(joinCode);
             if (!success) return RedirectToPage("/Workspaces");
 
-            // Authorization: only Owner or HeadPresident can manage members
             if (CurrentUserRole != "Owner" && CurrentUserRole != "HeadPresident")
             {
                 TempData["ErrorMessage"] = "You do not have permission to manage federation members.";
-                return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
+                return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "members" });
             }
 
             if (userId == Federation.OwnerId)
             {
                 TempData["ErrorMessage"] = "Cannot change the role of the Federation Owner.";
-                return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
+                return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "members" });
             }
 
             var member = await _context.WorkspaceFederationMembers
@@ -1069,22 +1236,59 @@ namespace unigrid.Pages
             if (member == null)
             {
                 TempData["ErrorMessage"] = "Federation member not found.";
-                return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
+                return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "members" });
             }
 
-            // HeadPresidents cannot modify other HeadPresidents or the Owner
             if (CurrentUserRole == "HeadPresident" && (member.Role == "HeadPresident" || member.Role == "Owner"))
             {
                 TempData["ErrorMessage"] = "Head Presidents cannot modify the roles of other Head Presidents or the Owner.";
-                return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
+                return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "members" });
             }
 
             member.Role = role;
             _context.WorkspaceFederationMembers.Update(member);
+
+            var settings = await GetFederationSettingsAsync(joinCode);
+            
+            void UpdateOverrideList(string key, bool isAllowed)
+            {
+                if (settings[key] == null)
+                {
+                    settings[key] = new System.Text.Json.Nodes.JsonArray();
+                }
+                
+                var arr = settings[key].AsArray();
+                var existingItem = arr.FirstOrDefault(item => item != null && item.GetValue<string>().ToLower() == userId.ToString().ToLower());
+                
+                if (isAllowed)
+                {
+                    if (existingItem != null)
+                    {
+                        arr.Remove(existingItem);
+                    }
+                }
+                else
+                {
+                    if (existingItem == null)
+                    {
+                        arr.Add(userId.ToString());
+                    }
+                }
+            }
+
+            UpdateOverrideList("disabledCreateTaskUsers", canCreateTask);
+            UpdateOverrideList("disabledPushFileUsers", canPushFile);
+            UpdateOverrideList("disabledChatUsers", canChat);
+            UpdateOverrideList("disabledCreateChannelUsers", canCreateChannel);
+
+            Federation.SettingsJson = settings.ToJsonString();
+            _context.WorkspaceFederations.Update(Federation);
             await _context.SaveChangesAsync();
 
-            TempData["SuccessMessage"] = "Federation member role updated successfully.";
-            return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
+            _cache.Remove($"FedSettings_{joinCode.Trim().ToUpper()}");
+
+            TempData["SuccessMessage"] = "Federation member updated successfully.";
+            return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "members" });
         }
 
         public async System.Threading.Tasks.Task<IActionResult> OnPostRemoveFederationMemberAsync(string joinCode, Guid userId)
