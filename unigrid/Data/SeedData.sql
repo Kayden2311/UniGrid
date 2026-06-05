@@ -62,23 +62,7 @@ CREATE TABLE Users (
     CONSTRAINT FK_Users_Accounts FOREIGN KEY (AccountId) REFERENCES Accounts(Id) ON DELETE CASCADE
 );
 
--- 5. Workspaces
-CREATE TABLE Workspaces (
-    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    Name NVARCHAR(256) NOT NULL,
-    JoinCode NVARCHAR(20) NOT NULL UNIQUE,
-    OwnerId UNIQUEIDENTIFIER NOT NULL,
-    PackageTier NVARCHAR(50) DEFAULT 'Free',
-    CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
-    WorkspaceType NVARCHAR(50) NOT NULL DEFAULT 'Personal',
-    CompanyName NVARCHAR(256) NULL,
-    CompanyTaxCode NVARCHAR(100) NULL,
-    CompanyAddress NVARCHAR(500) NULL,
-    SettingsJson NVARCHAR(MAX) NULL,
-    CONSTRAINT FK_Workspaces_Users FOREIGN KEY (OwnerId) REFERENCES Users(Id)
-);
-
--- 5b. WorkspaceFederations (Enterprise & Academic Federated Groups)
+-- 5a. WorkspaceFederations (Enterprise & Academic Federated Groups)
 CREATE TABLE WorkspaceFederations (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     Name NVARCHAR(256) NOT NULL,
@@ -89,16 +73,37 @@ CREATE TABLE WorkspaceFederations (
     CONSTRAINT FK_WorkspaceFederations_Users FOREIGN KEY (OwnerId) REFERENCES Users(Id)
 );
 
+-- 5b. Workspaces
+CREATE TABLE Workspaces (
+    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    Name NVARCHAR(256) NOT NULL,
+    JoinCode NVARCHAR(20) NOT NULL UNIQUE,
+    InviteCode UNIQUEIDENTIFIER NOT NULL UNIQUE DEFAULT NEWID(), -- Secure, non-public invite token
+    OwnerId UNIQUEIDENTIFIER NOT NULL,
+    PackageTier NVARCHAR(50) DEFAULT 'Free',
+    CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
+    WorkspaceType NVARCHAR(50) NOT NULL DEFAULT 'Personal',
+    CompanyName NVARCHAR(256) NULL,
+    CompanyTaxCode NVARCHAR(100) NULL,
+    CompanyAddress NVARCHAR(500) NULL,
+    FederationId UNIQUEIDENTIFIER NULL,
+    SettingsJson NVARCHAR(MAX) NULL,
+    CONSTRAINT FK_Workspaces_Users FOREIGN KEY (OwnerId) REFERENCES Users(Id),
+    CONSTRAINT FK_Workspaces_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE SET NULL
+);
+
 -- 5c. WorkspaceFederationMembers
 CREATE TABLE WorkspaceFederationMembers (
     FederationId UNIQUEIDENTIFIER NOT NULL,
     UserId UNIQUEIDENTIFIER NOT NULL,
-    PersonalWorkspaceId UNIQUEIDENTIFIER NOT NULL,
+    PersonalWorkspaceId UNIQUEIDENTIFIER NULL, -- Nullable for high-level managers/users not in child workspaces
     JoinedAt DATETIME2 DEFAULT GETUTCDATE(),
+    Role NVARCHAR(50) NOT NULL DEFAULT 'Member', -- 'HeadPresident', 'DepartmentManager', 'Member', etc.
+    Status NVARCHAR(50) NOT NULL DEFAULT 'Active', -- 'Active', 'PendingOwnerApproval' (for personal plan link authorization)
     PRIMARY KEY (FederationId, UserId),
     CONSTRAINT FK_FedMembers_Federations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
     CONSTRAINT FK_FedMembers_Users FOREIGN KEY (UserId) REFERENCES Users(Id),
-    CONSTRAINT FK_FedMembers_Workspaces FOREIGN KEY (PersonalWorkspaceId) REFERENCES Workspaces(Id)
+    CONSTRAINT FK_FedMembers_Workspaces FOREIGN KEY (PersonalWorkspaceId) REFERENCES Workspaces(Id) ON DELETE SET NULL
 );
 
 -- 6. WorkspaceMembers (RBAC)
@@ -108,6 +113,9 @@ CREATE TABLE WorkspaceMembers (
     Role NVARCHAR(50) DEFAULT 'Member',
     JoinedAt DATETIME2 DEFAULT GETUTCDATE(),
     DisplayRole NVARCHAR(100) NULL,
+    CanDeleteFile BIT NOT NULL DEFAULT 0,
+    CanCreateTask BIT NOT NULL DEFAULT 1,
+    CanEditTask BIT NOT NULL DEFAULT 1,
     PRIMARY KEY (WorkspaceId, UserId),
     CONSTRAINT FK_Members_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id),
     CONSTRAINT FK_Members_Users FOREIGN KEY (UserId) REFERENCES Users(Id)
@@ -127,7 +135,8 @@ CREATE TABLE TaskCategories (
 -- 7. Tasks
 CREATE TABLE Tasks (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    WorkspaceId UNIQUEIDENTIFIER NOT NULL,
+    WorkspaceId UNIQUEIDENTIFIER NULL, -- Nullable if task belongs directly to Federation
+    FederationId UNIQUEIDENTIFIER NULL, -- Links tasks directly to a Federation
     AssigneeId UNIQUEIDENTIFIER NULL,
     CategoryId UNIQUEIDENTIFIER NULL,
     Title NVARCHAR(512) NOT NULL,
@@ -139,9 +148,11 @@ CREATE TABLE Tasks (
     CurrentCount INT NOT NULL DEFAULT 0,
     DueDate DATETIME2 NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
-    CONSTRAINT FK_Tasks_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id),
+    CONSTRAINT FK_Tasks_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Tasks_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Tasks_Users FOREIGN KEY (AssigneeId) REFERENCES Users(Id),
-    CONSTRAINT FK_Tasks_Categories FOREIGN KEY (CategoryId) REFERENCES TaskCategories(Id) ON DELETE SET NULL
+    CONSTRAINT FK_Tasks_Categories FOREIGN KEY (CategoryId) REFERENCES TaskCategories(Id) ON DELETE NO ACTION,
+    CONSTRAINT CK_Tasks_Owner CHECK ((WorkspaceId IS NOT NULL AND FederationId IS NULL) OR (WorkspaceId IS NULL AND FederationId IS NOT NULL))
 );
 
 -- 7b. KpiTargets (Workspace KPI Targets for users in categories)
@@ -174,7 +185,7 @@ CREATE TABLE TaskComments (
 -- 10. WorkspaceFiles
 CREATE TABLE WorkspaceFiles (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    WorkspaceId UNIQUEIDENTIFIER NOT NULL,
+    WorkspaceId UNIQUEIDENTIFIER NULL, -- Nullable if uploaded directly to Federation
     TaskId UNIQUEIDENTIFIER NULL,
     UserId UNIQUEIDENTIFIER NOT NULL,
     FileName NVARCHAR(512) NOT NULL,
@@ -184,18 +195,22 @@ CREATE TABLE WorkspaceFiles (
     IsPublic BIT NOT NULL DEFAULT 1,
     FederationId UNIQUEIDENTIFIER NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
-    CONSTRAINT FK_Files_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id),
-    CONSTRAINT FK_Files_Tasks FOREIGN KEY (TaskId) REFERENCES Tasks(Id) ON DELETE SET NULL,
+    CONSTRAINT FK_Files_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Files_Tasks FOREIGN KEY (TaskId) REFERENCES Tasks(Id) ON DELETE NO ACTION,
     CONSTRAINT FK_Files_Users FOREIGN KEY (UserId) REFERENCES Users(Id),
-    CONSTRAINT FK_Files_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE SET NULL
+    CONSTRAINT FK_Files_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE SET NULL,
+    CONSTRAINT CK_Files_Owner CHECK (WorkspaceId IS NOT NULL OR FederationId IS NOT NULL)
 );
 
 -- 11. ChatRooms
 CREATE TABLE ChatRooms (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    WorkspaceId UNIQUEIDENTIFIER NOT NULL UNIQUE,
+    WorkspaceId UNIQUEIDENTIFIER NULL,
+    FederationId UNIQUEIDENTIFIER NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
-    CONSTRAINT FK_Chat_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE
+    CONSTRAINT FK_Chat_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Chat_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
+    CONSTRAINT CK_ChatRooms_Owner CHECK ((WorkspaceId IS NOT NULL AND FederationId IS NULL) OR (WorkspaceId IS NULL AND FederationId IS NOT NULL))
 );
 
 -- 12. ChatMessages
@@ -220,6 +235,7 @@ CREATE TABLE PersonalSchedules (
     EndTime DATETIME2 NOT NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
     TaskId UNIQUEIDENTIFIER NULL,
+    TimeZone NVARCHAR(100) NOT NULL DEFAULT 'UTC',
     CONSTRAINT FK_PersonalSchedules_Users FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE,
     CONSTRAINT FK_PersonalSchedules_Tasks FOREIGN KEY (TaskId) REFERENCES Tasks(Id) ON DELETE SET NULL
 );
@@ -227,15 +243,18 @@ CREATE TABLE PersonalSchedules (
 -- 14. AuditLogs
 CREATE TABLE AuditLogs (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    WorkspaceId UNIQUEIDENTIFIER NOT NULL,
+    WorkspaceId UNIQUEIDENTIFIER NULL,
+    FederationId UNIQUEIDENTIFIER NULL,
     UserId UNIQUEIDENTIFIER NOT NULL,
     Action NVARCHAR(100) NOT NULL,
     TargetType NVARCHAR(100) NOT NULL,
     TargetId UNIQUEIDENTIFIER NOT NULL,
     Metadata NVARCHAR(MAX) NULL,
     Timestamp DATETIME2 DEFAULT GETUTCDATE(),
-    CONSTRAINT FK_Audit_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id),
-    CONSTRAINT FK_Audit_Users FOREIGN KEY (UserId) REFERENCES Users(Id)
+    CONSTRAINT FK_Audit_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Audit_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Audit_Users FOREIGN KEY (UserId) REFERENCES Users(Id),
+    CONSTRAINT CK_Audit_Owner CHECK ((WorkspaceId IS NOT NULL AND FederationId IS NULL) OR (WorkspaceId IS NULL AND FederationId IS NOT NULL))
 );
 
 -- 15. Billings
@@ -264,21 +283,28 @@ CREATE TABLE Notifications (
 -- 17. WorkspaceInvitations
 CREATE TABLE WorkspaceInvitations (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    WorkspaceId UNIQUEIDENTIFIER NOT NULL,
+    WorkspaceId UNIQUEIDENTIFIER NULL,
+    FederationId UNIQUEIDENTIFIER NULL,
     InviterId UNIQUEIDENTIFIER NOT NULL,
     InviteeEmail NVARCHAR(256) NOT NULL,
     Role NVARCHAR(50) NOT NULL DEFAULT 'Member',
+    DisplayRole NVARCHAR(100) NULL,
     Status NVARCHAR(50) NOT NULL DEFAULT 'Pending',
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
     CONSTRAINT FK_Invitations_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
-    CONSTRAINT FK_Invitations_Inviter FOREIGN KEY (InviterId) REFERENCES Users(Id)
+    CONSTRAINT FK_Invitations_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Invitations_Inviter FOREIGN KEY (InviterId) REFERENCES Users(Id),
+    CONSTRAINT CK_Invitations_Owner CHECK ((WorkspaceId IS NOT NULL AND FederationId IS NULL) OR (WorkspaceId IS NULL AND FederationId IS NOT NULL))
 );
 
 -- =============================================
 -- PERFORMANCE INDEXES
 -- =============================================
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
 CREATE INDEX IX_Accounts_Email ON Accounts(Email);
 CREATE INDEX IX_Workspaces_JoinCode ON Workspaces(JoinCode);
+CREATE INDEX IX_Workspaces_FederationId ON Workspaces(FederationId);
 CREATE INDEX IX_WorkspaceMembers_UserId ON WorkspaceMembers(UserId);
 CREATE INDEX IX_Tasks_Status ON Tasks(Status);
 CREATE INDEX IX_Tasks_AssigneeId ON Tasks(AssigneeId);
@@ -287,14 +313,19 @@ CREATE INDEX IX_PersonalSchedules_UserId ON PersonalSchedules(UserId);
 CREATE INDEX IX_ChatMessages_SentAt ON ChatMessages(SentAt);
 CREATE INDEX IX_Users_AccountId ON Users(AccountId);
 CREATE INDEX IX_Tasks_WorkspaceId ON Tasks(WorkspaceId);
+CREATE INDEX IX_Tasks_FederationId ON Tasks(FederationId);
 CREATE INDEX IX_WorkspaceFiles_WorkspaceId ON WorkspaceFiles(WorkspaceId);
 CREATE INDEX IX_WorkspaceFiles_TaskId ON WorkspaceFiles(TaskId);
 CREATE INDEX IX_WorkspaceFiles_FederationId ON WorkspaceFiles(FederationId);
 CREATE INDEX IX_TaskComments_TaskId ON TaskComments(TaskId);
 CREATE INDEX IX_ChatMessages_RoomId ON ChatMessages(RoomId);
+CREATE UNIQUE INDEX UX_ChatRooms_WorkspaceId ON ChatRooms(WorkspaceId) WHERE WorkspaceId IS NOT NULL;
+CREATE UNIQUE INDEX UX_ChatRooms_FederationId ON ChatRooms(FederationId) WHERE FederationId IS NOT NULL;
 CREATE INDEX IX_TaskCategories_WorkspaceId ON TaskCategories(WorkspaceId);
 CREATE INDEX IX_KpiTargets_Workspace_User_Category ON KpiTargets(WorkspaceId, UserId, CategoryId);
 CREATE INDEX IX_Tasks_CategoryId ON Tasks(CategoryId);
+CREATE INDEX IX_WorkspaceInvitations_FederationId ON WorkspaceInvitations(FederationId);
+CREATE INDEX IX_AuditLogs_FederationId ON AuditLogs(FederationId);
 
 GO
 
@@ -319,6 +350,44 @@ DECLARE @A_Liam UNIQUEIDENTIFIER = 'dddddddd-eeee-ffff-0000-111111111111';
 DECLARE @A_Olivia UNIQUEIDENTIFIER = 'eeeeeeee-ffff-0000-1111-222222222222';
 DECLARE @A_Noah UNIQUEIDENTIFIER = 'ffffffff-0000-1111-2222-333333333333';
 
+DECLARE @P_Alice UNIQUEIDENTIFIER = 'AAAAAA11-1111-1111-1111-111111111111';
+DECLARE @P_Bob UNIQUEIDENTIFIER = 'BBBBBB22-2222-2222-2222-222222222222';
+DECLARE @P_Charlie UNIQUEIDENTIFIER = 'CCCCCC33-3333-3333-3333-333333333333';
+DECLARE @P_Diana UNIQUEIDENTIFIER = 'DDDDDD44-4444-4444-4444-444444444444';
+DECLARE @P_Eve UNIQUEIDENTIFIER = 'EEEEEE55-5555-5555-5555-555555555555';
+DECLARE @P_Frank UNIQUEIDENTIFIER = 'FFFFFF66-6666-6666-6666-666666666666';
+DECLARE @P_Grace UNIQUEIDENTIFIER = 'AAAAAA77-7777-7777-7777-777777777777';
+DECLARE @P_Henry UNIQUEIDENTIFIER = 'BBBBBB88-8888-8888-8888-888888888888';
+DECLARE @P_Jack UNIQUEIDENTIFIER = 'CCCCCC99-9999-9999-9999-999999999999';
+DECLARE @P_Kelly UNIQUEIDENTIFIER = 'DDDDDD00-0000-0000-0000-000000000000';
+DECLARE @P_Liam UNIQUEIDENTIFIER = 'EEEEEE11-1111-1111-1111-111111111111';
+DECLARE @P_Olivia UNIQUEIDENTIFIER = 'FFFFFF22-2222-2222-2222-222222222222';
+DECLARE @P_Noah UNIQUEIDENTIFIER = 'AAAAAA33-3333-3333-3333-333333333333';
+
+DECLARE @Fed_Integration UNIQUEIDENTIFIER = 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF';
+DECLARE @Fed_Academic UNIQUEIDENTIFIER = 'EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE';
+DECLARE @Fed_Cloud UNIQUEIDENTIFIER = 'DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD';
+
+DECLARE @W_SE UNIQUEIDENTIFIER = '99999999-9999-9999-9999-999999999999';
+DECLARE @W_Web UNIQUEIDENTIFIER = '88888888-8888-8888-8888-888888888888';
+DECLARE @W_Calc UNIQUEIDENTIFIER = '77777777-7777-7777-7777-777777777777';
+DECLARE @W_Physics UNIQUEIDENTIFIER = '66666666-6666-6666-6666-666666666666';
+DECLARE @W_English UNIQUEIDENTIFIER = '55555555-5555-5555-5555-555555555555';
+DECLARE @W_Research UNIQUEIDENTIFIER = '44444444-4444-4444-4444-444444444444';
+DECLARE @W_Design UNIQUEIDENTIFIER = '33333333-2222-1111-0000-999999999999';
+DECLARE @W_Mobile UNIQUEIDENTIFIER = '22222222-1111-0000-9999-888888888888';
+DECLARE @W_Global UNIQUEIDENTIFIER = '11111111-0000-9999-8888-777777777777';
+DECLARE @W_AI UNIQUEIDENTIFIER = 'aaaaaaaa-1111-2222-3333-444444444444';
+DECLARE @W_Data UNIQUEIDENTIFIER = 'bbbbbbbb-2222-3333-4444-555555555555';
+
+DECLARE @Invite_SE UNIQUEIDENTIFIER = '11111111-aaaa-1111-aaaa-111111111111';
+DECLARE @Invite_Web UNIQUEIDENTIFIER = '22222222-bbbb-2222-bbbb-222222222222';
+DECLARE @Invite_Calc UNIQUEIDENTIFIER = '33333333-cccc-3333-cccc-333333333333';
+DECLARE @Invite_Design UNIQUEIDENTIFIER = '44444444-dddd-4444-dddd-444444444444';
+DECLARE @Invite_Mobile UNIQUEIDENTIFIER = '55555555-eeee-5555-eeee-555555555555';
+DECLARE @Invite_AI UNIQUEIDENTIFIER = '66666666-ffff-6666-ffff-666666666666';
+DECLARE @Invite_Data UNIQUEIDENTIFIER = '77777777-8888-7777-8888-777777777777';
+
 INSERT INTO Accounts (Id, Email, PasswordHash, Role) VALUES 
 (@A_Admin, 'admin@unigrid.com', 'password123', 1),
 (@A_Mod, 'mod@unigrid.com', 'password123', 3),
@@ -335,21 +404,6 @@ INSERT INTO Accounts (Id, Email, PasswordHash, Role) VALUES
 (@A_Liam, 'liam@student.edu', 'password123', 2),
 (@A_Olivia, 'olivia@student.edu', 'password123', 2),
 (@A_Noah, 'noah@student.edu', 'password123', 2);
-
--- 2. Create Profiles
-DECLARE @P_Alice UNIQUEIDENTIFIER = 'AAAAAA11-1111-1111-1111-111111111111';
-DECLARE @P_Bob UNIQUEIDENTIFIER = 'BBBBBB22-2222-2222-2222-222222222222';
-DECLARE @P_Charlie UNIQUEIDENTIFIER = 'CCCCCC33-3333-3333-3333-333333333333';
-DECLARE @P_Diana UNIQUEIDENTIFIER = 'DDDDDD44-4444-4444-4444-444444444444';
-DECLARE @P_Eve UNIQUEIDENTIFIER = 'EEEEEE55-5555-5555-5555-555555555555';
-DECLARE @P_Frank UNIQUEIDENTIFIER = 'FFFFFF66-6666-6666-6666-666666666666';
-DECLARE @P_Grace UNIQUEIDENTIFIER = 'AAAAAA77-7777-7777-7777-777777777777';
-DECLARE @P_Henry UNIQUEIDENTIFIER = 'BBBBBB88-8888-8888-8888-888888888888';
-DECLARE @P_Jack UNIQUEIDENTIFIER = 'CCCCCC99-9999-9999-9999-999999999999';
-DECLARE @P_Kelly UNIQUEIDENTIFIER = 'DDDDDD00-0000-0000-0000-000000000000';
-DECLARE @P_Liam UNIQUEIDENTIFIER = 'EEEEEE11-1111-1111-1111-111111111111';
-DECLARE @P_Olivia UNIQUEIDENTIFIER = 'FFFFFF22-2222-2222-2222-222222222222';
-DECLARE @P_Noah UNIQUEIDENTIFIER = 'AAAAAA33-3333-3333-3333-333333333333';
 
 INSERT INTO Admins (AccountId, FullName, SuperAdmin) VALUES (@A_Admin, 'System Administrator', 1);
 INSERT INTO Moderators (AccountId, FullName, Region) VALUES (@A_Mod, 'Platform Moderator', 'East-Asia');
@@ -368,31 +422,24 @@ INSERT INTO Users (Id, AccountId, FullName, SubscriptionTier, BusinessAttribute)
 (@P_Olivia, @A_Olivia, 'Olivia Tran', 'ProPlus', 'normal'),
 (@P_Noah, @A_Noah, 'Noah Le', 'Personal', 'normal');
 
--- 3. Create Expanded Workspaces (11 Workspaces Total)
-DECLARE @W_SE UNIQUEIDENTIFIER = '99999999-9999-9999-9999-999999999999';
-DECLARE @W_Web UNIQUEIDENTIFIER = '88888888-8888-8888-8888-888888888888';
-DECLARE @W_Calc UNIQUEIDENTIFIER = '77777777-7777-7777-7777-777777777777';
-DECLARE @W_Physics UNIQUEIDENTIFIER = '66666666-6666-6666-6666-666666666666';
-DECLARE @W_English UNIQUEIDENTIFIER = '55555555-5555-5555-5555-555555555555';
-DECLARE @W_Research UNIQUEIDENTIFIER = '44444444-4444-4444-4444-444444444444';
-DECLARE @W_Design UNIQUEIDENTIFIER = '33333333-2222-1111-0000-999999999999';
-DECLARE @W_Mobile UNIQUEIDENTIFIER = '22222222-1111-0000-9999-888888888888';
-DECLARE @W_Global UNIQUEIDENTIFIER = '11111111-0000-9999-8888-777777777777';
-DECLARE @W_AI UNIQUEIDENTIFIER = 'aaaaaaaa-1111-2222-3333-444444444444';
-DECLARE @W_Data UNIQUEIDENTIFIER = 'bbbbbbbb-2222-3333-4444-555555555555';
+-- 13. Create three Demo Workspace Federations (Mô hình Liên bang)
+INSERT INTO WorkspaceFederations (Id, Name, JoinCode, OwnerId) VALUES
+(@Fed_Integration, 'Store Integration Federation', 'FED-STORE', @P_Alice),
+(@Fed_Academic, 'Academic Collaboration Alliance', 'FED-ACAD', @P_Bob),
+(@Fed_Cloud, 'Cloud Architecture Alliance', 'FED-CLOUD', @P_Bob);
 
-INSERT INTO Workspaces (Id, Name, OwnerId, JoinCode, PackageTier, WorkspaceType, CompanyName, CompanyTaxCode, CompanyAddress) VALUES 
-(@W_SE, 'Enterprise Portal', @P_Alice, 'SE-PRO', 'Business', 'Business', 'UniGrid Corporation', '0109988776', '456 Enterprise Towers, District 1, HCMC'),
-(@W_Web, 'E-Commerce Branch', @P_Alice, 'WEB-DEV', 'ProPlus', 'Group', NULL, NULL, NULL),
-(@W_Calc, 'Personal Planner', @P_Bob, 'MATH-101', 'Personal', 'Personal', NULL, NULL, NULL),
-(@W_Physics, 'Physics Lab', @P_Alice, 'PHYS-101', 'Free', 'Personal', NULL, NULL, NULL),
-(@W_English, 'English Composition', @P_Alice, 'ENGL-101', 'Free', 'Personal', NULL, NULL, NULL),
-(@W_Research, 'Research Methods', @P_Alice, 'RES-101', 'Free', 'Personal', NULL, NULL, NULL),
-(@W_Design, 'UX Design Studio', @P_Bob, 'DSN-FLOW', 'ProPlus', 'Group', NULL, NULL, NULL),
-(@W_Mobile, 'Mobile Dev Team', @P_Charlie, 'MBL-APP', 'Pro', 'Group', NULL, NULL, NULL),
-(@W_Global, 'Global Corporate Operations', @P_Frank, 'GLB-OPS', 'Business', 'Business', 'Aperture Science', '0991122334', '789 Enrichment Center Rd, Ohio, US'),
-(@W_AI, 'AI R&D Lab', @P_Alice, 'AI-LAB', 'ProPlus', 'Group', NULL, NULL, NULL),
-(@W_Data, 'Data Analytics Hub', @P_Bob, 'DATA-HUB', 'Pro', 'Group', NULL, NULL, NULL);
+INSERT INTO Workspaces (Id, Name, OwnerId, JoinCode, InviteCode, PackageTier, WorkspaceType, CompanyName, CompanyTaxCode, CompanyAddress, FederationId) VALUES 
+(@W_SE, 'Enterprise Portal', @P_Alice, 'SE-PRO', @Invite_SE, 'Business', 'Business', 'UniGrid Corporation', '0109988776', '456 Enterprise Towers, District 1, HCMC', NULL),
+(@W_Web, 'E-Commerce Branch', @P_Alice, 'WEB-DEV', @Invite_Web, 'ProPlus', 'Group', NULL, NULL, NULL, @Fed_Integration),
+(@W_Calc, 'Personal Planner', @P_Bob, 'MATH-101', @Invite_Calc, 'Personal', 'Personal', NULL, NULL, NULL, NULL),
+(@W_Physics, 'Physics Lab', @P_Alice, 'PHYS-101', NEWID(), 'Free', 'Personal', NULL, NULL, NULL, NULL),
+(@W_English, 'English Composition', @P_Alice, 'ENGL-101', NEWID(), 'Free', 'Personal', NULL, NULL, NULL, NULL),
+(@W_Research, 'Research Methods', @P_Alice, 'RES-101', NEWID(), 'Free', 'Personal', NULL, NULL, NULL, NULL),
+(@W_Design, 'UX Design Studio', @P_Bob, 'DSN-FLOW', @Invite_Design, 'ProPlus', 'Group', NULL, NULL, NULL, @Fed_Academic),
+(@W_Mobile, 'Mobile Dev Team', @P_Charlie, 'MBL-APP', @Invite_Mobile, 'Pro', 'Group', NULL, NULL, NULL, @Fed_Cloud),
+(@W_Global, 'Global Corporate Operations', @P_Frank, 'GLB-OPS', NEWID(), 'Business', 'Business', 'Aperture Science', '0991122334', '789 Enrichment Center Rd, Ohio, US', NULL),
+(@W_AI, 'AI R&D Lab', @P_Alice, 'AI-LAB', @Invite_AI, 'ProPlus', 'Group', NULL, NULL, NULL, @Fed_Integration),
+(@W_Data, 'Data Analytics Hub', @P_Bob, 'DATA-HUB', @Invite_Data, 'Pro', 'Group', NULL, NULL, NULL, @Fed_Cloud);
 
 -- 4. Set Up Billings for Workspaces
 INSERT INTO Billings (WorkspaceId, PackageId, Status, EndDate) VALUES 
@@ -773,42 +820,58 @@ INSERT INTO PersonalSchedules (UserId, Title, Description, StartTime, EndTime, T
 (@P_Noah, 'Analytics Tracking Schema', '{"desc":"Engagement mapping","priority":"low","color":2}', DATEADD(hour, 14, DATEADD(day, 3, @CurrentMonday)), DATEADD(hour, 16, DATEADD(day, 3, @CurrentMonday)), @T44),
 (@P_Noah, 'Executive Dashboard Assembly', '{"desc":"Draw charts inside view","priority":"medium","color":0}', DATEADD(hour, 9, DATEADD(day, 4, @CurrentMonday)), DATEADD(hour, 11, DATEADD(day, 4, @CurrentMonday)), @T32);
 
--- 13. Create three Demo Workspace Federations (Mô hình Liên bang)
-DECLARE @Fed_Integration UNIQUEIDENTIFIER = 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF';
-DECLARE @Fed_Academic UNIQUEIDENTIFIER = 'EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE';
-DECLARE @Fed_Cloud UNIQUEIDENTIFIER = 'DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD';
-
-INSERT INTO WorkspaceFederations (Id, Name, JoinCode, OwnerId) VALUES
-(@Fed_Integration, 'Store Integration Federation', 'FED-STORE', @P_Alice),
-(@Fed_Academic, 'Academic Collaboration Alliance', 'FED-ACAD', @P_Bob),
-(@Fed_Cloud, 'Cloud Architecture Alliance', 'FED-CLOUD', @P_Bob);
-
 -- 14. Add Members to the Federations
 -- Federation 1 members (FED-STORE)
-INSERT INTO WorkspaceFederationMembers (FederationId, UserId, PersonalWorkspaceId) VALUES
-(@Fed_Integration, @P_Alice, @W_Web),
-(@Fed_Integration, @P_Bob, @W_Calc);
+INSERT INTO WorkspaceFederationMembers (FederationId, UserId, PersonalWorkspaceId, Role, Status) VALUES
+(@Fed_Integration, @P_Alice, NULL, 'HeadPresident', 'Active'),
+(@Fed_Integration, @P_Bob, @W_Calc, 'Member', 'PendingOwnerApproval'), -- Personal workspace, requires authorization
+(@Fed_Integration, @P_Frank, NULL, 'DepartmentManager', 'Active'), -- Department Manager not in a child workspace
+(@Fed_Integration, @P_Grace, NULL, 'DepartmentManager', 'Active');
 
 -- Federation 2 members (FED-ACAD)
-INSERT INTO WorkspaceFederationMembers (FederationId, UserId, PersonalWorkspaceId) VALUES
-(@Fed_Academic, @P_Bob, @W_Design),
-(@Fed_Academic, @P_Charlie, @W_Mobile);
+INSERT INTO WorkspaceFederationMembers (FederationId, UserId, PersonalWorkspaceId, Role, Status) VALUES
+(@Fed_Academic, @P_Bob, NULL, 'HeadPresident', 'Active'),
+(@Fed_Academic, @P_Charlie, NULL, 'Member', 'Active');
 
 -- Federation 3 members (FED-CLOUD)
-INSERT INTO WorkspaceFederationMembers (FederationId, UserId, PersonalWorkspaceId) VALUES
-(@Fed_Cloud, @P_Bob, @W_Calc),
-(@Fed_Cloud, @P_Charlie, @W_Mobile),
-(@Fed_Cloud, @P_Olivia, @W_Design);
+INSERT INTO WorkspaceFederationMembers (FederationId, UserId, PersonalWorkspaceId, Role, Status) VALUES
+(@Fed_Cloud, @P_Bob, NULL, 'HeadPresident', 'Active'),
+(@Fed_Cloud, @P_Charlie, NULL, 'Member', 'Active'),
+(@Fed_Cloud, @P_Olivia, NULL, 'Member', 'Active');
+
+-- 14b. High-level Federation Tasks
+DECLARE @T_Fed1 UNIQUEIDENTIFIER = 'abcdefab-eeee-1111-2222-333333333333';
+DECLARE @T_Fed2 UNIQUEIDENTIFIER = 'abcdefab-eeee-1111-2222-444444444444';
+
+INSERT INTO Tasks (Id, WorkspaceId, FederationId, AssigneeId, Title, Description, Status, Priority, DueDate) VALUES
+(@T_Fed1, NULL, @Fed_Integration, @P_Frank, 'Review Q3 Cross-Department Progress', 'Analyze metrics and reports from WEB-DEV and MATH-101.', 1, 3, DATEADD(day, 7, @CurrentMonday)),
+(@T_Fed2, NULL, @Fed_Integration, @P_Alice, 'Authorize Personal Plan Workspace Connections', 'Verify secure invite links and approve Bob Tran''s math planner connection.', 0, 2, DATEADD(day, 3, @CurrentMonday));
+
+-- 14c. Federation Chat Room
+DECLARE @CR_Fed_Int UNIQUEIDENTIFIER = 'fed12345-1234-1234-1234-123456789012';
+INSERT INTO ChatRooms (Id, WorkspaceId, FederationId) VALUES
+(@CR_Fed_Int, NULL, @Fed_Integration);
+
+-- Seeding chat messages in the Federation Chat Room
+INSERT INTO ChatMessages (RoomId, SenderId, Content, SentAt) VALUES
+(@CR_Fed_Int, @P_Alice, 'Welcome to the Store Integration Federation Hub! Managers can discuss high-level tasks here.', DATEADD(hour, -5, GETUTCDATE())),
+(@CR_Fed_Int, @P_Frank, 'Reporting in. I have started reviewing the progress reports for the e-commerce branch.', DATEADD(hour, -4, GETUTCDATE())),
+(@CR_Fed_Int, @P_Bob, 'Hi Alice, I submitted an integration request for my personal planner. Please authorize it.', DATEADD(hour, -3, GETUTCDATE())),
+(@CR_Fed_Int, @P_Alice, '@Bob I see your request. Personal workspaces require validation. I will approve it shortly.', DATEADD(hour, -2, GETUTCDATE()));
 
 -- 15. Project files to the Federations
 -- Project files for FED-STORE
 UPDATE WorkspaceFiles SET FederationId = @Fed_Integration, IsPublic = 1 WHERE FileName = 'Transformer_Comparison.pdf';
 UPDATE WorkspaceFiles SET FederationId = @Fed_Integration, IsPublic = 1 WHERE FileName = 'Database_Schema_Draft.docx';
 
--- Projected Files for FED-STORE
+-- Projected Files for FED-STORE (Files from child workspaces projected to Federation)
 INSERT INTO WorkspaceFiles (WorkspaceId, UserId, FileName, FileUrl, FileType, FileSize, IsPublic, FederationId, CreatedAt) VALUES 
 (@W_Web, @P_Alice, 'Storefront_Mockups_V1.pdf', 'files/88888888-8888-8888-8888-888888888888/storefront_mockups_v1.pdf', 'pdf', 2202010, 1, @Fed_Integration, DATEADD(hour, -2, GETUTCDATE())),
 (@W_Calc, @P_Bob, 'Payment_Gateway_Specs.docx', 'files/77777777-7777-7777-7777-777777777777/payment_gateway_specs.docx', 'doc', 1258291, 1, @Fed_Integration, DATEADD(hour, -1, GETUTCDATE()));
+
+-- Direct File Uploads to the Federation (WorkspaceId is NULL)
+INSERT INTO WorkspaceFiles (WorkspaceId, UserId, FileName, FileUrl, FileType, FileSize, IsPublic, FederationId, CreatedAt) VALUES 
+(NULL, @P_Alice, 'Federation_Strategy_Q3.pdf', 'files/federations/FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF/strategy_q3.pdf', 'pdf', 5489222, 1, @Fed_Integration, DATEADD(hour, -4, GETUTCDATE()));
 
 -- Projected Files for FED-ACAD
 INSERT INTO WorkspaceFiles (WorkspaceId, UserId, FileName, FileUrl, FileType, FileSize, IsPublic, FederationId, CreatedAt) VALUES 
@@ -821,10 +884,11 @@ INSERT INTO WorkspaceFiles (WorkspaceId, UserId, FileName, FileUrl, FileType, Fi
 (@W_Design, @P_Olivia, 'UI_Dark_Layout_Grid.png', 'files/33333333-2222-1111-0000-999999999999/ui_dark_grid.png', 'image', 1048576, 1, @Fed_Cloud, DATEADD(hour, -3, GETUTCDATE()));
 
 -- 16. Seed Sample Invitations & Notifications (Lively Platform Activities)
-INSERT INTO WorkspaceInvitations (WorkspaceId, InviterId, InviteeEmail, Role, Status) VALUES
-(@W_AI, @P_Alice, 'grace@student.edu', 'Member', 'Pending'),
-(@W_Data, @P_Bob, 'liam@student.edu', 'Member', 'Pending'),
-(@W_Web, @P_Alice, 'olivia@student.edu', 'Member', 'Accepted');
+INSERT INTO WorkspaceInvitations (WorkspaceId, FederationId, InviterId, InviteeEmail, Role, Status) VALUES
+(@W_AI, NULL, @P_Alice, 'grace@student.edu', 'Member', 'Pending'),
+(@W_Data, NULL, @P_Bob, 'liam@student.edu', 'Member', 'Pending'),
+(@W_Web, NULL, @P_Alice, 'olivia@student.edu', 'Member', 'Accepted'),
+(NULL, @Fed_Integration, @P_Alice, 'frank@student.edu', 'DepartmentManager', 'Accepted');
 
 INSERT INTO Notifications (UserId, Message, Type, Link, IsRead) VALUES
 (@P_Alice, 'You have been appointed Manager of the new AI R&D Lab.', 'WorkspaceInvite', '/workspaces', 0),
