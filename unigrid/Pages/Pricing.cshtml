@@ -16,7 +16,17 @@
         selectedPriceMonthly: '', 
         selectedPriceYearly: '',
         selectedFeatures: [],
-        triggerUpgrade(tier, priceM, priceY, features) {
+        
+        // Checkout state variables
+        checkoutLoading: false,
+        paymentConfirming: false,
+        paymentSuccess: false,
+        qrUrl: '',
+        txnRef: '',
+        amountVnd: 0,
+        errorMessage: '',
+
+        async triggerUpgrade(tier, priceM, priceY, features) {
             if (@(User.Identity?.IsAuthenticated == true ? "false" : "true")) {
                 window.location.href = '/Signup?tier=' + tier;
                 return;
@@ -25,7 +35,41 @@
             this.selectedPriceMonthly = priceM;
             this.selectedPriceYearly = priceY;
             this.selectedFeatures = features;
+            
+            // Reset checkout state
+            this.errorMessage = '';
+            this.paymentSuccess = false;
+            this.qrUrl = '';
+            this.txnRef = '';
+            this.amountVnd = 0;
+            this.checkoutLoading = true;
             this.showConfirmModal = true;
+
+            try {
+                const response = await fetch('/api/billing/create-checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tier: tier,
+                        billingPeriod: this.billing,
+                        joinCode: '@Model.ActiveWorkspaceJoinCode'
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    this.qrUrl = data.qrUrl;
+                    this.txnRef = data.transactionRef;
+                    this.amountVnd = data.amount;
+                } else {
+                    this.errorMessage = data.message || 'Failed to register checkout.';
+                }
+            } catch (err) {
+                this.errorMessage = 'Network error while initiating payment checkout.';
+                console.error(err);
+            } finally {
+                this.checkoutLoading = false;
+            }
         },
         triggerBusinessUpgrade() {
             if (@(User.Identity?.IsAuthenticated == true ? "false" : "true")) {
@@ -34,9 +78,38 @@
             }
             this.showBusinessModal = true;
         },
-        confirmUpgrade() {
-            document.getElementById('upgradeTier').value = this.selectedTier;
-            document.getElementById('upgradeForm').submit();
+        async confirmPayment() {
+            this.paymentConfirming = true;
+            this.errorMessage = '';
+
+            try {
+                const response = await fetch('/api/billing/confirm-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        transactionRef: this.txnRef,
+                        tier: this.selectedTier,
+                        billingPeriod: this.billing,
+                        joinCode: '@Model.ActiveWorkspaceJoinCode'
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    this.paymentSuccess = true;
+                    setTimeout(() => {
+                        this.showConfirmModal = false;
+                        window.location.href = data.joinCode ? ('/WorkspaceDetail/' + data.joinCode) : '/Dashboard';
+                    }, 1500);
+                } else {
+                    this.errorMessage = data.message || 'Transaction confirmation failed.';
+                }
+            } catch (err) {
+                this.errorMessage = 'Network error while verifying payment.';
+                console.error(err);
+            } finally {
+                this.paymentConfirming = false;
+            }
         },
         async submitFederationRequest() {
             if (!this.businessName.trim() || !this.contactPhone.trim()) return;
@@ -342,59 +415,102 @@
     <!-- Confirm Upgrade Modal -->
     <div x-show="showConfirmModal" x-transition x-cloak class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
         <!-- Backdrop -->
-        <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @@click="showConfirmModal = false"></div>
+        <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @@click="if (!paymentConfirming && !paymentSuccess) showConfirmModal = false"></div>
         
         <!-- Modal Content -->
         <div class="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-2xl relative z-10 w-full max-w-lg transform transition-all duration-300">
-            <button @@click="showConfirmModal = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors">
+            <button x-show="!paymentConfirming && !paymentSuccess" @@click="showConfirmModal = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors">
                 <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
             
-            <div class="space-y-6">
-                <div class="h-12 w-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-md">
-                    <svg class="w-6 h-6 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+            <!-- Loading Checkout State -->
+            <div x-show="checkoutLoading" class="py-12 flex flex-col items-center justify-center space-y-4">
+                <div class="h-10 w-10 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-widest animate-pulse">Generating dynamic VietQR...</p>
+            </div>
+
+            <!-- Error State -->
+            <div x-show="!checkoutLoading && errorMessage" class="py-6 space-y-6">
+                <div class="h-12 w-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center shadow-md">
+                    <i data-lucide="alert-circle" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-black text-slate-800">Checkout Error</h3>
+                    <p class="text-sm text-slate-500 mt-2" x-text="errorMessage"></p>
+                </div>
+                <button @@click="showConfirmModal = false" class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl transition-all">Close</button>
+            </div>
+
+            <!-- Success Redirect State -->
+            <div x-show="paymentSuccess" class="py-12 flex flex-col items-center justify-center space-y-4">
+                <div class="h-14 w-14 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center border border-emerald-100 shadow-lg">
+                    <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                 </div>
-                
-                <div>
-                    <h3 class="text-2xl font-black text-slate-800 tracking-tight">Confirm plan upgrade</h3>
-                    <p class="text-sm text-slate-500 mt-1">You are upgrading to the <span class="font-bold text-indigo-600" x-text="selectedTier"></span> plan.</p>
+                <h4 class="text-lg font-black text-slate-800">Payment Confirmed!</h4>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Upgrading subscription, redirecting...</p>
+            </div>
+
+            <!-- Main Checkout View -->
+            <div x-show="!checkoutLoading && !errorMessage && !paymentSuccess" class="space-y-6">
+                <!-- Header -->
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
+                        <i data-lucide="qr-code" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black text-slate-800 tracking-tight">VietQR Instant Payment</h3>
+                        <p class="text-[10px] text-slate-400 font-black uppercase tracking-wider">Scan QR code to transfer instantly</p>
+                    </div>
                 </div>
                 
-                <div class="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
+                <!-- Plan Summary -->
+                <div class="px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between text-xs">
                     <div>
-                        <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Billing details</p>
-                        <p class="text-lg font-bold text-slate-800 mt-1" x-text="billing == 'monthly' ? 'Monthly Billing' : 'Yearly Billing'"></p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Plan Selected</p>
+                        <p class="text-sm font-bold text-slate-800 mt-0.5" x-text="selectedTier + ' Plan (' + (billing == 'monthly' ? 'Monthly' : 'Yearly') + ')'"></p>
                     </div>
                     <div class="text-right">
-                        <p class="text-2xl font-black text-slate-900">
-                            <span x-text="billing == 'monthly' ? selectedPriceMonthly : selectedPriceYearly"></span>
-                            <span class="text-xs text-slate-400 font-bold">VND</span>
-                        </p>
-                        <p class="text-[10px] text-slate-400 font-bold uppercase mt-0.5" x-text="billing == 'monthly' ? '/ month' : '/ year'"></p>
+                        <p class="text-lg font-black text-slate-800" x-text="amountVnd.toLocaleString('vi-VN') + ' VND'"></p>
                     </div>
                 </div>
-                
-                <div class="space-y-3">
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Included features</p>
-                    <ul class="grid grid-cols-2 gap-3">
-                        <template x-for="feature in selectedFeatures">
-                            <li class="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                                <svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                                <span x-text="feature"></span>
-                            </li>
-                        </template>
-                    </ul>
+
+                <!-- VietQR Dynamic Image -->
+                <div class="relative py-2 flex justify-center bg-white rounded-3xl border border-slate-100 shadow-sm p-4">
+                    <img :src="qrUrl" alt="VietQR Payment Code" class="rounded-xl max-w-[200px] border border-slate-100 shadow-sm" />
                 </div>
-                
-                <div class="flex gap-4 pt-4 border-t border-slate-100">
-                    <button @@click="showConfirmModal = false" class="flex-1 py-4 bg-slate-100 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-all">Cancel</button>
-                    <button @@click="confirmUpgrade()" class="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">Confirm Upgrade</button>
+
+                <!-- Transfer Credentials Details -->
+                <div class="p-4 bg-indigo-50/20 border border-indigo-100/50 rounded-2xl space-y-2 text-[11px] font-semibold text-slate-600">
+                    <div class="flex justify-between">
+                        <span>Merchant Bank:</span>
+                        <span class="font-bold text-slate-800">MoMo</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Account Number:</span>
+                        <span class="font-bold text-slate-800 select-all">PSG2615912200000011</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Account Name:</span>
+                        <span class="font-bold text-slate-800">DUONG XUAN PHU</span>
+                    </div>
+                    <div class="flex justify-between border-t border-indigo-100/60 pt-2 text-indigo-700">
+                        <span>Transfer Message:</span>
+                        <span class="font-black select-all" x-text="'UNIGRID ' + txnRef"></span>
+                    </div>
+                </div>
+
+                <!-- Action Triggers -->
+                <div class="flex gap-4 pt-2">
+                    <button :disabled="paymentConfirming" @@click="showConfirmModal = false" class="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-all text-xs disabled:opacity-50">Cancel</button>
+                    <button :disabled="paymentConfirming" @@click="confirmPayment()" class="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all text-xs flex items-center justify-center gap-2">
+                        <span x-show="paymentConfirming" class="h-3 w-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+                        <span x-show="!paymentConfirming" x-text="'I have completed payment'"></span>
+                        <span x-show="paymentConfirming" x-text="'Verifying transfer...'"></span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -632,8 +748,4 @@
     </footer>
 </div>
 
-<form method="post" asp-page-handler="Upgrade" id="upgradeForm" style="display:none;">
-    <input type="hidden" name="tier" id="upgradeTier" />
-    <input type="hidden" name="joinCode" value="@Model.ActiveWorkspaceJoinCode" />
-    @Html.AntiForgeryToken()
-</form>
+
