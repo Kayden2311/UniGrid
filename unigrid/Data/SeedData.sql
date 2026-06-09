@@ -264,7 +264,13 @@ CREATE TABLE Billings (
     PackageId NVARCHAR(100) NOT NULL,
     Status NVARCHAR(50) DEFAULT 'Active',
     EndDate DATETIME2 NOT NULL,
-    CONSTRAINT FK_Billing_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE
+    Amount DECIMAL(18, 2) NULL,
+    UserId UNIQUEIDENTIFIER NULL,
+    PaymentMethod NVARCHAR(100) NULL,
+    TransactionRef NVARCHAR(100) NULL,
+    CreatedAt DATETIME2 NULL,
+    CONSTRAINT FK_Billing_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Billing_Users FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE SET NULL
 );
 
 -- 16. Notifications
@@ -442,18 +448,18 @@ INSERT INTO Workspaces (Id, Name, OwnerId, JoinCode, InviteCode, PackageTier, Wo
 (@W_Data, 'Data Analytics Hub', @P_Bob, 'DATA-HUB', @Invite_Data, 'Pro', 'Group', NULL, NULL, NULL, @Fed_Cloud);
 
 -- 4. Set Up Billings for Workspaces
-INSERT INTO Billings (WorkspaceId, PackageId, Status, EndDate) VALUES 
-(@W_SE, 'business_monthly', 'Active', DATEADD(year, 1, GETUTCDATE())),
-(@W_Web, 'proplus_monthly', 'Active', DATEADD(year, 10, GETUTCDATE())),
-(@W_Calc, 'personal_monthly', 'Active', DATEADD(year, 10, GETUTCDATE())),
-(@W_Physics, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE())),
-(@W_English, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE())),
-(@W_Research, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE())),
-(@W_Design, 'proplus_monthly', 'Active', DATEADD(year, 5, GETUTCDATE())),
-(@W_Mobile, 'pro_monthly', 'Active', DATEADD(year, 5, GETUTCDATE())),
-(@W_Global, 'business_monthly', 'Active', DATEADD(year, 2, GETUTCDATE())),
-(@W_AI, 'proplus_monthly', 'Active', DATEADD(year, 3, GETUTCDATE())),
-(@W_Data, 'pro_monthly', 'Active', DATEADD(year, 3, GETUTCDATE()));
+INSERT INTO Billings (WorkspaceId, PackageId, Status, EndDate, Amount, UserId, PaymentMethod, TransactionRef, CreatedAt) VALUES 
+(@W_SE, 'business_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 899000, @P_Alice, 'Credit Card', 'TXN-SE-001', DATEADD(month, -1, GETUTCDATE())),
+(@W_Web, 'proplus_monthly', 'Active', DATEADD(year, 10, GETUTCDATE()), 449000, @P_Alice, 'VNPAY QR', 'TXN-WEB-002', DATEADD(month, -2, GETUTCDATE())),
+(@W_Calc, 'personal_monthly', 'Active', DATEADD(year, 10, GETUTCDATE()), 40000, @P_Bob, 'Momo E-Wallet', 'TXN-CALC-003', DATEADD(month, -3, GETUTCDATE())),
+(@W_Physics, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE()), 0, NULL, 'System', 'TXN-FREE-000', DATEADD(month, -1, GETUTCDATE())),
+(@W_English, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE()), 0, NULL, 'System', 'TXN-FREE-000', DATEADD(month, -1, GETUTCDATE())),
+(@W_Research, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE()), 0, NULL, 'System', 'TXN-FREE-000', DATEADD(month, -1, GETUTCDATE())),
+(@W_Design, 'proplus_monthly', 'Active', DATEADD(year, 5, GETUTCDATE()), 449000, @P_Bob, 'Bank Transfer', 'TXN-DSN-004', DATEADD(month, -4, GETUTCDATE())),
+(@W_Mobile, 'pro_monthly', 'Active', DATEADD(year, 5, GETUTCDATE()), 299000, @P_Charlie, 'Credit Card', 'TXN-MBL-005', DATEADD(month, -5, GETUTCDATE())),
+(@W_Global, 'business_monthly', 'Active', DATEADD(year, 2, GETUTCDATE()), 899000, @P_Frank, 'Bank Transfer', 'TXN-GLB-006', DATEADD(month, -6, GETUTCDATE())),
+(@W_AI, 'proplus_monthly', 'Active', DATEADD(year, 3, GETUTCDATE()), 449000, @P_Alice, 'VNPAY QR', 'TXN-AI-007', DATEADD(month, -7, GETUTCDATE())),
+(@W_Data, 'pro_monthly', 'Active', DATEADD(year, 3, GETUTCDATE()), 299000, @P_Bob, 'Momo E-Wallet', 'TXN-DAT-008', DATEADD(month, -8, GETUTCDATE()));
 
 -- 5. Add Workspace Memberships with Nominal Display Roles
 INSERT INTO WorkspaceMembers (WorkspaceId, UserId, Role, DisplayRole) VALUES 

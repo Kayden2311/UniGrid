@@ -1,0 +1,189 @@
+@page
+@model unigrid.Pages.Admin.UsersModel
+@{
+    ViewData["Title"] = "User Control Panel";
+}
+
+<div class="space-y-8 max-w-7xl mx-auto" x-data="{ showRoleConfirm: false, targetAccountId: '', targetRoleName: '', targetRoleValue: 0 }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-black text-slate-800 tracking-tight font-display">User Control Panel</h1>
+            <p class="text-slate-500 text-sm mt-1">Manage system authentication roles, access restrictions, and locked accounts.</p>
+        </div>
+        <div>
+            <a href="/Admin/Index" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert Notifications -->
+    @if (TempData["UserSuccess"] != null)
+    {
+        <div class="p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-sm">
+            <i data-lucide="check-circle" class="w-4 h-4 shrink-0"></i>
+            <span>@TempData["UserSuccess"]</span>
+        </div>
+    }
+    @if (TempData["UserError"] != null)
+    {
+        <div class="p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-sm">
+            <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i>
+            <span>@TempData["UserError"]</span>
+        </div>
+    }
+
+    <!-- Search and Filters Panel -->
+    <div class="glass p-6 rounded-[2rem] shadow-sm">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <!-- Search Query -->
+            <div class="md:col-span-2 space-y-1.5">
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Search Profile</label>
+                <div class="flex items-center px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-700 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+                    <i data-lucide="search" class="w-4 h-4 mr-2 text-slate-400"></i>
+                    <input type="text" asp-for="SearchQuery" placeholder="Search by name, email..." class="bg-transparent border-none outline-none text-xs w-full text-slate-700 placeholder:text-slate-400">
+                </div>
+            </div>
+
+            <!-- Role Filter -->
+            <div class="space-y-1.5">
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System Role</label>
+                <select asp-for="RoleFilter" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                    <option value="">All Roles</option>
+                    <option value="1">Admin</option>
+                    <option value="2">User (Member)</option>
+                    <option value="3">Moderator</option>
+                </select>
+            </div>
+
+            <!-- Status Filter -->
+            <div class="space-y-1.5">
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Lock Status</label>
+                <select asp-for="LockedFilter" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                    <option value="">All Statuses</option>
+                    <option value="false">Active Only</option>
+                    <option value="true">Locked Only</option>
+                </select>
+            </div>
+
+            <!-- Submit Button / Clear -->
+            <div class="md:col-span-4 flex justify-end gap-3 pt-2">
+                @if (!string.IsNullOrEmpty(Model.SearchQuery) || Model.RoleFilter.HasValue || Model.LockedFilter.HasValue)
+                {
+                    <a href="/Admin/Users" class="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all">
+                        Clear Filters
+                    </a>
+                }
+                <button type="submit" class="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">
+                    Apply Filters
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Users Table -->
+    <div class="glass rounded-[2.5rem] shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-100 bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <th class="py-5 px-6">Name</th>
+                        <th class="py-5 px-6">Email</th>
+                        <th class="py-5 px-6">Role</th>
+                        <th class="py-5 px-6">Status</th>
+                        <th class="py-5 px-6">Registered At</th>
+                        <th class="py-5 px-6 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                    @if (Model.AccountsList.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="py-12 text-center text-xs text-slate-400 font-bold italic">
+                                No matching accounts found.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var account in Model.AccountsList)
+                        {
+                            <tr class="hover:bg-slate-50/20 transition-all duration-200">
+                                <!-- Name -->
+                                <td class="py-4 px-6">
+                                    <div class="flex items-center gap-3">
+                                        <div class="h-8 w-8 rounded-full bg-gradient-to-tr from-slate-200 to-slate-300 text-slate-700 flex items-center justify-center text-xs font-bold shrink-0">
+                                            @string.Concat(account.FullName.Split(' ').Select(n => n.Length > 0 ? n[0].ToString() : "U")).ToUpper().Substring(0, Math.Min(account.FullName.Split(' ').Length, 2))
+                                        </div>
+                                        <div class="font-bold text-slate-800 text-sm">@account.FullName</div>
+                                    </div>
+                                </td>
+
+                                <!-- Email -->
+                                <td class="py-4 px-6 text-xs text-slate-500 font-medium">
+                                    @account.Email
+                                </td>
+
+                                <!-- Role -->
+                                <td class="py-4 px-6">
+                                    <form method="post" asp-page-handler="ChangeRole" class="inline-block">
+                                        <input type="hidden" name="accountId" value="@account.AccountId">
+                                        <select name="newRole" onchange="this.form.submit()" class="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer">
+                                            <option value="1" selected="@(account.Role == 1)">Admin</option>
+                                            <option value="2" selected="@(account.Role == 2)">User</option>
+                                            <option value="3" selected="@(account.Role == 3)">Moderator</option>
+                                        </select>
+                                    </form>
+                                </td>
+
+                                <!-- Status -->
+                                <td class="py-4 px-6">
+                                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider
+                                        @(account.IsLocked ? "bg-rose-50 text-rose-600 border border-rose-100" : "bg-emerald-50 text-emerald-600 border border-emerald-100")">
+                                        @(account.IsLocked ? "Locked" : "Active")
+                                    </span>
+                                </td>
+
+                                <!-- Registered At -->
+                                <td class="py-4 px-6 text-xs text-slate-500">
+                                    @account.CreatedAt.ToLocalTime().ToString("d")
+                                </td>
+
+                                <!-- Actions -->
+                                <td class="py-4 px-6 text-right">
+                                    <form method="post" asp-page-handler="ToggleLock" class="inline-block">
+                                        <input type="hidden" name="accountId" value="@account.AccountId">
+                                        <button type="submit" class="px-3.5 py-1.5 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all border shadow-sm
+                                            @(account.IsLocked ? "bg-emerald-50 border-emerald-100 text-emerald-600 hover:bg-emerald-100" : "bg-rose-50 border-rose-100 text-rose-600 hover:bg-rose-100")">
+                                            @(account.IsLocked ? "Unlock" : "Lock")
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        @if (Model.TotalPages > 1)
+        {
+            <div class="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
+                <span class="text-xs text-slate-400 font-bold">Showing page @Model.CurrentPage of @Model.TotalPages (Total: @Model.TotalCount accounts)</span>
+                <div class="flex gap-2">
+                    <a href="/Admin/Users?SearchQuery=@Model.SearchQuery&RoleFilter=@Model.RoleFilter&LockedFilter=@Model.LockedFilter&CurrentPage=@(Model.CurrentPage - 1)"
+                       class="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1 @(Model.CurrentPage == 1 ? "opacity-50 pointer-events-none" : "hover:text-indigo-600")">
+                        Previous
+                    </a>
+                    <a href="/Admin/Users?SearchQuery=@Model.SearchQuery&RoleFilter=@Model.RoleFilter&LockedFilter=@Model.LockedFilter&CurrentPage=@(Model.CurrentPage + 1)"
+                       class="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1 @(Model.CurrentPage == Model.TotalPages ? "opacity-50 pointer-events-none" : "hover:text-indigo-600")">
+                        Next
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+</div>
