@@ -122,6 +122,11 @@ public class LoginModel : PageModel
                 _logger.LogInformation("Redirecting User to Dashboard.");
                 return RedirectToPage("/Dashboard");
             }
+            else if (account.Role == 1)
+            {
+                _logger.LogInformation("Redirecting Admin to Admin Dashboard.");
+                return RedirectToPage("/Admin/Index");
+            }
             else
             {
                 _logger.LogInformation("Redirecting Admin/Mod to Index (Client pages restricted).");

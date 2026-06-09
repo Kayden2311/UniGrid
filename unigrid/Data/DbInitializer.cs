@@ -424,6 +424,48 @@ namespace unigrid.Data
                 logger.LogError(ex, "DbInitializer: Failed to run Task Categories and KPI Targets database migrations.");
             }
 
+            // 1h. Ensure billing transaction columns exist in Billings table (Transaction metadata migration)
+            try
+            {
+                logger.LogInformation("DbInitializer: Ensuring billing transaction columns exist in Billings table...");
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Billings]') AND name = 'Amount')
+                    BEGIN
+                        ALTER TABLE [dbo].[Billings] ADD [Amount] DECIMAL(18, 2) NULL;
+                    END
+                ");
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Billings]') AND name = 'UserId')
+                    BEGIN
+                        ALTER TABLE [dbo].[Billings] ADD [UserId] UNIQUEIDENTIFIER NULL;
+                        ALTER TABLE [dbo].[Billings] ADD CONSTRAINT [FK_Billing_Users] FOREIGN KEY ([UserId]) REFERENCES [dbo].[Users]([Id]) ON DELETE SET NULL;
+                    END
+                ");
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Billings]') AND name = 'PaymentMethod')
+                    BEGIN
+                        ALTER TABLE [dbo].[Billings] ADD [PaymentMethod] NVARCHAR(100) NULL;
+                    END
+                ");
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Billings]') AND name = 'TransactionRef')
+                    BEGIN
+                        ALTER TABLE [dbo].[Billings] ADD [TransactionRef] NVARCHAR(100) NULL;
+                    END
+                ");
+                await context.Database.ExecuteSqlRawAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Billings]') AND name = 'CreatedAt')
+                    BEGIN
+                        ALTER TABLE [dbo].[Billings] ADD [CreatedAt] DATETIME2 NULL;
+                    END
+                ");
+                logger.LogInformation("DbInitializer: Billing transaction columns verified/added successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "DbInitializer: Failed to add/verify billing transaction columns in Billings table.");
+            }
+
             // 2. Check if Alice Nguyen and her User profile exist
             bool hasAlice = false;
             try
@@ -639,17 +681,138 @@ namespace unigrid.Data
                 await context.SaveChangesAsync();
 
                 // 7. Seed Billings
-                var billingSE = new Billing { WorkspaceId = workspaceSE.Id, PackageId = "business_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(1) };
-                var billingWeb = new Billing { WorkspaceId = workspaceWeb.Id, PackageId = "proplus_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
-                var billingCalc = new Billing { WorkspaceId = workspaceCalc.Id, PackageId = "personal_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
-                var billingPhysics = new Billing { WorkspaceId = workspacePhysics.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
-                var billingEnglish = new Billing { WorkspaceId = workspaceEnglish.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
-                var billingResearch = new Billing { WorkspaceId = workspaceResearch.Id, PackageId = "free_tier", Status = "Active", EndDate = DateTime.UtcNow.AddYears(10) };
-                var billingDesign = new Billing { WorkspaceId = workspaceDesign.Id, PackageId = "proplus_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(5) };
-                var billingMobile = new Billing { WorkspaceId = workspaceMobile.Id, PackageId = "pro_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(5) };
-                var billingGlobal = new Billing { WorkspaceId = workspaceGlobal.Id, PackageId = "business_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(2) };
-                var billingAI = new Billing { WorkspaceId = workspaceAI.Id, PackageId = "proplus_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(3) };
-                var billingData = new Billing { WorkspaceId = workspaceData.Id, PackageId = "pro_monthly", Status = "Active", EndDate = DateTime.UtcNow.AddYears(3) };
+                var billingSE = new Billing 
+                { 
+                    WorkspaceId = workspaceSE.Id, 
+                    PackageId = "business_monthly", 
+                    Status = "Active", 
+                    EndDate = DateTime.UtcNow.AddYears(1),
+                    Amount = 899000,
+                    UserId = userAlice.Id,
+                    PaymentMethod = "Credit Card",
+                    TransactionRef = "TXN-SE-001",
+                    CreatedAt = DateTime.UtcNow.AddMonths(-1)
+                };
+                var billingWeb = new Billing 
+                { 
+                    WorkspaceId = workspaceWeb.Id, 
+                    PackageId = "proplus_monthly", 
+                    Status = "Active", 
+                    EndDate = DateTime.UtcNow.AddYears(10),
+                    Amount = 449000,
+                    UserId = userAlice.Id,
+                    PaymentMethod = "VNPAY QR",
+                    TransactionRef = "TXN-WEB-002",
+                    CreatedAt = DateTime.UtcNow.AddMonths(-2)
+                };
+                var billingCalc = new Billing 
+                { 
+                    WorkspaceId = workspaceCalc.Id, 
+                    PackageId = "personal_monthly", 
+                    Status = "Active", 
+                    EndDate = DateTime.UtcNow.AddYears(10),
+                    Amount = 40000,
+                    UserId = userBob.Id,
+                    PaymentMethod = "Momo E-Wallet",
+                    TransactionRef = "TXN-CALC-003",
+                    CreatedAt = DateTime.UtcNow.AddMonths(-3)
+                };
+                var billingPhysics = new Billing 
+                { 
+                    WorkspaceId = workspacePhysics.Id, 
+                    PackageId = "free_tier", 
+                    Status = "Active", 
+                    EndDate = DateTime.UtcNow.AddYears(10),
+                    Amount = 0,
+                    UserId = null,
+                    PaymentMethod = "System",
+                    TransactionRef = "TXN-FREE-000",
+                    CreatedAt = DateTime.UtcNow.AddMonths(-1)
+                };
+                var billingEnglish = new Billing 
+                { 
+                    WorkspaceId = workspaceEnglish.Id, 
+                    PackageId = "free_tier", 
+                    Status = "Active", 
+                    EndDate = DateTime.UtcNow.AddYears(10),
+                    Amount = 0,
+                    UserId = null,
+                    PaymentMethod = "System",
+                    TransactionRef = "TXN-FREE-000",
+                    CreatedAt = DateTime.UtcNow.AddMonths(-1)
+                };
+                var billingResearch = new Billing 
+                { 
+                    WorkspaceId = workspaceResearch.Id, 
+                    PackageId = "free_tier", 
+                    Status = "Active", 
+                    EndDate = DateTime.UtcNow.AddYears(10),
+                    Amount = 0,
+                    UserId = null,
+                    PaymentMethod = "System",
+                    TransactionRef = "TXN-FREE-000",
+                    CreatedAt = DateTime.UtcNow.AddMonths(-1)
+                };
+                var billingDesign = new Billing 
+                { 
+                    WorkspaceId = workspaceDesign.Id, 
+                    PackageId = "proplus_monthly", 
+                    Status = "Active", 
+                    EndDate = DateTime.UtcNow.AddYears(5),
+                    Amount = 449000,
+                    UserId = userBob.Id,
+                    PaymentMethod = "Bank Transfer",
+                    TransactionRef = "TXN-DSN-004",
+                    CreatedAt = DateTime.UtcNow.AddMonths(-4)
+                };
+                var billingMobile = new Billing 
+                { 
+                    WorkspaceId = workspaceMobile.Id, 
+                    PackageId = "pro_monthly", 
+                    Status = "Active", 
+                    EndDate = DateTime.UtcNow.AddYears(5),
+                    Amount = 299000,
+                    UserId = userCharlie.Id,
+                    PaymentMethod = "Credit Card",
+                    TransactionRef = "TXN-MBL-005",
+                    CreatedAt = DateTime.UtcNow.AddMonths(-5)
+                };
+                var billingGlobal = new Billing 
+                { 
+                    WorkspaceId = workspaceGlobal.Id, 
+                    PackageId = "business_monthly", 
+                    Status = "Active", 
+                    EndDate = DateTime.UtcNow.AddYears(2),
+                    Amount = 899000,
+                    UserId = userFrank.Id,
+                    PaymentMethod = "Bank Transfer",
+                    TransactionRef = "TXN-GLB-006",
+                    CreatedAt = DateTime.UtcNow.AddMonths(-6)
+                };
+                var billingAI = new Billing 
+                { 
+                    WorkspaceId = workspaceAI.Id, 
+                    PackageId = "proplus_monthly", 
+                    Status = "Active", 
+                    EndDate = DateTime.UtcNow.AddYears(3),
+                    Amount = 449000,
+                    UserId = userAlice.Id,
+                    PaymentMethod = "VNPAY QR",
+                    TransactionRef = "TXN-AI-007",
+                    CreatedAt = DateTime.UtcNow.AddMonths(-7)
+                };
+                var billingData = new Billing 
+                { 
+                    WorkspaceId = workspaceData.Id, 
+                    PackageId = "pro_monthly", 
+                    Status = "Active", 
+                    EndDate = DateTime.UtcNow.AddYears(3),
+                    Amount = 299000,
+                    UserId = userBob.Id,
+                    PaymentMethod = "Momo E-Wallet",
+                    TransactionRef = "TXN-DAT-008",
+                    CreatedAt = DateTime.UtcNow.AddMonths(-8)
+                };
 
                 await context.Billings.AddRangeAsync(billingSE, billingWeb, billingCalc, billingPhysics, billingEnglish, billingResearch, billingDesign, billingMobile, billingGlobal, billingAI, billingData);
                 await context.SaveChangesAsync();

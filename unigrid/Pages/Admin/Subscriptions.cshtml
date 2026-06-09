@@ -1,0 +1,306 @@
+@page
+@model unigrid.Pages.Admin.SubscriptionsModel
+@{
+    ViewData["Title"] = "Subscription Control";
+}
+
+<div class="space-y-8 max-w-7xl mx-auto" x-data="{ activeTab: 'workspaces', showAddBillingModal: false, selectedWorkspaceId: '', selectedWorkspaceName: '' }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-black text-slate-800 tracking-tight font-display">Subscription Management</h1>
+            <p class="text-slate-500 text-sm mt-1">Review active workspaces, modify pricing tiers, and manage customer billing history.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+            <form method="post" asp-page-handler="SyncFromEmail" class="inline-block">
+                <button type="submit" class="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-violet-100 flex items-center gap-1.5 cursor-pointer">
+                    <i data-lucide="mail" class="w-4 h-4"></i>
+                    Sync from Admin Email
+                </button>
+            </form>
+            <a href="/Admin/Index" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert Notifications -->
+    @if (TempData["SubSuccess"] != null)
+    {
+        <div class="p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-sm">
+            <i data-lucide="check-circle" class="w-4 h-4 shrink-0"></i>
+            <span>@TempData["SubSuccess"]</span>
+        </div>
+    }
+    @if (TempData["SubError"] != null)
+    {
+        <div class="p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-sm">
+            <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i>
+            <span>@TempData["SubError"]</span>
+        </div>
+    }
+
+    <!-- Tab Switching Navigation -->
+    <div class="flex border-b border-slate-200">
+        <button @@click="activeTab = 'workspaces'" 
+                :class="activeTab === 'workspaces' ? 'border-indigo-600 text-indigo-600 font-extrabold' : 'border-transparent text-slate-400 font-semibold hover:text-slate-600'"
+                class="py-3 px-6 text-sm border-b-2 transition-all flex items-center gap-2 cursor-pointer">
+            <i data-lucide="box" class="w-4 h-4"></i>
+            Workspace Tiers
+        </button>
+        <button @@click="activeTab = 'billings'" 
+                :class="activeTab === 'billings' ? 'border-indigo-600 text-indigo-600 font-extrabold' : 'border-transparent text-slate-400 font-semibold hover:text-slate-600'"
+                class="py-3 px-6 text-sm border-b-2 transition-all flex items-center gap-2 cursor-pointer">
+            <i data-lucide="receipt" class="w-4 h-4"></i>
+            Billing Transactions
+        </button>
+    </div>
+
+    <!-- TAB 1: WORKSPACES -->
+    <div x-show="activeTab === 'workspaces'" class="space-y-6">
+        <div class="glass rounded-[2.5rem] shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-100 bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            <th class="py-5 px-6">Workspace</th>
+                            <th class="py-5 px-6">Owner</th>
+                            <th class="py-5 px-6">Package Tier</th>
+                            <th class="py-5 px-6">Status</th>
+                            <th class="py-5 px-6">Subscription End</th>
+                            <th class="py-5 px-6 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50">
+                        @if (Model.WorkspacesList.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="6" class="py-12 text-center text-xs text-slate-400 font-bold italic">
+                                    No workspaces registered in database.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var ws in Model.WorkspacesList)
+                            {
+                                <tr class="hover:bg-slate-50/20 transition-all duration-200">
+                                    <!-- Workspace Name -->
+                                    <td class="py-4 px-6">
+                                        <div class="font-bold text-slate-800 text-sm">@ws.Name</div>
+                                        <div class="text-[10px] text-slate-400 font-medium">Join Code: @ws.JoinCode</div>
+                                    </td>
+
+                                    <!-- Owner -->
+                                    <td class="py-4 px-6">
+                                        <div class="text-xs font-bold text-slate-700">@ws.OwnerName</div>
+                                        <div class="text-[10px] text-slate-400">@ws.OwnerEmail</div>
+                                    </td>
+
+                                    <!-- Package Tier select -->
+                                    <td class="py-4 px-6">
+                                        <form method="post" asp-page-handler="UpdatePlan" class="inline-block">
+                                            <input type="hidden" name="workspaceId" value="@ws.WorkspaceId">
+                                            <select name="tier" onchange="this.form.submit()" class="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer">
+                                                <option value="Free" selected="@(ws.PackageTier == "Free")">Free</option>
+                                                <option value="Personal" selected="@(ws.PackageTier == "Personal")">Personal</option>
+                                                <option value="Pro" selected="@(ws.PackageTier == "Pro")">Pro</option>
+                                                <option value="ProPlus" selected="@(ws.PackageTier == "ProPlus")">Pro+</option>
+                                                <option value="Business" selected="@(ws.PackageTier == "Business")">Business</option>
+                                            </select>
+                                        </form>
+                                    </td>
+
+                                    <!-- Status Badge -->
+                                    <td class="py-4 px-6">
+                                        @if (ws.PackageTier == "Free")
+                                        {
+                                            <span class="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-black uppercase tracking-wider">Free Plan</span>
+                                        }
+                                        else if (ws.ActiveBilling != null)
+                                        {
+                                            <span class="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[9px] font-black uppercase tracking-wider border border-emerald-100">Subscribed</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="px-2 py-0.5 bg-rose-50 text-rose-600 rounded text-[9px] font-black uppercase tracking-wider border border-rose-100">Expired / Direct</span>
+                                        }
+                                    </td>
+
+                                    <!-- Subscription End Date -->
+                                    <td class="py-4 px-6 text-xs text-slate-500 font-medium">
+                                        @(ws.ActiveBilling != null ? ws.ActiveBilling.EndDate.ToLocalTime().ToString("g") : "N/A")
+                                    </td>
+
+                                    <!-- Actions -->
+                                    <td class="py-4 px-6 text-right">
+                                        <button @@click="selectedWorkspaceId = '@ws.WorkspaceId'; selectedWorkspaceName = '@ws.Name.Replace("'", "\\'")'; showAddBillingModal = true"
+                                                class="px-3 py-1.5 border border-slate-200 text-indigo-600 hover:bg-slate-50 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ml-auto">
+                                            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                            Record Payment
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: BILLING TRANSACTIONS (RE-DESIGNED FOR TRANSACTION DETAILS) -->
+    <div x-show="activeTab === 'billings'" class="space-y-6" x-cloak>
+        <div class="glass rounded-[2.5rem] shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-100 bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            <th class="py-5 px-6">Payment Date</th>
+                            <th class="py-5 px-6">Payer / User</th>
+                            <th class="py-5 px-6">Workspace</th>
+                            <th class="py-5 px-6">Plan</th>
+                            <th class="py-5 px-6">Amount</th>
+                            <th class="py-5 px-6">Transaction Ref / Method</th>
+                            <th class="py-5 px-6">Status</th>
+                            <th class="py-5 px-6 text-right">Extend</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50">
+                        @if (Model.BillingsList.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="8" class="py-12 text-center text-xs text-slate-400 font-bold italic">
+                                    No transaction records found.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var billing in Model.BillingsList)
+                            {
+                                <tr class="hover:bg-slate-50/20 transition-all duration-200">
+                                    <!-- Payment Date -->
+                                    <td class="py-4 px-6 text-xs text-slate-500">
+                                        @billing.CreatedAt.ToLocalTime().ToString("g")
+                                    </td>
+
+                                    <!-- Payer / User -->
+                                    <td class="py-4 px-6">
+                                        <div class="text-xs font-bold text-slate-700">@billing.PayerName</div>
+                                        <div class="text-[10px] text-slate-400">@billing.PayerEmail</div>
+                                    </td>
+
+                                    <!-- Workspace Name -->
+                                    <td class="py-4 px-6 font-semibold text-slate-700 text-xs">
+                                        @billing.WorkspaceName
+                                    </td>
+
+                                    <!-- Plan -->
+                                    <td class="py-4 px-6">
+                                        <span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[9px] font-black uppercase tracking-wider">
+                                            @billing.PackageId
+                                        </span>
+                                    </td>
+
+                                    <!-- Amount -->
+                                    <td class="py-4 px-6 font-bold text-slate-800 text-xs">
+                                        @billing.Amount.ToString("N0") <span class="text-[10px] text-slate-400">VND</span>
+                                    </td>
+
+                                    <!-- Transaction Ref / Method -->
+                                    <td class="py-4 px-6">
+                                        <div class="text-xs font-mono font-bold text-slate-600">@billing.TransactionRef</div>
+                                        <div class="text-[9px] font-semibold text-slate-400">via @billing.PaymentMethod</div>
+                                    </td>
+
+                                    <!-- Status -->
+                                    <td class="py-4 px-6">
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border
+                                            @(billing.Status == "Active" && billing.EndDate >= DateTime.UtcNow ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-rose-50 text-rose-600 border-rose-100")">
+                                            @(billing.Status == "Active" && billing.EndDate >= DateTime.UtcNow ? "Active" : "Expired")
+                                        </span>
+                                        <div class="text-[8px] text-slate-400 mt-1">Expires: @billing.EndDate.ToLocalTime().ToString("d")</div>
+                                    </td>
+
+                                    <!-- Extend Duration -->
+                                    <td class="py-4 px-6 text-right">
+                                        <form method="post" asp-page-handler="ExtendBilling" class="inline-flex items-center gap-2">
+                                            <input type="hidden" name="billingId" value="@billing.BillingId">
+                                            <select name="extensionMonths" class="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 outline-none focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer">
+                                                <option value="1">1 Mo</option>
+                                                <option value="3">3 Mo</option>
+                                                <option value="6">6 Mo</option>
+                                                <option value="12">12 Mo</option>
+                                            </select>
+                                            <button type="submit" class="px-3 py-1.5 bg-indigo-650 text-white rounded-lg text-[10px] font-bold shadow-md hover:bg-indigo-700 transition-all">
+                                                Apply
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- POPUP MODAL: MANUAL TRANSACTION REGISTRATION -->
+    <div x-show="showAddBillingModal" x-transition x-cloak class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @@click="showAddBillingModal = false"></div>
+        
+        <!-- Modal Content -->
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-2xl relative z-10 w-full max-w-lg transform transition-all duration-300">
+            <button @@click="showAddBillingModal = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+            
+            <form method="post" asp-page-handler="CreateBilling" class="space-y-6">
+                <input type="hidden" name="workspaceId" :value="selectedWorkspaceId">
+                
+                <div>
+                    <h3 class="text-2xl font-black text-slate-800 tracking-tight">Record payment / billing</h3>
+                    <p class="text-sm text-slate-500 mt-1">Manual payment log override for workspace: <span class="font-bold text-indigo-600" x-text="selectedWorkspaceName"></span></p>
+                </div>
+                
+                <!-- Package Selection -->
+                <div class="space-y-1.5">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Select Pricing Package</label>
+                    <select name="packageId" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                        <option value="personal_monthly">Personal Plan (40,000 VND / Mo)</option>
+                        <option value="pro_monthly">Pro Plan (299,000 VND / Mo)</option>
+                        <option value="proplus_monthly">Pro+ Plan (449,000 VND / Mo)</option>
+                        <option value="business_monthly">Business Plan (899,000 VND / Mo)</option>
+                        <option value="personal_yearly">Personal Plan (399,000 VND / Yr)</option>
+                        <option value="pro_yearly">Pro Plan (2,900,000 VND / Yr)</option>
+                        <option value="proplus_yearly">Pro+ Plan (4,400,000 VND / Yr)</option>
+                        <option value="business_yearly">Business Plan (8,900,000 VND / Yr)</option>
+                    </select>
+                </div>
+
+                <!-- Duration Selection -->
+                <div class="space-y-1.5">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Plan Duration (Months)</label>
+                    <select name="durationMonths" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                        <option value="1">1 Month</option>
+                        <option value="3">3 Months</option>
+                        <option value="6">6 Months</option>
+                        <option value="12">12 Months (1 Year)</option>
+                        <option value="24">24 Months (2 Years)</option>
+                    </select>
+                </div>
+                
+                <div class="flex gap-4 pt-4 border-t border-slate-100">
+                    <button type="button" @@click="showAddBillingModal = false" class="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-all">Cancel</button>
+                    <button type="submit" class="flex-1 py-3.5 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">Save Transaction</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

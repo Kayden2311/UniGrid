@@ -1,0 +1,483 @@
+@page
+@model unigrid.Pages.Admin.IndexModel
+@{
+    ViewData["Title"] = "Admin Dashboard";
+}
+
+<div class="space-y-8 max-w-7xl mx-auto" x-data="{ currentTab: 'overview' }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-black text-slate-800 tracking-tight font-display">System Overview</h1>
+            <p class="text-slate-500 text-sm mt-1">Real-time metrics, operations fees settings, and income performance chart.</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="/Admin/Users" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2">
+                <i data-lucide="users" class="w-4 h-4 text-teal-500"></i>
+                Manage Users
+            </a>
+            <a href="/Admin/Subscriptions" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2">
+                <i data-lucide="credit-card" class="w-4 h-4 text-amber-500"></i>
+                Subscriptions
+            </a>
+            <a href="/Admin/Federations" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2">
+                <i data-lucide="globe" class="w-4 h-4 text-violet-500"></i>
+                Federations
+            </a>
+        </div>
+    </div>
+
+    <!-- Status Alerts -->
+    @if (!string.IsNullOrEmpty(Model.StatusMessage))
+    {
+        var isSuccess = Model.StatusMessage.StartsWith("Success");
+        <div class="p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 shadow-sm @(isSuccess ? "bg-emerald-50 border-emerald-100 text-emerald-800" : "bg-rose-50 border-rose-100 text-rose-800")">
+            <div class="flex items-center gap-2">
+                <i data-lucide="@(isSuccess ? "check-circle" : "alert-circle")" class="w-5 h-5 shrink-0"></i>
+                <span class="text-xs font-bold">@Model.StatusMessage</span>
+            </div>
+            <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+    }
+
+    <!-- Summary Metrics -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5">
+        <!-- Revenue Card -->
+        <div class="glass p-5 rounded-[2rem] flex flex-col justify-between border-t-4 border-indigo-500 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300">
+            <div class="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-50 rounded-full blur-xl group-hover:scale-125 transition-transform duration-500"></div>
+            <div class="relative z-10">
+                <div class="flex justify-between items-start mb-3">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Projected MRR</span>
+                    <div class="h-7 w-7 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                        <i data-lucide="trending-up" class="w-4 h-4"></i>
+                    </div>
+                </div>
+                <h3 class="text-xl font-black text-slate-800 font-display">@Model.ProjectedMonthlyRevenue.ToString("N0") <span class="text-[10px] font-semibold text-slate-400">VND</span></h3>
+                <p class="text-slate-500 text-[10px] mt-1">Gross monthly income</p>
+            </div>
+        </div>
+
+        <!-- Costs Card -->
+        <div class="glass p-5 rounded-[2rem] flex flex-col justify-between border-t-4 border-rose-500 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300">
+            <div class="absolute -right-4 -bottom-4 w-20 h-20 bg-rose-50 rounded-full blur-xl group-hover:scale-125 transition-transform duration-500"></div>
+            <div class="relative z-10">
+                <div class="flex justify-between items-start mb-3">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operation Costs</span>
+                    <div class="h-7 w-7 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center">
+                        <i data-lucide="coins" class="w-4 h-4"></i>
+                    </div>
+                </div>
+                <h3 class="text-xl font-black text-slate-800 font-display">@Model.TotalCosts.ToString("N0") <span class="text-[10px] font-semibold text-slate-400">VND</span></h3>
+                <p class="text-slate-500 text-[10px] mt-1">Server, Cloud, AI APIs</p>
+            </div>
+        </div>
+
+        <!-- Net Profit Card -->
+        <div class="glass p-5 rounded-[2rem] flex flex-col justify-between border-t-4 border-emerald-500 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300">
+            <div class="absolute -right-4 -bottom-4 w-20 h-20 bg-emerald-50 rounded-full blur-xl group-hover:scale-125 transition-transform duration-500"></div>
+            <div class="relative z-10">
+                <div class="flex justify-between items-start mb-3">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Net Profit</span>
+                    <div class="h-7 w-7 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                        <i data-lucide="wallet" class="w-4 h-4"></i>
+                    </div>
+                </div>
+                <h3 class="text-xl font-black text-slate-800 font-display">@Model.ProjectedNetProfit.ToString("N0") <span class="text-[10px] font-semibold text-slate-400">VND</span></h3>
+                <p class="text-slate-500 text-[10px] mt-1">MRR minus costs</p>
+            </div>
+        </div>
+
+        <!-- Subscriptions Card -->
+        <div class="glass p-5 rounded-[2rem] flex flex-col justify-between border-t-4 border-amber-400 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300">
+            <div class="absolute -right-4 -bottom-4 w-20 h-20 bg-amber-50 rounded-full blur-xl group-hover:scale-125 transition-transform duration-500"></div>
+            <div class="relative z-10">
+                <div class="flex justify-between items-start mb-3">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Plans</span>
+                    <div class="h-7 w-7 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
+                        <i data-lucide="credit-card" class="w-4 h-4"></i>
+                    </div>
+                </div>
+                <h3 class="text-xl font-black text-slate-800 font-display">@Model.ActiveSubscriptionsCount <span class="text-[10px] font-semibold text-slate-400">Spaces</span></h3>
+                <p class="text-slate-500 text-[10px] mt-1">Avg @Model.AverageRevenuePerSubscription.ToString("N0") VND</p>
+            </div>
+        </div>
+
+        <!-- Accounts Card -->
+        <div class="glass p-5 rounded-[2rem] flex flex-col justify-between border-t-4 border-teal-400 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300">
+            <div class="absolute -right-4 -bottom-4 w-20 h-20 bg-teal-50 rounded-full blur-xl group-hover:scale-125 transition-transform duration-500"></div>
+            <div class="relative z-10">
+                <div class="flex justify-between items-start mb-3">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Accounts</span>
+                    <div class="h-7 w-7 bg-teal-55/10 text-teal-600 rounded-xl flex items-center justify-center">
+                        <i data-lucide="users" class="w-4 h-4"></i>
+                    </div>
+                </div>
+                <h3 class="text-xl font-black text-slate-800 font-display">@Model.TotalAccounts <span class="text-[10px] font-semibold text-slate-400">Total</span></h3>
+                <p class="text-rose-600 text-[10px] mt-1 font-semibold">@Model.LockedAccounts Locked</p>
+            </div>
+        </div>
+
+        <!-- Workspaces Card -->
+        <div class="glass p-5 rounded-[2rem] flex flex-col justify-between border-t-4 border-violet-500 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300">
+            <div class="absolute -right-4 -bottom-4 w-20 h-20 bg-violet-50 rounded-full blur-xl group-hover:scale-125 transition-transform duration-500"></div>
+            <div class="relative z-10">
+                <div class="flex justify-between items-start mb-3">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nodes</span>
+                    <div class="h-7 w-7 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center">
+                        <i data-lucide="box" class="w-4 h-4"></i>
+                    </div>
+                </div>
+                <h3 class="text-xl font-black text-slate-800 font-display">@Model.TotalWorkspaces <span class="text-[10px] font-semibold text-slate-400">Spaces</span></h3>
+                <p class="text-slate-500 text-[10px] mt-1">@Model.TotalFederations Federations</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Financial Analytics Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Income Chart Card -->
+        <div class="lg:col-span-2 glass p-8 rounded-[2.5rem] shadow-sm flex flex-col justify-between min-h-[400px]">
+            <div>
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-6">
+                    <div>
+                        <h3 class="text-lg font-black text-slate-800 font-display">Monthly Revenue vs. Costs vs. Profit</h3>
+                        <p class="text-xs text-slate-400 mt-1">Aggregated historical cashflow performance parsed from billing records.</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-lg border border-slate-100">
+                            <span class="h-2 w-2 rounded-full bg-indigo-500"></span> Revenue
+                        </span>
+                        <span class="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-lg border border-slate-100">
+                            <span class="h-2 w-2 rounded-full bg-rose-500"></span> Costs
+                        </span>
+                        <span class="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-lg border border-slate-100">
+                            <span class="h-2 w-2 rounded-full bg-emerald-500"></span> Profit
+                        </span>
+                    </div>
+                </div>
+                <div class="relative w-full h-[280px]">
+                    <canvas id="financeChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Operations Cost Settings Card -->
+        <div class="lg:col-span-1 glass p-8 rounded-[2.5rem] shadow-sm flex flex-col justify-between">
+            <div>
+                <h3 class="text-lg font-black text-slate-800 mb-2 font-display">Operations Cost Settings</h3>
+                <p class="text-xs text-slate-400 font-medium">Configure monthly operational fees in VND to evaluate actual cash flow profit.</p>
+                
+                <form method="post" asp-page-handler="SaveFees" class="space-y-4 mt-6">
+                    @Html.AntiForgeryToken()
+                    <!-- Server Fee -->
+                    <div class="space-y-1.5">
+                        <label asp-for="ServerFee" class="block text-xs font-bold text-slate-700">Server & Infrastructure Fee (VND)</label>
+                        <div class="relative flex items-center">
+                            <i data-lucide="server" class="absolute left-3 w-4 h-4 text-slate-400"></i>
+                            <input type="number" asp-for="ServerFee" class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="1,500,000" required />
+                        </div>
+                    </div>
+
+                    <!-- Cloud Storage Fee -->
+                    <div class="space-y-1.5">
+                        <label asp-for="CloudFee" class="block text-xs font-bold text-slate-700">Cloud Storage & Database Fee (VND)</label>
+                        <div class="relative flex items-center">
+                            <i data-lucide="cloud" class="absolute left-3 w-4 h-4 text-slate-400"></i>
+                            <input type="number" asp-for="CloudFee" class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="2,500,000" required />
+                        </div>
+                    </div>
+
+                    <!-- AI API Key usage fee -->
+                    <div class="space-y-1.5">
+                        <label asp-for="AiApiFee" class="block text-xs font-bold text-slate-700">AI APIs Usage Fee (VND)</label>
+                        <div class="relative flex items-center">
+                            <i data-lucide="cpu" class="absolute left-3 w-4 h-4 text-slate-400"></i>
+                            <input type="number" asp-for="AiApiFee" class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="1,800,000" required />
+                        </div>
+                    </div>
+
+                    <!-- Submit Trigger -->
+                    <div class="pt-2">
+                        <button type="submit" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 cursor-pointer">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            Save Fee Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="pt-4 border-t border-slate-100 mt-6 flex flex-col gap-1.5 text-xs text-slate-400">
+                <div class="flex justify-between font-bold">
+                    <span>Total Operational Cost:</span>
+                    <span class="text-rose-600">@Model.TotalCosts.ToString("N0") VND</span>
+                </div>
+                <div class="flex justify-between font-bold">
+                    <span>Projected Net Profit:</span>
+                    <span class="text-emerald-600">@Model.ProjectedNetProfit.ToString("N0") VND</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Sections -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Subscriptions Breakdown -->
+        <div class="lg:col-span-1 glass p-8 rounded-[2.5rem] shadow-sm flex flex-col justify-between">
+            <div>
+                <h3 class="text-lg font-black text-slate-800 mb-2 font-display">Plans Breakdown</h3>
+                <p class="text-xs text-slate-400 font-medium">Distribution of workspaces across package tiers.</p>
+                
+                <div class="space-y-4 mt-6">
+                    <!-- Business -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs font-bold text-slate-700">
+                            <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-slate-900"></span> Business (899K)</span>
+                            <span>@Model.BusinessSubscribers</span>
+                        </div>
+                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-slate-900 rounded-full" style="width: @(Model.TotalWorkspaces > 0 ? (double)Model.BusinessSubscribers / Model.TotalWorkspaces * 100 : 0)%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Pro+ -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs font-bold text-slate-700">
+                            <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-violet-500"></span> Pro+ (449K)</span>
+                            <span>@Model.ProPlusSubscribers</span>
+                        </div>
+                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-violet-500 rounded-full" style="width: @(Model.TotalWorkspaces > 0 ? (double)Model.ProPlusSubscribers / Model.TotalWorkspaces * 100 : 0)%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Pro -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs font-bold text-slate-700">
+                            <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-indigo-500"></span> Pro (299K)</span>
+                            <span>@Model.ProSubscribers</span>
+                        </div>
+                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-indigo-500 rounded-full" style="width: @(Model.TotalWorkspaces > 0 ? (double)Model.ProSubscribers / Model.TotalWorkspaces * 100 : 0)%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Personal -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs font-bold text-slate-700">
+                            <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-teal-500"></span> Personal (40K)</span>
+                            <span>@Model.PersonalSubscribers</span>
+                        </div>
+                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-teal-500 rounded-full" style="width: @(Model.TotalWorkspaces > 0 ? (double)Model.PersonalSubscribers / Model.TotalWorkspaces * 100 : 0)%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Free -->
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between text-xs font-bold text-slate-700">
+                            <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-slate-400"></span> Free Tier</span>
+                            <span>@Model.FreeTierWorkspaces</span>
+                        </div>
+                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-slate-400 rounded-full" style="width: @(Model.TotalWorkspaces > 0 ? (double)Model.FreeTierWorkspaces / Model.TotalWorkspaces * 100 : 0)%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pt-6 border-t border-slate-100 mt-6 flex justify-between text-xs text-slate-400 font-bold">
+                <span>Total Workspaces: @Model.TotalWorkspaces</span>
+                <span>Subscribed: @(Model.BusinessSubscribers + Model.ProPlusSubscribers + Model.ProSubscribers + Model.PersonalSubscribers)</span>
+            </div>
+        </div>
+
+        <!-- Recent System Activities -->
+        <div class="lg:col-span-2 glass p-8 rounded-[2.5rem] shadow-sm flex flex-col">
+            <div class="mb-4">
+                <h3 class="text-lg font-black text-slate-800 font-display">System Audit Logs</h3>
+                <p class="text-xs text-slate-400 mt-1">Real-time actions executed by users on the platform.</p>
+            </div>
+
+            <div class="flex-1 overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            <th class="pb-3">Timestamp</th>
+                            <th class="pb-3">User</th>
+                            <th class="pb-3">Action</th>
+                            <th class="pb-3">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50">
+                        @if (Model.RecentAuditLogs.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="4" class="py-8 text-center text-xs text-slate-400 font-bold italic">
+                                    No audit logs recorded yet.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var log in Model.RecentAuditLogs)
+                            {
+                                <tr>
+                                    <td class="py-3.5 text-xs text-slate-500">
+                                        @(log.Timestamp?.ToLocalTime().ToString("g") ?? "N/A")
+                                    </td>
+                                    <td class="py-3.5 text-xs font-bold text-slate-700">
+                                        @(log.User?.FullName ?? "System")
+                                    </td>
+                                    <td class="py-3.5 text-xs">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase
+                                            @(log.Action == "Create" || log.Action == "Add" ? "bg-emerald-50 text-emerald-600" :
+                                              log.Action == "Update" || log.Action == "Move" ? "bg-indigo-50 text-indigo-600" :
+                                              log.Action == "Delete" || log.Action == "Remove" ? "bg-rose-50 text-rose-600" :
+                                              "bg-slate-50 text-slate-600")">
+                                            @log.Action
+                                        </span>
+                                    </td>
+                                    <td class="py-3.5 text-xs text-slate-600 max-w-[200px] truncate">
+                                        @if (log.Workspace != null)
+                                        {
+                                            <span>Workspace: <span class="font-semibold text-slate-700">@log.Workspace.Name</span></span>
+                                        }
+                                        else if (log.Federation != null)
+                                        {
+                                            <span>Fed: <span class="font-semibold text-slate-700">@log.Federation.Name</span></span>
+                                        }
+                                        else
+                                        {
+                                            <span>@log.TargetType (ID: @log.TargetId.ToString().Substring(0, 8)...)</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const labels = @Html.Raw(Model.ChartLabelsJson);
+            const revenues = @Html.Raw(Model.RevenueChartDataJson);
+            const costs = @Html.Raw(Model.CostChartDataJson);
+            const profits = @Html.Raw(Model.ProfitChartDataJson);
+
+            const ctx = document.getElementById('financeChart').getContext('2d');
+            
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Revenue',
+                            data: revenues,
+                            backgroundColor: 'rgba(79, 70, 229, 0.7)',
+                            borderColor: 'rgb(79, 70, 229)',
+                            borderWidth: 1.5,
+                            borderRadius: 6,
+                            order: 3
+                        },
+                        {
+                            label: 'Costs',
+                            data: costs,
+                            type: 'line',
+                            borderColor: 'rgb(244, 63, 94)',
+                            backgroundColor: 'transparent',
+                            borderWidth: 3,
+                            pointBackgroundColor: 'rgb(244, 63, 94)',
+                            pointHoverRadius: 6,
+                            tension: 0.3,
+                            order: 1
+                        },
+                        {
+                            label: 'Net Profit',
+                            data: profits,
+                            type: 'line',
+                            borderColor: 'rgb(16, 185, 129)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            pointBackgroundColor: 'rgb(16, 185, 129)',
+                            pointHoverRadius: 6,
+                            tension: 0.3,
+                            order: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                            titleFont: { size: 11, weight: 'bold' },
+                            bodyFont: { size: 11 },
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.raw !== null) {
+                                        label += new Intl.NumberFormat('vi-VN').format(context.raw) + ' VND';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                font: {
+                                    size: 10,
+                                    weight: 'bold'
+                                },
+                                color: '#94a3b8'
+                            }
+                        },
+                        y: {
+                            grid: {
+                                borderDash: [4, 4],
+                                color: '#e2e8f0'
+                            },
+                            ticks: {
+                                font: {
+                                    size: 10
+                                },
+                                color: '#94a3b8',
+                                callback: function(value) {
+                                    if (value >= 1000000) {
+                                        return (value / 1000000).toFixed(1) + 'M';
+                                    } else if (value >= 1000) {
+                                        return (value / 1000).toFixed(0) + 'K';
+                                    }
+                                    return value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+}
