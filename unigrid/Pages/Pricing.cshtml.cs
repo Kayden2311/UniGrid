@@ -23,21 +23,19 @@ public class PricingModel : PageModel
     public bool IsWorkspaceUpgrade { get; set; }
 
     public string CurrentPlan { get; set; } = "None";
+    public AdminSettings Settings { get; set; } = null!;
 
     public int GetPlanRank(string? plan)
     {
-        return plan switch
-        {
-            "Personal" => 1,
-            "Pro" => 2,
-            "ProPlus" => 3,
-            "Business" => 4,
-            _ => 0
-        };
+        if (string.IsNullOrEmpty(plan) || plan == "Free") return 0;
+        var settings = AdminSettings.Load(_context);
+        var index = settings.Plans.FindIndex(p => p.Id.Equals(plan, StringComparison.OrdinalIgnoreCase) || p.Name.Equals(plan, StringComparison.OrdinalIgnoreCase));
+        return index >= 0 ? index + 1 : 0;
     }
 
     public async System.Threading.Tasks.Task OnGetAsync()
     {
+        Settings = AdminSettings.Load(_context);
         var accountIdClaim = User.FindFirst("AccountId")?.Value;
         if (!string.IsNullOrEmpty(accountIdClaim))
         {
@@ -82,23 +80,18 @@ public class PricingModel : PageModel
             // Determine billing period (default to monthly if empty/null)
             billingPeriod = (billingPeriod ?? "monthly").ToLower();
             
-            // Calculate plan cost
+            // Calculate plan cost dynamically from admin settings
+            var settings = AdminSettings.Load(_context);
             decimal amount = 0;
-            if (tier == "Personal")
+            var plan = settings.Plans.FirstOrDefault(p => p.Id.Equals(tier, StringComparison.OrdinalIgnoreCase) || p.Name.Equals(tier, StringComparison.OrdinalIgnoreCase));
+            if (plan != null)
             {
-                amount = billingPeriod == "yearly" ? 399000 : 40000;
+                amount = billingPeriod == "yearly" ? plan.YearlyPrice : plan.MonthlyPrice;
             }
-            else if (tier == "Pro")
+            else
             {
-                amount = billingPeriod == "yearly" ? 2900000 : 299000;
-            }
-            else if (tier == "ProPlus")
-            {
-                amount = billingPeriod == "yearly" ? 4400000 : 449000;
-            }
-            else if (tier == "Business")
-            {
-                amount = billingPeriod == "yearly" ? 8900000 : 899000;
+                TempData["UpgradeError"] = $"Plan tier '{tier}' is not recognized.";
+                return RedirectToPage("/Pricing", new { joinCode = JoinCode });
             }
 
             Workspace? workspace = null;
@@ -109,12 +102,12 @@ public class PricingModel : PageModel
                 workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == JoinCode);
                 if (workspace != null)
                 {
-                    if (tier == "Personal")
+                    if (plan.MemberLimit > 0)
                     {
                         int memberCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == workspace.Id);
-                        if (memberCount > 1)
+                        if (memberCount > plan.MemberLimit)
                         {
-                            TempData["UpgradeError"] = "Cannot switch this Workspace to the Personal plan because it currently has more than 1 member. The Personal plan is for individual use only.";
+                            TempData["UpgradeError"] = $"Cannot switch this Workspace to the {plan.Name} plan because it currently has more than {plan.MemberLimit} members. The {plan.Name} plan allows a maximum of {plan.MemberLimit} members.";
                             return RedirectToPage("/Pricing", new { joinCode = JoinCode });
                         }
                     }
@@ -227,4 +220,57 @@ public class PricingModel : PageModel
 
         return new JsonResult(new { success = true });
     }
+}
+
+public static class PlanColorHelper
+{
+    public static string GetBorderClass(string? color) => (color ?? "indigo").ToLower() switch
+    {
+        "teal" => "border-teal-400",
+        "indigo" => "border-indigo-400",
+        "violet" => "border-violet-500",
+        "emerald" => "border-emerald-400",
+        "slate" => "border-slate-800",
+        _ => "border-indigo-400"
+    };
+
+    public static string GetTextClass(string? color) => (color ?? "indigo").ToLower() switch
+    {
+        "teal" => "text-teal-600",
+        "indigo" => "text-indigo-600",
+        "violet" => "text-violet-600",
+        "emerald" => "text-emerald-600",
+        "slate" => "text-slate-800",
+        _ => "text-indigo-600"
+    };
+
+    public static string GetBgClass(string? color) => (color ?? "indigo").ToLower() switch
+    {
+        "teal" => "bg-teal-600 hover:bg-teal-700",
+        "indigo" => "bg-indigo-600 hover:bg-indigo-700",
+        "violet" => "bg-violet-600 hover:bg-violet-700",
+        "emerald" => "bg-emerald-600 hover:bg-emerald-700",
+        "slate" => "bg-slate-800 hover:bg-slate-900",
+        _ => "bg-indigo-600 hover:bg-indigo-700"
+    };
+
+    public static string GetShadowClass(string? color) => (color ?? "indigo").ToLower() switch
+    {
+        "teal" => "shadow-teal-100",
+        "indigo" => "shadow-indigo-100",
+        "violet" => "shadow-violet-100",
+        "emerald" => "shadow-emerald-100",
+        "slate" => "shadow-slate-200",
+        _ => "shadow-indigo-100"
+    };
+    
+    public static string GetRingClass(string? color) => (color ?? "indigo").ToLower() switch
+    {
+        "teal" => "ring-teal-500/20",
+        "indigo" => "ring-indigo-500/20",
+        "violet" => "ring-violet-500/20",
+        "emerald" => "ring-emerald-500/20",
+        "slate" => "ring-slate-800/20",
+        _ => "ring-indigo-500/20"
+    };
 }

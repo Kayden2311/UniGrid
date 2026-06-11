@@ -19,14 +19,14 @@ public class FileRepository : IFileRepository
     {
         return await _context.WorkspaceFiles
             .Include(wf => wf.User)
-            .FirstOrDefaultAsync(f => f.Id == id);
+            .FirstOrDefaultAsync(f => !f.IsDisabled && f.Id == id);
     }
 
     public async System.Threading.Tasks.Task<List<WorkspaceFile>> GetWorkspaceFilesAsync(Guid workspaceId)
     {
         return await _context.WorkspaceFiles
             .Include(wf => wf.User)
-            .Where(wf => wf.WorkspaceId == workspaceId)
+            .Where(wf => !wf.IsDisabled && wf.WorkspaceId == workspaceId)
             .OrderByDescending(wf => wf.CreatedAt)
             .ToListAsync();
     }
@@ -38,20 +38,21 @@ public class FileRepository : IFileRepository
 
     public void Remove(WorkspaceFile file)
     {
-        _context.WorkspaceFiles.Remove(file);
+        file.IsDisabled = true;
+        _context.WorkspaceFiles.Update(file);
     }
 
     public async System.Threading.Tasks.Task<long> GetUserStorageUsedAsync(Guid workspaceId, Guid userId)
     {
         return await _context.WorkspaceFiles
-            .Where(f => f.WorkspaceId == workspaceId && f.UserId == userId)
+            .Where(f => !f.IsDisabled && f.WorkspaceId == workspaceId && f.UserId == userId)
             .SumAsync(f => f.FileSize);
     }
 
     public async System.Threading.Tasks.Task<long> GetWorkspaceStorageUsedAsync(Guid workspaceId)
     {
         return await _context.WorkspaceFiles
-            .Where(f => f.WorkspaceId == workspaceId)
+            .Where(f => !f.IsDisabled && f.WorkspaceId == workspaceId)
             .SumAsync(f => f.FileSize);
     }
 }

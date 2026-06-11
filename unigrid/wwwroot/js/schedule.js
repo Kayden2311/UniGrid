@@ -39,12 +39,131 @@ function scheduleComponent() {
         formDesc: '',
         formStartTime: '',
         formEndTime: '',
+        formDate: '',
+        formStartTimeVal: '',
+        formEndTimeVal: '',
         formColor: 0,
         formPriority: 'medium',
         formDayIdx: 0,
         formStartSlot: 0,
         formDuration: 2,
         formTimeZone: 'UTC',
+
+        // Custom time picker state
+        startHour: '09',
+        startMinute: '00',
+        startAmpm: 'AM',
+        startTimeDropdownOpen: false,
+
+        endHour: '10',
+        endMinute: '00',
+        endAmpm: 'AM',
+        endTimeDropdownOpen: false,
+
+        updateStartTimeFromCustom() {
+            let h = parseInt(this.startHour);
+            if (this.startAmpm === 'PM' && h < 12) h += 12;
+            if (this.startAmpm === 'AM' && h === 12) h = 0;
+            this.formStartTimeVal = `${h.toString().padStart(2, '0')}:${this.startMinute}`;
+        },
+
+        updateEndTimeFromCustom() {
+            let h = parseInt(this.endHour);
+            if (this.endAmpm === 'PM' && h < 12) h += 12;
+            if (this.endAmpm === 'AM' && h === 12) h = 0;
+            this.formEndTimeVal = `${h.toString().padStart(2, '0')}:${this.endMinute}`;
+        },
+
+        parseTimesToCustom() {
+            if (this.formStartTimeVal) {
+                let parts = this.formStartTimeVal.split(':');
+                let h24 = parseInt(parts[0]);
+                this.startMinute = parts[1];
+                this.startAmpm = h24 >= 12 ? 'PM' : 'AM';
+                let h12 = h24 % 12;
+                if (h12 === 0) h12 = 12;
+                this.startHour = h12.toString().padStart(2, '0');
+            }
+            if (this.formEndTimeVal) {
+                let parts = this.formEndTimeVal.split(':');
+                let h24 = parseInt(parts[0]);
+                this.endMinute = parts[1];
+                this.endAmpm = h24 >= 12 ? 'PM' : 'AM';
+                let h12 = h24 % 12;
+                if (h12 === 0) h12 = 12;
+                this.endHour = h12.toString().padStart(2, '0');
+            }
+        },
+
+        formatLocalDate(date) {
+            let y = date.getFullYear();
+            let m = (date.getMonth() + 1).toString().padStart(2, '0');
+            let d = date.getDate().toString().padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        },
+
+        formatLocalTime(date) {
+            let h = date.getHours().toString().padStart(2, '0');
+            let m = date.getMinutes().toString().padStart(2, '0');
+            return `${h}:${m}`;
+        },
+
+        formatDateTimeAMPM(date) {
+            let months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            let m = months[date.getMonth()];
+            let d = date.getDate();
+            let y = date.getFullYear();
+            let h = date.getHours();
+            let min = date.getMinutes().toString().padStart(2, '0');
+            let suffix = h >= 12 ? 'PM' : 'AM';
+            let displayHour = h % 12;
+            if (displayHour === 0) displayHour = 12;
+            return `${m} ${d}, ${y}, ${displayHour.toString().padStart(2, '0')}:${min} ${suffix}`;
+        },
+
+        formatDeadlineDate(date) {
+            let days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            let dayName = days[date.getDay()];
+            let h = date.getHours();
+            let m = date.getMinutes().toString().padStart(2, '0');
+            let suffix = h >= 12 ? 'PM' : 'AM';
+            let displayHour = h % 12;
+            if (displayHour === 0) displayHour = 12;
+            return `${dayName}, ${displayHour.toString().padStart(2, '0')}:${m} ${suffix}`;
+        },
+
+        formatExactTimeRange(startD, endD) {
+            if (!startD || !endD) return '';
+            let start = new Date(startD);
+            let end = new Date(endD);
+            
+            let sh = start.getHours();
+            let sm = start.getMinutes().toString().padStart(2, '0');
+            let sSuffix = sh >= 12 ? 'PM' : 'AM';
+            let sHour = sh % 12 === 0 ? 12 : sh % 12;
+
+            let eh = end.getHours();
+            let em = end.getMinutes().toString().padStart(2, '0');
+            let eSuffix = eh >= 12 ? 'PM' : 'AM';
+            let eHour = eh % 12 === 0 ? 12 : eh % 12;
+
+            let sStr = sHour.toString().padStart(2, '0') + ':' + sm;
+            let eStr = eHour.toString().padStart(2, '0') + ':' + em;
+            if (sSuffix === eSuffix) {
+                return `${sStr} - ${eStr} ${eSuffix}`;
+            } else {
+                return `${sStr} ${sSuffix} - ${eStr} ${eSuffix}`;
+            }
+        },
+
+        getFormStartEndISOTimes() {
+            let startD = new Date(`${this.formDate}T${this.formStartTimeVal}`);
+            let endD = new Date(`${this.formDate}T${this.formEndTimeVal}`);
+            return {
+                startTime: startD.toISOString(),
+                endTime: endD.toISOString()
+            };
+        },
 
         init() {
             // Load serialized C# Razor Page models
@@ -55,9 +174,9 @@ function scheduleComponent() {
                 let startDate = new Date(e.startTime);
                 let endDate = new Date(e.endTime);
                 let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
-                let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
-                let duration = Math.max(1, endSlot - startSlot);
+                let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
+                let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
+                let duration = Math.max(0.5, endSlot - startSlot);
 
                 let isTask = !!e.taskId;
                 let workspaceName = '';
@@ -65,6 +184,15 @@ function scheduleComponent() {
                 let descText = e.description || '';
                 let priority = 'medium';
                 let colorIdx = 0;
+
+                try {
+                    if (descText.startsWith('{')) {
+                        let descObj = JSON.parse(descText);
+                        descText = descObj.desc || '';
+                        priority = descObj.priority || 'medium';
+                        colorIdx = descObj.color !== undefined ? descObj.color : 0;
+                    }
+                } catch (err) {}
 
                 if (isTask) {
                     let t = rawTasks.find(x => x.id === e.taskId);
@@ -74,15 +202,6 @@ function scheduleComponent() {
                         priority = t.priority || 'medium';
                         colorIdx = t.priority === 'high' ? 3 : (t.priority === 'medium' ? 2 : 4);
                     }
-                } else {
-                    try {
-                        if (descText.startsWith('{')) {
-                            let descObj = JSON.parse(descText);
-                            descText = descObj.desc || '';
-                            priority = descObj.priority || 'medium';
-                            colorIdx = descObj.color !== undefined ? descObj.color : 0;
-                        }
-                    } catch (err) {}
                 }
 
                 return {
@@ -328,14 +447,13 @@ function scheduleComponent() {
                 return dDate >= startOfWeek && dDate <= endOfWeek;
             }).map(t => {
                 let dDate = new Date(t.dueDate);
-                let options = { weekday: 'short', hour: '2-digit', minute: '2-digit' };
                 return {
                     id: t.id,
                     title: t.title,
                     description: t.description || '',
                     workspaceName: t.workspaceName,
                     workspaceJoinCode: t.workspaceJoinCode || '',
-                    formattedDate: dDate.toLocaleDateString('en-US', options),
+                    formattedDate: this.formatDeadlineDate(dDate),
                     priority: t.priority,
                     isTask: true
                 };
@@ -344,14 +462,30 @@ function scheduleComponent() {
 
         get unscheduledTasks() {
             let scheduledTaskIds = this.workspaceTasks.map(t => t.taskId);
-            return this.tasks.filter(t => !t.dueDate && !scheduledTaskIds.includes(t.id)).map(t => {
+            let dates = this.weekDates;
+            let startOfWeek = new Date(dates[0]);
+            startOfWeek.setHours(0, 0, 0, 0);
+            let endOfWeek = new Date(dates[6]);
+            endOfWeek.setHours(23, 59, 59, 999);
+
+            return this.tasks.filter(t => {
+                if (scheduledTaskIds.includes(t.id)) return false;
+                
+                // If it has a due date in the current week, it goes to weeklyDeadlines instead
+                if (t.dueDate) {
+                    let dDate = new Date(t.dueDate);
+                    if (dDate >= startOfWeek && dDate <= endOfWeek) return false;
+                }
+                return true;
+            }).map(t => {
+                let dDate = t.dueDate ? new Date(t.dueDate) : null;
                 return {
                     id: t.id,
                     title: t.title,
                     description: t.description || '',
                     workspaceName: t.workspaceName,
                     workspaceJoinCode: t.workspaceJoinCode || '',
-                    formattedDate: "No Date",
+                    formattedDate: dDate ? this.formatDeadlineDate(dDate) : "Backlog",
                     priority: t.priority,
                     isTask: true
                 };
@@ -359,8 +493,9 @@ function scheduleComponent() {
         },
 
         slotToTime(slot) {
-            let h = 7 + Math.floor(slot / 2);
-            let m = slot % 2 === 0 ? '00' : '30';
+            let totalMinutes = slot * 30;
+            let h = Math.floor(totalMinutes / 60);
+            let m = Math.floor(totalMinutes % 60).toString().padStart(2, '0');
             let suffix = h >= 12 ? 'PM' : 'AM';
             let displayHour = h % 12;
             if (displayHour === 0) displayHour = 12;
@@ -369,13 +504,15 @@ function scheduleComponent() {
 
         formatTimeRange(startSlot, duration) {
             let endSlot = startSlot + duration;
-            let sh = 7 + Math.floor(startSlot / 2);
-            let sm = startSlot % 2 === 0 ? '00' : '30';
+            let sTotal = startSlot * 30;
+            let sh = Math.floor(sTotal / 60);
+            let sm = Math.floor(sTotal % 60).toString().padStart(2, '0');
             let sSuffix = sh >= 12 ? 'PM' : 'AM';
             let sHour = sh % 12 === 0 ? 12 : sh % 12;
 
-            let eh = 7 + Math.floor(endSlot / 2);
-            let em = endSlot % 2 === 0 ? '00' : '30';
+            let eTotal = endSlot * 30;
+            let eh = Math.floor(eTotal / 60);
+            let em = Math.floor(eTotal % 60).toString().padStart(2, '0');
             let eSuffix = eh >= 12 ? 'PM' : 'AM';
             let eHour = eh % 12 === 0 ? 12 : eh % 12;
 
@@ -389,26 +526,28 @@ function scheduleComponent() {
         },
 
         slotToTimeStr(slot) {
-            let h = 7 + Math.floor(slot / 2);
-            let m = slot % 2 === 0 ? '00' : '30';
+            let totalMinutes = slot * 30;
+            let h = Math.floor(totalMinutes / 60);
+            let m = Math.floor(totalMinutes % 60).toString().padStart(2, '0');
             return `${h.toString().padStart(2, '0')}:${m}`;
         },
         getDisplayHour(slot) {
-            let timeStr = this.slotToTimeStr(slot);
-            const parts = timeStr.split(':');
-            let h = parseInt(parts[0]) % 12;
+            let totalMinutes = slot * 30;
+            let h = Math.floor(totalMinutes / 60) % 12;
             if (h === 0) h = 12;
             return h.toString().padStart(2, '0');
         },
         getDisplayMinute(slot) {
-            return slot % 2 === 0 ? '00' : '30';
+            let totalMinutes = slot * 30;
+            return Math.floor(totalMinutes % 60).toString().padStart(2, '0');
         },
         isAM(slot) {
-            let h = 7 + Math.floor(slot / 2);
+            let totalMinutes = slot * 30;
+            let h = Math.floor(totalMinutes / 60);
             return h < 12;
         },
         incrementHour() {
-            let newStart = Math.min(32, this.formStartSlot + 2);
+            let newStart = Math.min(46, this.formStartSlot + 2);
             this.formStartSlot = newStart;
         },
         decrementHour() {
@@ -416,7 +555,7 @@ function scheduleComponent() {
             this.formStartSlot = newStart;
         },
         incrementMinute() {
-            let newStart = Math.min(33, this.formStartSlot + 1);
+            let newStart = Math.min(47, this.formStartSlot + 1);
             this.formStartSlot = newStart;
         },
         decrementMinute() {
@@ -424,7 +563,7 @@ function scheduleComponent() {
             this.formStartSlot = newStart;
         },
         setAM() {
-            let h = 7 + Math.floor(this.formStartSlot / 2);
+            let h = Math.floor((this.formStartSlot * 30) / 60);
             if (h >= 12) {
                 this.formStartSlot = Math.max(0, this.formStartSlot - 24);
             }
@@ -438,8 +577,8 @@ function scheduleComponent() {
 
         slotsToISOTimes(dayIdx, startSlot, duration) {
             let date = this.weekDates[dayIdx];
-            let sh = 7 + Math.floor(startSlot / 2);
-            let sm = startSlot % 2 === 0 ? 0 : 30;
+            let sh = Math.floor(startSlot / 2);
+            let sm = Math.round((startSlot % 2) * 30);
             
             let startDate = new Date(date);
             startDate.setHours(sh, sm, 0, 0);
@@ -475,6 +614,21 @@ function scheduleComponent() {
             let { startTime, endTime } = this.slotsToISOTimes(dayIdx, slotIdx, durationSlotCount);
             this.formStartTime = startTime;
             this.formEndTime = endTime;
+
+            // Populate local date and times
+            let date = this.weekDates[dayIdx];
+            this.formDate = this.formatLocalDate(date);
+            
+            let sh = Math.floor(slotIdx / 2);
+            let sm = slotIdx % 2 === 0 ? 0 : 30;
+            this.formStartTimeVal = `${sh.toString().padStart(2, '0')}:${sm.toString().padStart(2, '0')}`;
+            
+            let eh = Math.floor((slotIdx + durationSlotCount) / 2);
+            let em = (slotIdx + durationSlotCount) % 2 === 0 ? 0 : 30;
+            this.formEndTimeVal = `${eh.toString().padStart(2, '0')}:${em.toString().padStart(2, '0')}`;
+
+            this.parseTimesToCustom();
+
             this.dialogOpen = true;
         },
 
@@ -502,6 +656,12 @@ function scheduleComponent() {
                 let { startTime, endTime } = this.slotsToISOTimes(event.dayIdx, event.startSlot, event.duration || 2);
                 this.formStartTime = startTime;
                 this.formEndTime = endTime;
+
+                let startD = new Date(event.startDate);
+                let endD = new Date(event.endDate);
+                this.formDate = this.formatLocalDate(startD);
+                this.formStartTimeVal = this.formatLocalTime(startD);
+                this.formEndTimeVal = this.formatLocalTime(endD);
             } else {
                 // If it is unscheduled (clicked from the sidebar)
                 if (event.dueDate) {
@@ -521,18 +681,28 @@ function scheduleComponent() {
                     let hours = d.getHours();
                     let minutes = d.getMinutes();
                     if ((hours === 23 && minutes === 59) || (hours === 0 && minutes === 0)) {
-                        this.formStartSlot = 4; // 9:00 AM
+                        this.formStartSlot = 18; // 9:00 AM (slot 18 in 24h system)
                     } else {
-                        this.formStartSlot = Math.max(0, (hours - 7) * 2 + (minutes >= 30 ? 1 : 0));
+                        this.formStartSlot = Math.max(0, hours * 2 + (minutes >= 30 ? 1 : 0));
                     }
+
+                    this.formDate = this.formatLocalDate(d);
+                    this.formStartTimeVal = "09:00";
+                    this.formEndTimeVal = "10:00";
                 } else {
                     this.formDayIdx = 0; // Monday
-                    this.formStartSlot = 4; // 9:00 AM
+                    this.formStartSlot = 18; // 9:00 AM (slot 18 in 24h system)
+
+                    let d = this.weekDates[0];
+                    this.formDate = this.formatLocalDate(d);
+                    this.formStartTimeVal = "09:00";
+                    this.formEndTimeVal = "10:00";
                 }
                 this.formDuration = 2;
                 this.formStartTime = '';
                 this.formEndTime = '';
             }
+            this.parseTimesToCustom();
             this.dialogOpen = true;
         },
 
@@ -616,7 +786,7 @@ function scheduleComponent() {
                 let dueD = new Date(rawTask.dueDate);
                 let endD = new Date(endTime);
                 if (endD > dueD) {
-                    let formatted = dueD.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    let formatted = this.formatDateTimeAMPM(dueD);
                     this.showAlert("Scheduling Conflict", `You cannot schedule this task past its due date (<strong>${formatted}</strong>).`);
                     this.draggedTask = null;
                     return;
@@ -634,7 +804,7 @@ function scheduleComponent() {
                     hours = 9;
                     minutes = 0;
                 }
-                originalStartSlot = Math.max(0, (hours - 7) * 2 + (minutes >= 30 ? 1 : 0));
+                originalStartSlot = Math.max(0, hours * 2 + (minutes >= 30 ? 1 : 0));
             }
 
             this.pendingChange = {
@@ -707,13 +877,13 @@ function scheduleComponent() {
                 day = Math.max(0, Math.min(day, 6));
 
                 let slotIdx = Math.floor(relY / 36);
-                slotIdx = Math.max(0, Math.min(slotIdx, 33));
+                slotIdx = Math.max(0, Math.min(slotIdx, 47));
 
                 let targetEv = this.movingTask.isTask
                     ? this.workspaceTasks.find(x => x.id === this.movingTask.taskId)
                     : this.events.find(x => x.id === this.movingTask.taskId);
                 if (targetEv) {
-                    let newStart = Math.max(0, Math.min(slotIdx - this.movingTask.offsetSlot, 34 - targetEv.duration));
+                    let newStart = Math.max(0, Math.min(slotIdx - this.movingTask.offsetSlot, 48 - targetEv.duration));
                     this.movingTask.currentDayIdx = day;
                     this.movingTask.currentStartSlot = newStart;
                 }
@@ -790,7 +960,7 @@ function scheduleComponent() {
  
                 if (edge === 'bottom') {
                     let newDuration = Math.max(1, this.resizingTask.origDuration + slotDelta);
-                    targetEv.duration = Math.min(newDuration, 34 - targetEv.startSlot);
+                    targetEv.duration = Math.min(newDuration, 48 - targetEv.startSlot);
                 } else {
                     let newStart = Math.max(0, this.resizingTask.origStartSlot + slotDelta);
                     let endSlot = this.resizingTask.origStartSlot + this.resizingTask.origDuration;
@@ -847,7 +1017,7 @@ function scheduleComponent() {
                     let dueD = new Date(rawTask.dueDate);
                     let endD = new Date(endTime);
                     if (endD > dueD) {
-                        let formatted = dueD.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                        let formatted = this.formatDateTimeAMPM(dueD);
                         this.showAlert("Scheduling Conflict", `You cannot schedule this task past its due date (<strong>${formatted}</strong>).`);
                         this.cancelPendingChange();
                         return;
@@ -887,6 +1057,7 @@ function scheduleComponent() {
                         this.workspaceTasks = this.workspaceTasks.filter(x => x.taskId !== pc.taskId);
                     }
                 }
+                this.workspaceTasks = [...this.workspaceTasks]; // trigger reactivity!
             } else {
                 let targetEv = this.events.find(x => x.id === pc.eventId);
                 if (targetEv) {
@@ -898,6 +1069,7 @@ function scheduleComponent() {
                     targetEv.startDate = new Date(startTime);
                     targetEv.endDate = new Date(endTime);
                 }
+                this.events = [...this.events]; // trigger reactivity!
             }
             this.confirmDialogOpen = false;
             this.pendingChange = null;
@@ -921,16 +1093,27 @@ function scheduleComponent() {
                     let targetEv = this.events.find(x => x.id === eventId);
                     if (targetEv) {
                         let e = data.eventItem;
-                        targetEv.startDate = new Date(e.startTime);
-                        targetEv.endDate = new Date(e.endTime);
+                        let startDate = new Date(e.startTime);
+                        let endDate = new Date(e.endTime);
+                        let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+                        let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
+                        let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
+                        let duration = Math.max(0.5, endSlot - startSlot);
+
+                        targetEv.startDate = startDate;
+                        targetEv.endDate = endDate;
+                        targetEv.dayIdx = dayIdx;
+                        targetEv.startSlot = startSlot;
+                        targetEv.duration = duration;
+                        this.events = [...this.events]; // trigger reactivity!
                     }
                 } else {
-                    alert(data.message || "Failed to update event time.");
+                    this.showAlert("Scheduling Conflict", data.message || "Failed to update event time.");
                     this.init();
                 }
             } catch (err) {
                 console.error("Network error updating event times:", err);
-                alert("Network error. Failed to update event time.");
+                this.showAlert("Network Error", "Failed to update event time due to a network error.");
                 this.init();
             }
         },
@@ -955,9 +1138,9 @@ function scheduleComponent() {
                     let startDate = new Date(e.startTime);
                     let endDate = new Date(e.endTime);
                     let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                    let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
-                    let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
-                    let duration = Math.max(1, endSlot - startSlot);
+                    let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
+                    let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
+                    let duration = Math.max(0.5, endSlot - startSlot);
 
                     let rawTask = this.tasks.find(x => x.id === taskId);
                     let wName = rawTask ? rawTask.workspaceName : 'Workspace';
@@ -989,13 +1172,14 @@ function scheduleComponent() {
                     } else {
                         this.workspaceTasks.push(mappedWTask);
                     }
+                    this.workspaceTasks = [...this.workspaceTasks]; // trigger reactivity!
                 } else {
-                    alert(data.message || "Failed to schedule task.");
+                    this.showAlert("Scheduling Conflict", data.message || "Failed to schedule task.");
                     this.init();
                 }
             } catch (err) {
                 console.error("Network error updating task times:", err);
-                alert("Network error. Failed to schedule task.");
+                this.showAlert("Network Error", "Failed to schedule task due to a network error.");
                 this.init();
             }
         },
@@ -1014,6 +1198,13 @@ function scheduleComponent() {
         saveEvent() {
             if (!this.formTitle.trim()) return;
             
+            let startD = new Date(`${this.formDate}T${this.formStartTimeVal}`);
+            let endD = new Date(`${this.formDate}T${this.formEndTimeVal}`);
+            if (endD <= startD) {
+                this.showAlert("Invalid Time Range", "The end time must be after the start time.");
+                return;
+            }
+
             let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
             let payload = new URLSearchParams();
             
@@ -1023,7 +1214,8 @@ function scheduleComponent() {
                 color: this.formColor
             });
             
-            let { startTime, endTime } = this.slotsToISOTimes(this.formDayIdx, this.formStartSlot, this.formDuration);
+            let startTime = startD.toISOString();
+            let endTime = endD.toISOString();
             this.formStartTime = startTime;
             this.formEndTime = endTime;
             
@@ -1049,9 +1241,9 @@ function scheduleComponent() {
                             let startDate = new Date(e.startTime);
                             let endDate = new Date(e.endTime);
                             let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                            let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
-                            let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
-                            let duration = Math.max(1, endSlot - startSlot);
+                            let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
+                            let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
+                            let duration = Math.max(0.5, endSlot - startSlot);
 
                             let descText = e.description || '';
                             let priority = 'medium';
@@ -1078,10 +1270,11 @@ function scheduleComponent() {
                                 endDate: endDate,
                                 timeZone: e.timeZone || 'UTC'
                             };
+                            this.events = [...this.events]; // trigger reactivity!
                         }
                         this.dialogOpen = false;
                     } else {
-                        alert(data.message || "Failed to edit event.");
+                        this.showAlert("Scheduling Conflict", data.message || "Failed to edit event.");
                     }
                 })
                 .catch(err => console.error("Error saving event:", err));
@@ -1097,9 +1290,9 @@ function scheduleComponent() {
                         let startDate = new Date(e.startTime);
                         let endDate = new Date(e.endTime);
                         let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                        let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
-                        let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
-                        let duration = Math.max(1, endSlot - startSlot);
+                        let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
+                        let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
+                        let duration = Math.max(0.5, endSlot - startSlot);
 
                         let descText = e.description || '';
                         let priority = 'medium';
@@ -1126,9 +1319,10 @@ function scheduleComponent() {
                             endDate: endDate,
                             timeZone: e.timeZone || 'UTC'
                         });
+                        this.events = [...this.events]; // trigger reactivity!
                         this.dialogOpen = false;
                     } else {
-                        alert(data.message || "Failed to create event.");
+                        this.showAlert("Scheduling Conflict", data.message || "Failed to create event.");
                     }
                 })
                 .catch(err => console.error("Error creating event:", err));
@@ -1159,8 +1353,16 @@ function scheduleComponent() {
 
         duplicateEvent() {
             if (!this.formId) return;
-            let targetDayIdx = (this.formDayIdx + 1) % 7;
-            let { startTime, endTime } = this.slotsToISOTimes(targetDayIdx, this.formStartSlot, this.formDuration);
+            
+            let startD = new Date(`${this.formDate}T${this.formStartTimeVal}`);
+            let endD = new Date(`${this.formDate}T${this.formEndTimeVal}`);
+            
+            // Increment date by 1 day
+            startD.setDate(startD.getDate() + 1);
+            endD.setDate(endD.getDate() + 1);
+            
+            let startTime = startD.toISOString();
+            let endTime = endD.toISOString();
             
             let token = document.querySelector('input[name="__RequestVerificationToken"]').value;
             let payload = new URLSearchParams();
@@ -1189,9 +1391,9 @@ function scheduleComponent() {
                     let startDate = new Date(e.startTime);
                     let endDate = new Date(e.endTime);
                     let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                    let startSlot = Math.max(0, (startDate.getHours() - 7) * 2 + (startDate.getMinutes() >= 30 ? 1 : 0));
-                    let endSlot = Math.min(34, (endDate.getHours() - 7) * 2 + (endDate.getMinutes() >= 30 ? 1 : 0));
-                    let duration = Math.max(1, endSlot - startSlot);
+                    let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
+                    let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
+                    let duration = Math.max(0.5, endSlot - startSlot);
 
                     let descText = e.description || '';
                     let priority = 'medium';
@@ -1218,24 +1420,32 @@ function scheduleComponent() {
                         endDate: endDate,
                         timeZone: e.timeZone || 'UTC'
                     });
+                    this.events = [...this.events]; // trigger reactivity!
                     this.dialogOpen = false;
                 } else {
-                    alert(data.message || "Failed to duplicate event.");
+                    this.showAlert("Scheduling Conflict", data.message || "Failed to duplicate event.");
                 }
             })
             .catch(err => console.error("Error duplicating event:", err));
         },
 
         async saveTaskSchedule() {
-            let { startTime, endTime } = this.slotsToISOTimes(this.formDayIdx, this.formStartSlot, this.formDuration);
+            let startD = new Date(`${this.formDate}T${this.formStartTimeVal}`);
+            let endD = new Date(`${this.formDate}T${this.formEndTimeVal}`);
+            if (endD <= startD) {
+                this.showAlert("Invalid Time Range", "The end time must be after the start time.");
+                return;
+            }
+            
+            let startTime = startD.toISOString();
+            let endTime = endD.toISOString();
             
             // Strict client-side due date check
             let rawTask = this.tasks.find(x => x.id === this.formId);
             if (rawTask && rawTask.dueDate) {
                 let dueD = new Date(rawTask.dueDate);
-                let endD = new Date(endTime);
                 if (endD > dueD) {
-                    let formatted = dueD.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    let formatted = this.formatDateTimeAMPM(dueD);
                     this.showAlert("Scheduling Conflict", `You cannot schedule this task past its due date (<strong>${formatted}</strong>).`);
                     return;
                 }
@@ -1263,11 +1473,11 @@ function scheduleComponent() {
                         this.workspaceTasks = this.workspaceTasks.filter(t => t.id !== this.formId);
                         this.dialogOpen = false;
                     } else {
-                        alert(data.message || "Failed to unschedule task.");
+                        this.showAlert("Error", data.message || "Failed to unschedule task.");
                     }
                 } catch (err) {
                     console.error("Error unscheduling task:", err);
-                    alert("Network error. Failed to unschedule task.");
+                    this.showAlert("Network Error", "Failed to unschedule task due to a network error.");
                 }
             }
         }

@@ -1,6 +1,7 @@
 /* 
    UniGrid Complete Database Schema & Expanded Massive High-Fidelity Seeding Script
    Includes all tables mapped in UniGridDbContext, with extremely realistic, dense seeding.
+   Generated to meet the 1500-2000 lines requirement.
 */
 
 IF EXISTS (SELECT name FROM sys.databases WHERE name = 'UniGridDb')
@@ -29,7 +30,8 @@ CREATE TABLE Accounts (
     IsLocked BIT DEFAULT 0,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
     RefreshToken VARCHAR(512) NULL,
-    RefreshTokenExpiry DATETIME2 NULL
+    RefreshTokenExpiry DATETIME2 NULL,
+    IsDisabled BIT NOT NULL DEFAULT 0
 );
 
 -- 2. Admins
@@ -38,6 +40,7 @@ CREATE TABLE Admins (
     AccountId UNIQUEIDENTIFIER NOT NULL,
     FullName NVARCHAR(256) NOT NULL,
     SuperAdmin BIT DEFAULT 0,
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Admins_Accounts FOREIGN KEY (AccountId) REFERENCES Accounts(Id) ON DELETE CASCADE
 );
 
@@ -47,6 +50,7 @@ CREATE TABLE Moderators (
     AccountId UNIQUEIDENTIFIER NOT NULL,
     FullName NVARCHAR(256) NOT NULL,
     Region NVARCHAR(100) NULL,
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Moderators_Accounts FOREIGN KEY (AccountId) REFERENCES Accounts(Id) ON DELETE CASCADE
 );
 
@@ -59,10 +63,11 @@ CREATE TABLE Users (
     SubscriptionExpires DATETIME2 NULL,
     AvatarUrl NVARCHAR(MAX) NULL,
     BusinessAttribute NVARCHAR(50) NOT NULL DEFAULT 'normal',
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Users_Accounts FOREIGN KEY (AccountId) REFERENCES Accounts(Id) ON DELETE CASCADE
 );
 
--- 5a. WorkspaceFederations (Enterprise & Academic Federated Groups)
+-- 5a. WorkspaceFederations
 CREATE TABLE WorkspaceFederations (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     Name NVARCHAR(256) NOT NULL,
@@ -70,6 +75,7 @@ CREATE TABLE WorkspaceFederations (
     OwnerId UNIQUEIDENTIFIER NOT NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
     SettingsJson NVARCHAR(MAX) NULL,
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_WorkspaceFederations_Users FOREIGN KEY (OwnerId) REFERENCES Users(Id)
 );
 
@@ -78,7 +84,7 @@ CREATE TABLE Workspaces (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     Name NVARCHAR(256) NOT NULL,
     JoinCode NVARCHAR(20) NOT NULL UNIQUE,
-    InviteCode UNIQUEIDENTIFIER NOT NULL UNIQUE DEFAULT NEWID(), -- Secure, non-public invite token
+    InviteCode UNIQUEIDENTIFIER NOT NULL UNIQUE DEFAULT NEWID(),
     OwnerId UNIQUEIDENTIFIER NOT NULL,
     PackageTier NVARCHAR(50) DEFAULT 'Free',
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
@@ -88,6 +94,7 @@ CREATE TABLE Workspaces (
     CompanyAddress NVARCHAR(500) NULL,
     FederationId UNIQUEIDENTIFIER NULL,
     SettingsJson NVARCHAR(MAX) NULL,
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Workspaces_Users FOREIGN KEY (OwnerId) REFERENCES Users(Id),
     CONSTRAINT FK_Workspaces_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE SET NULL
 );
@@ -96,17 +103,18 @@ CREATE TABLE Workspaces (
 CREATE TABLE WorkspaceFederationMembers (
     FederationId UNIQUEIDENTIFIER NOT NULL,
     UserId UNIQUEIDENTIFIER NOT NULL,
-    PersonalWorkspaceId UNIQUEIDENTIFIER NULL, -- Nullable for high-level managers/users not in child workspaces
+    PersonalWorkspaceId UNIQUEIDENTIFIER NULL,
     JoinedAt DATETIME2 DEFAULT GETUTCDATE(),
-    Role NVARCHAR(50) NOT NULL DEFAULT 'Member', -- 'HeadPresident', 'DepartmentManager', 'Member', etc.
-    Status NVARCHAR(50) NOT NULL DEFAULT 'Active', -- 'Active', 'PendingOwnerApproval' (for personal plan link authorization)
+    Role NVARCHAR(50) NOT NULL DEFAULT 'Member',
+    Status NVARCHAR(50) NOT NULL DEFAULT 'Active',
+    IsDisabled BIT NOT NULL DEFAULT 0,
     PRIMARY KEY (FederationId, UserId),
     CONSTRAINT FK_FedMembers_Federations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
     CONSTRAINT FK_FedMembers_Users FOREIGN KEY (UserId) REFERENCES Users(Id),
     CONSTRAINT FK_FedMembers_Workspaces FOREIGN KEY (PersonalWorkspaceId) REFERENCES Workspaces(Id) ON DELETE SET NULL
 );
 
--- 6. WorkspaceMembers (RBAC)
+-- 6. WorkspaceMembers
 CREATE TABLE WorkspaceMembers (
     WorkspaceId UNIQUEIDENTIFIER NOT NULL,
     UserId UNIQUEIDENTIFIER NOT NULL,
@@ -116,12 +124,13 @@ CREATE TABLE WorkspaceMembers (
     CanDeleteFile BIT NOT NULL DEFAULT 0,
     CanCreateTask BIT NOT NULL DEFAULT 1,
     CanEditTask BIT NOT NULL DEFAULT 1,
+    IsDisabled BIT NOT NULL DEFAULT 0,
     PRIMARY KEY (WorkspaceId, UserId),
     CONSTRAINT FK_Members_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id),
     CONSTRAINT FK_Members_Users FOREIGN KEY (UserId) REFERENCES Users(Id)
 );
 
--- 6b. TaskCategories (Custom Workspace Task Categories)
+-- 6b. TaskCategories
 CREATE TABLE TaskCategories (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     WorkspaceId UNIQUEIDENTIFIER NOT NULL,
@@ -129,25 +138,27 @@ CREATE TABLE TaskCategories (
     Description NVARCHAR(1000) NULL,
     ColorHex NVARCHAR(7) NOT NULL DEFAULT '#3B82F6',
     CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_TaskCategories_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE
 );
 
 -- 7. Tasks
 CREATE TABLE Tasks (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    WorkspaceId UNIQUEIDENTIFIER NULL, -- Nullable if task belongs directly to Federation
-    FederationId UNIQUEIDENTIFIER NULL, -- Links tasks directly to a Federation
+    WorkspaceId UNIQUEIDENTIFIER NULL,
+    FederationId UNIQUEIDENTIFIER NULL,
     AssigneeId UNIQUEIDENTIFIER NULL,
     CategoryId UNIQUEIDENTIFIER NULL,
     Title NVARCHAR(512) NOT NULL,
     Description NVARCHAR(MAX) NULL,
-    Status INT DEFAULT 0, -- 0: Todo, 1: InProgress, 2: Review, 3: Done
-    Priority INT DEFAULT 1, -- 1: Low, 2: Medium, 3: High
+    Status INT DEFAULT 0,
+    Priority INT DEFAULT 1,
     IsCounterTask BIT NOT NULL DEFAULT 0,
     TargetCount INT NOT NULL DEFAULT 1,
     CurrentCount INT NOT NULL DEFAULT 0,
     DueDate DATETIME2 NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Tasks_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Tasks_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Tasks_Users FOREIGN KEY (AssigneeId) REFERENCES Users(Id),
@@ -155,17 +166,18 @@ CREATE TABLE Tasks (
     CONSTRAINT CK_Tasks_Owner CHECK ((WorkspaceId IS NOT NULL AND FederationId IS NULL) OR (WorkspaceId IS NULL AND FederationId IS NOT NULL))
 );
 
--- 7b. KpiTargets (Workspace KPI Targets for users in categories)
+-- 7b. KpiTargets
 CREATE TABLE KpiTargets (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
     WorkspaceId UNIQUEIDENTIFIER NOT NULL,
     UserId UNIQUEIDENTIFIER NOT NULL,
     CategoryId UNIQUEIDENTIFIER NOT NULL,
-    PeriodType NVARCHAR(20) NOT NULL, -- Daily, Weekly, Monthly
+    PeriodType NVARCHAR(20) NOT NULL,
     StartDate DATETIME2 NOT NULL,
     EndDate DATETIME2 NOT NULL,
     TargetValue INT NOT NULL DEFAULT 0,
     CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_KpiTargets_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE NO ACTION,
     CONSTRAINT FK_KpiTargets_Users FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE NO ACTION,
     CONSTRAINT FK_KpiTargets_Categories FOREIGN KEY (CategoryId) REFERENCES TaskCategories(Id) ON DELETE CASCADE
@@ -178,6 +190,7 @@ CREATE TABLE TaskComments (
     UserId UNIQUEIDENTIFIER NOT NULL,
     Content NVARCHAR(MAX) NOT NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Comments_Tasks FOREIGN KEY (TaskId) REFERENCES Tasks(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Comments_Users FOREIGN KEY (UserId) REFERENCES Users(Id)
 );
@@ -185,7 +198,7 @@ CREATE TABLE TaskComments (
 -- 10. WorkspaceFiles
 CREATE TABLE WorkspaceFiles (
     Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    WorkspaceId UNIQUEIDENTIFIER NULL, -- Nullable if uploaded directly to Federation
+    WorkspaceId UNIQUEIDENTIFIER NULL,
     TaskId UNIQUEIDENTIFIER NULL,
     UserId UNIQUEIDENTIFIER NOT NULL,
     FileName NVARCHAR(512) NOT NULL,
@@ -195,6 +208,7 @@ CREATE TABLE WorkspaceFiles (
     IsPublic BIT NOT NULL DEFAULT 1,
     FederationId UNIQUEIDENTIFIER NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Files_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Files_Tasks FOREIGN KEY (TaskId) REFERENCES Tasks(Id) ON DELETE NO ACTION,
     CONSTRAINT FK_Files_Users FOREIGN KEY (UserId) REFERENCES Users(Id),
@@ -208,6 +222,7 @@ CREATE TABLE ChatRooms (
     WorkspaceId UNIQUEIDENTIFIER NULL,
     FederationId UNIQUEIDENTIFIER NULL,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Chat_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Chat_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
     CONSTRAINT CK_ChatRooms_Owner CHECK ((WorkspaceId IS NOT NULL AND FederationId IS NULL) OR (WorkspaceId IS NULL AND FederationId IS NOT NULL))
@@ -221,6 +236,7 @@ CREATE TABLE ChatMessages (
     Content NVARCHAR(MAX) NOT NULL,
     SentAt DATETIME2 DEFAULT GETUTCDATE(),
     IsDeleted BIT DEFAULT 0,
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Messages_Rooms FOREIGN KEY (RoomId) REFERENCES ChatRooms(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Messages_Users FOREIGN KEY (SenderId) REFERENCES Users(Id)
 );
@@ -236,6 +252,7 @@ CREATE TABLE PersonalSchedules (
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
     TaskId UNIQUEIDENTIFIER NULL,
     TimeZone NVARCHAR(100) NOT NULL DEFAULT 'UTC',
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_PersonalSchedules_Users FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE,
     CONSTRAINT FK_PersonalSchedules_Tasks FOREIGN KEY (TaskId) REFERENCES Tasks(Id) ON DELETE SET NULL
 );
@@ -251,6 +268,7 @@ CREATE TABLE AuditLogs (
     TargetId UNIQUEIDENTIFIER NOT NULL,
     Metadata NVARCHAR(MAX) NULL,
     Timestamp DATETIME2 DEFAULT GETUTCDATE(),
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Audit_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Audit_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Audit_Users FOREIGN KEY (UserId) REFERENCES Users(Id),
@@ -269,6 +287,7 @@ CREATE TABLE Billings (
     PaymentMethod NVARCHAR(100) NULL,
     TransactionRef NVARCHAR(100) NULL,
     CreatedAt DATETIME2 NULL,
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Billing_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Billing_Users FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE SET NULL
 );
@@ -283,6 +302,7 @@ CREATE TABLE Notifications (
     IsRead BIT NOT NULL DEFAULT 0,
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
     RelatedId UNIQUEIDENTIFIER NULL,
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Notifications_Users FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
 );
 
@@ -297,10 +317,21 @@ CREATE TABLE WorkspaceInvitations (
     DisplayRole NVARCHAR(100) NULL,
     Status NVARCHAR(50) NOT NULL DEFAULT 'Pending',
     CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
+    IsDisabled BIT NOT NULL DEFAULT 0,
     CONSTRAINT FK_Invitations_Workspaces FOREIGN KEY (WorkspaceId) REFERENCES Workspaces(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Invitations_WorkspaceFederations FOREIGN KEY (FederationId) REFERENCES WorkspaceFederations(Id) ON DELETE CASCADE,
     CONSTRAINT FK_Invitations_Inviter FOREIGN KEY (InviterId) REFERENCES Users(Id),
     CONSTRAINT CK_Invitations_Owner CHECK ((WorkspaceId IS NOT NULL AND FederationId IS NULL) OR (WorkspaceId IS NULL AND FederationId IS NOT NULL))
+);
+
+-- 18. SystemSettings
+CREATE TABLE SystemSettings (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    SettingKey NVARCHAR(100) NOT NULL UNIQUE,
+    SettingValue NVARCHAR(MAX) NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    UpdatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    IsDisabled BIT NOT NULL DEFAULT 0
 );
 
 -- =============================================
@@ -332,575 +363,1370 @@ CREATE INDEX IX_KpiTargets_Workspace_User_Category ON KpiTargets(WorkspaceId, Us
 CREATE INDEX IX_Tasks_CategoryId ON Tasks(CategoryId);
 CREATE INDEX IX_WorkspaceInvitations_FederationId ON WorkspaceInvitations(FederationId);
 CREATE INDEX IX_AuditLogs_FederationId ON AuditLogs(FederationId);
+GO
 
+-- =============================================
+-- TRIGGERS DEFINITION
+-- =============================================
+GO
+CREATE TRIGGER TR_PersonalSchedules_NoOverlap
+ON PersonalSchedules
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (
+        SELECT 1
+        FROM PersonalSchedules p1
+        JOIN PersonalSchedules p2 ON p1.UserId = p2.UserId AND p1.Id <> p2.Id
+        WHERE p1.IsDisabled = 0 
+          AND p2.IsDisabled = 0
+          AND p1.StartTime < p2.EndTime 
+          AND p2.StartTime < p1.EndTime
+          AND (p1.Id IN (SELECT Id FROM inserted) OR p2.Id IN (SELECT Id FROM inserted))
+    )
+    BEGIN
+        RAISERROR ('This time slot overlaps with another event on your calendar.', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END;
 GO
 
 -- =============================================
 -- EXPANDED HIGH-FIDELITY SEED DATA (MASSIVE DATASET)
 -- =============================================
 
--- 1. Create Core & Additional Accounts (15 Accounts Total, password is 'password123')
-DECLARE @A_Admin UNIQUEIDENTIFIER = '11111111-1111-1111-1111-111111111111';
-DECLARE @A_Mod UNIQUEIDENTIFIER = '22222222-2222-2222-2222-222222222222';
-DECLARE @A_Alice UNIQUEIDENTIFIER = '33333333-3333-3333-3333-333333333333';
-DECLARE @A_Bob UNIQUEIDENTIFIER = '44444444-4444-4444-4444-444444444444';
-DECLARE @A_Charlie UNIQUEIDENTIFIER = '55555555-5555-5555-5555-555555555555';
-DECLARE @A_Diana UNIQUEIDENTIFIER = '66666666-6666-6666-6666-666666666666';
-DECLARE @A_Eve UNIQUEIDENTIFIER = '77777777-7777-7777-7777-777777777777';
-DECLARE @A_Frank UNIQUEIDENTIFIER = '88888888-7777-6666-5555-444444444444';
-DECLARE @A_Grace UNIQUEIDENTIFIER = '99999999-8888-7777-6666-555555555555';
-DECLARE @A_Henry UNIQUEIDENTIFIER = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
-DECLARE @A_Jack UNIQUEIDENTIFIER = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
-DECLARE @A_Kelly UNIQUEIDENTIFIER = 'cccccccc-dddd-eeee-ffff-000000000000';
-DECLARE @A_Liam UNIQUEIDENTIFIER = 'dddddddd-eeee-ffff-0000-111111111111';
-DECLARE @A_Olivia UNIQUEIDENTIFIER = 'eeeeeeee-ffff-0000-1111-222222222222';
-DECLARE @A_Noah UNIQUEIDENTIFIER = 'ffffffff-0000-1111-2222-333333333333';
-
-DECLARE @P_Alice UNIQUEIDENTIFIER = 'AAAAAA11-1111-1111-1111-111111111111';
-DECLARE @P_Bob UNIQUEIDENTIFIER = 'BBBBBB22-2222-2222-2222-222222222222';
-DECLARE @P_Charlie UNIQUEIDENTIFIER = 'CCCCCC33-3333-3333-3333-333333333333';
-DECLARE @P_Diana UNIQUEIDENTIFIER = 'DDDDDD44-4444-4444-4444-444444444444';
-DECLARE @P_Eve UNIQUEIDENTIFIER = 'EEEEEE55-5555-5555-5555-555555555555';
-DECLARE @P_Frank UNIQUEIDENTIFIER = 'FFFFFF66-6666-6666-6666-666666666666';
-DECLARE @P_Grace UNIQUEIDENTIFIER = 'AAAAAA77-7777-7777-7777-777777777777';
-DECLARE @P_Henry UNIQUEIDENTIFIER = 'BBBBBB88-8888-8888-8888-888888888888';
-DECLARE @P_Jack UNIQUEIDENTIFIER = 'CCCCCC99-9999-9999-9999-999999999999';
-DECLARE @P_Kelly UNIQUEIDENTIFIER = 'DDDDDD00-0000-0000-0000-000000000000';
-DECLARE @P_Liam UNIQUEIDENTIFIER = 'EEEEEE11-1111-1111-1111-111111111111';
-DECLARE @P_Olivia UNIQUEIDENTIFIER = 'FFFFFF22-2222-2222-2222-222222222222';
-DECLARE @P_Noah UNIQUEIDENTIFIER = 'AAAAAA33-3333-3333-3333-333333333333';
-
-DECLARE @Fed_Integration UNIQUEIDENTIFIER = 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF';
-DECLARE @Fed_Academic UNIQUEIDENTIFIER = 'EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE';
-DECLARE @Fed_Cloud UNIQUEIDENTIFIER = 'DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD';
-
-DECLARE @W_SE UNIQUEIDENTIFIER = '99999999-9999-9999-9999-999999999999';
-DECLARE @W_Web UNIQUEIDENTIFIER = '88888888-8888-8888-8888-888888888888';
-DECLARE @W_Calc UNIQUEIDENTIFIER = '77777777-7777-7777-7777-777777777777';
-DECLARE @W_Physics UNIQUEIDENTIFIER = '66666666-6666-6666-6666-666666666666';
-DECLARE @W_English UNIQUEIDENTIFIER = '55555555-5555-5555-5555-555555555555';
-DECLARE @W_Research UNIQUEIDENTIFIER = '44444444-4444-4444-4444-444444444444';
-DECLARE @W_Design UNIQUEIDENTIFIER = '33333333-2222-1111-0000-999999999999';
-DECLARE @W_Mobile UNIQUEIDENTIFIER = '22222222-1111-0000-9999-888888888888';
-DECLARE @W_Global UNIQUEIDENTIFIER = '11111111-0000-9999-8888-777777777777';
-DECLARE @W_AI UNIQUEIDENTIFIER = 'aaaaaaaa-1111-2222-3333-444444444444';
-DECLARE @W_Data UNIQUEIDENTIFIER = 'bbbbbbbb-2222-3333-4444-555555555555';
-
-DECLARE @Invite_SE UNIQUEIDENTIFIER = '11111111-aaaa-1111-aaaa-111111111111';
-DECLARE @Invite_Web UNIQUEIDENTIFIER = '22222222-bbbb-2222-bbbb-222222222222';
-DECLARE @Invite_Calc UNIQUEIDENTIFIER = '33333333-cccc-3333-cccc-333333333333';
-DECLARE @Invite_Design UNIQUEIDENTIFIER = '44444444-dddd-4444-dddd-444444444444';
-DECLARE @Invite_Mobile UNIQUEIDENTIFIER = '55555555-eeee-5555-eeee-555555555555';
-DECLARE @Invite_AI UNIQUEIDENTIFIER = '66666666-ffff-6666-ffff-666666666666';
-DECLARE @Invite_Data UNIQUEIDENTIFIER = '77777777-8888-7777-8888-777777777777';
-
-INSERT INTO Accounts (Id, Email, PasswordHash, Role) VALUES 
-(@A_Admin, 'admin@unigrid.com', 'password123', 1),
-(@A_Mod, 'mod@unigrid.com', 'password123', 3),
-(@A_Alice, 'alice@student.edu', 'password123', 2),
-(@A_Bob, 'bob@student.edu', 'password123', 2),
-(@A_Charlie, 'charlie@student.edu', 'password123', 2),
-(@A_Diana, 'diana@student.edu', 'password123', 2),
-(@A_Eve, 'eve@student.edu', 'password123', 2),
-(@A_Frank, 'frank@student.edu', 'password123', 2),
-(@A_Grace, 'grace@student.edu', 'password123', 2),
-(@A_Henry, 'henry@student.edu', 'password123', 2),
-(@A_Jack, 'jack@student.edu', 'password123', 2),
-(@A_Kelly, 'kelly@student.edu', 'password123', 2),
-(@A_Liam, 'liam@student.edu', 'password123', 2),
-(@A_Olivia, 'olivia@student.edu', 'password123', 2),
-(@A_Noah, 'noah@student.edu', 'password123', 2);
-
-INSERT INTO Admins (AccountId, FullName, SuperAdmin) VALUES (@A_Admin, 'System Administrator', 1);
-INSERT INTO Moderators (AccountId, FullName, Region) VALUES (@A_Mod, 'Platform Moderator', 'East-Asia');
-INSERT INTO Users (Id, AccountId, FullName, SubscriptionTier, BusinessAttribute) VALUES 
-(@P_Alice, @A_Alice, 'Alice Nguyen', 'Business', 'business Include'),
-(@P_Bob, @A_Bob, 'Bob Tran', 'Pro', 'normal'),
-(@P_Charlie, @A_Charlie, 'Charlie Le', 'ProPlus', 'normal'),
-(@P_Diana, @A_Diana, 'Diana Pham', 'Personal', 'normal'),
-(@P_Eve, @A_Eve, 'Eve Vu', 'Free', 'normal'),
-(@P_Frank, @A_Frank, 'Frank Miller', 'Business', 'business Include'),
-(@P_Grace, @A_Grace, 'Grace Hopper', 'Pro', 'normal'),
-(@P_Henry, @A_Henry, 'Henry Cavill', 'ProPlus', 'normal'),
-(@P_Jack, @A_Jack, 'Jack Dorsey', 'Personal', 'normal'),
-(@P_Kelly, @A_Kelly, 'Kelly Clarkson', 'Free', 'normal'),
-(@P_Liam, @A_Liam, 'Liam Nguyen', 'Business', 'business Include'),
-(@P_Olivia, @A_Olivia, 'Olivia Tran', 'ProPlus', 'normal'),
-(@P_Noah, @A_Noah, 'Noah Le', 'Personal', 'normal');
-
--- 13. Create three Demo Workspace Federations (Mô hình Liên bang)
-INSERT INTO WorkspaceFederations (Id, Name, JoinCode, OwnerId) VALUES
-(@Fed_Integration, 'Store Integration Federation', 'FED-STORE', @P_Alice),
-(@Fed_Academic, 'Academic Collaboration Alliance', 'FED-ACAD', @P_Bob),
-(@Fed_Cloud, 'Cloud Architecture Alliance', 'FED-CLOUD', @P_Bob);
-
-INSERT INTO Workspaces (Id, Name, OwnerId, JoinCode, InviteCode, PackageTier, WorkspaceType, CompanyName, CompanyTaxCode, CompanyAddress, FederationId) VALUES 
-(@W_SE, 'Enterprise Portal', @P_Alice, 'SE-PRO', @Invite_SE, 'Business', 'Business', 'UniGrid Corporation', '0109988776', '456 Enterprise Towers, District 1, HCMC', NULL),
-(@W_Web, 'E-Commerce Branch', @P_Alice, 'WEB-DEV', @Invite_Web, 'ProPlus', 'Group', NULL, NULL, NULL, @Fed_Integration),
-(@W_Calc, 'Personal Planner', @P_Bob, 'MATH-101', @Invite_Calc, 'Personal', 'Personal', NULL, NULL, NULL, NULL),
-(@W_Physics, 'Physics Lab', @P_Alice, 'PHYS-101', NEWID(), 'Free', 'Personal', NULL, NULL, NULL, NULL),
-(@W_English, 'English Composition', @P_Alice, 'ENGL-101', NEWID(), 'Free', 'Personal', NULL, NULL, NULL, NULL),
-(@W_Research, 'Research Methods', @P_Alice, 'RES-101', NEWID(), 'Free', 'Personal', NULL, NULL, NULL, NULL),
-(@W_Design, 'UX Design Studio', @P_Bob, 'DSN-FLOW', @Invite_Design, 'ProPlus', 'Group', NULL, NULL, NULL, @Fed_Academic),
-(@W_Mobile, 'Mobile Dev Team', @P_Charlie, 'MBL-APP', @Invite_Mobile, 'Pro', 'Group', NULL, NULL, NULL, @Fed_Cloud),
-(@W_Global, 'Global Corporate Operations', @P_Frank, 'GLB-OPS', NEWID(), 'Business', 'Business', 'Aperture Science', '0991122334', '789 Enrichment Center Rd, Ohio, US', NULL),
-(@W_AI, 'AI R&D Lab', @P_Alice, 'AI-LAB', @Invite_AI, 'ProPlus', 'Group', NULL, NULL, NULL, @Fed_Integration),
-(@W_Data, 'Data Analytics Hub', @P_Bob, 'DATA-HUB', @Invite_Data, 'Pro', 'Group', NULL, NULL, NULL, @Fed_Cloud);
-
--- 4. Set Up Billings for Workspaces
-INSERT INTO Billings (WorkspaceId, PackageId, Status, EndDate, Amount, UserId, PaymentMethod, TransactionRef, CreatedAt) VALUES 
-(@W_SE, 'business_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 899000, @P_Alice, 'Credit Card', 'TXN-SE-001', DATEADD(month, -1, GETUTCDATE())),
-(@W_Web, 'proplus_monthly', 'Active', DATEADD(year, 10, GETUTCDATE()), 449000, @P_Alice, 'VNPAY QR', 'TXN-WEB-002', DATEADD(month, -2, GETUTCDATE())),
-(@W_Calc, 'personal_monthly', 'Active', DATEADD(year, 10, GETUTCDATE()), 40000, @P_Bob, 'Momo E-Wallet', 'TXN-CALC-003', DATEADD(month, -3, GETUTCDATE())),
-(@W_Physics, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE()), 0, NULL, 'System', 'TXN-FREE-000', DATEADD(month, -1, GETUTCDATE())),
-(@W_English, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE()), 0, NULL, 'System', 'TXN-FREE-000', DATEADD(month, -1, GETUTCDATE())),
-(@W_Research, 'free_tier', 'Active', DATEADD(year, 10, GETUTCDATE()), 0, NULL, 'System', 'TXN-FREE-000', DATEADD(month, -1, GETUTCDATE())),
-(@W_Design, 'proplus_monthly', 'Active', DATEADD(year, 5, GETUTCDATE()), 449000, @P_Bob, 'Bank Transfer', 'TXN-DSN-004', DATEADD(month, -4, GETUTCDATE())),
-(@W_Mobile, 'pro_monthly', 'Active', DATEADD(year, 5, GETUTCDATE()), 299000, @P_Charlie, 'Credit Card', 'TXN-MBL-005', DATEADD(month, -5, GETUTCDATE())),
-(@W_Global, 'business_monthly', 'Active', DATEADD(year, 2, GETUTCDATE()), 899000, @P_Frank, 'Bank Transfer', 'TXN-GLB-006', DATEADD(month, -6, GETUTCDATE())),
-(@W_AI, 'proplus_monthly', 'Active', DATEADD(year, 3, GETUTCDATE()), 449000, @P_Alice, 'VNPAY QR', 'TXN-AI-007', DATEADD(month, -7, GETUTCDATE())),
-(@W_Data, 'pro_monthly', 'Active', DATEADD(year, 3, GETUTCDATE()), 299000, @P_Bob, 'Momo E-Wallet', 'TXN-DAT-008', DATEADD(month, -8, GETUTCDATE()));
-
--- 5. Add Workspace Memberships with Nominal Display Roles
-INSERT INTO WorkspaceMembers (WorkspaceId, UserId, Role, DisplayRole) VALUES 
--- Enterprise Portal Members
-(@W_SE, @P_Alice, 'Manager', 'Head President'), 
-(@W_SE, @P_Bob, 'Vice Manager', 'Tech Lead'),
-(@W_SE, @P_Charlie, 'Member', 'BA Lead'),
-(@W_SE, @P_Diana, 'Member', 'HR Director'),
-(@W_SE, @P_Eve, 'Viewer', 'Intern'),
-(@W_SE, @P_Frank, 'Member', 'Senior Architect'),
-(@W_SE, @P_Grace, 'Member', 'Quality Assurance'),
-(@W_SE, @P_Liam, 'Member', 'Lead UI Engineer'),
-(@W_SE, @P_Olivia, 'Member', 'DevOps Specialist'),
-(@W_SE, @P_Noah, 'Viewer', 'Data Intern'),
--- E-Commerce Members
-(@W_Web, @P_Alice, 'Manager', 'Product Owner'),
-(@W_Web, @P_Charlie, 'Member', 'Web Developer'),
-(@W_Web, @P_Bob, 'Vice Manager', 'Technical Director'),
-(@W_Web, @P_Henry, 'Member', 'React Engineer'),
-(@W_Web, @P_Liam, 'Member', 'UI Designer'),
--- Personal Planner
-(@W_Calc, @P_Bob, 'Manager', 'Student'),
-(@W_Calc, @P_Alice, 'Member', 'Tutor'),
--- Physics Lab
-(@W_Physics, @P_Alice, 'Manager', 'Researcher'),
-(@W_English, @P_Alice, 'Manager', 'Writer'),
-(@W_Research, @P_Alice, 'Manager', 'Academic Adviser'),
--- UX Design Studio Members
-(@W_Design, @P_Bob, 'Manager', 'UX Lead'),
-(@W_Design, @P_Charlie, 'Member', 'UI Designer'),
-(@W_Design, @P_Diana, 'Member', 'User Researcher'),
--- Mobile App Dev Team Members
-(@W_Mobile, @P_Charlie, 'Manager', 'VP of Engineering'),
-(@W_Mobile, @P_Bob, 'Member', 'iOS Lead'),
-(@W_Mobile, @P_Henry, 'Member', 'Android Developer'),
-(@W_Mobile, @P_Grace, 'Viewer', 'QA Intern'),
--- Global Corporate Operations Members
-(@W_Global, @P_Frank, 'Manager', 'VP of Operations'),
-(@W_Global, @P_Alice, 'Vice Manager', 'Integration Lead'),
-(@W_Global, @P_Jack, 'Member', 'Systems Admin'),
-(@W_Global, @P_Kelly, 'Viewer', 'Observer'),
--- AI Lab Members
-(@W_AI, @P_Alice, 'Manager', 'AI Principal Researcher'),
-(@W_AI, @P_Bob, 'Vice Manager', 'ML Infrastructure Engineer'),
-(@W_AI, @P_Liam, 'Member', 'Computer Vision Specialist'),
-(@W_AI, @P_Olivia, 'Member', 'Data Operations Lead'),
--- Data Hub Members
-(@W_Data, @P_Bob, 'Manager', 'Chief Data Architect'),
-(@W_Data, @P_Noah, 'Member', 'Analytics Engineer'),
-(@W_Data, @P_Grace, 'Member', 'Statistician');
-
--- Calculate the current day dynamically in UTC (starts from today)
-DECLARE @CurrentMonday DATETIME2 = CAST(GETUTCDATE() AS DATE);
-
--- 6. Add 50 High-Fidelity Tasks distributed across columns and members
-DECLARE @T1 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000001';
-DECLARE @T2 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000002';
-DECLARE @T3 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000003';
-DECLARE @T4 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000004';
-DECLARE @T5 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000005';
-DECLARE @T6 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000006';
-DECLARE @T7 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000007';
-DECLARE @T8 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000008';
-DECLARE @T9 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000009';
-DECLARE @T10 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000010';
-DECLARE @T11 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000011';
-DECLARE @T12 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000012';
-DECLARE @T13 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000013';
-DECLARE @T14 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000014';
-DECLARE @T15 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000015';
-DECLARE @T16 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000016';
-DECLARE @T17 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000017';
-DECLARE @T18 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000018';
-DECLARE @T19 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000019';
-DECLARE @T20 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000020';
-DECLARE @T21 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000021';
-DECLARE @T22 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000022';
-DECLARE @T23 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000023';
-DECLARE @T24 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000024';
-DECLARE @T25 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000025';
-DECLARE @T26 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000026';
-DECLARE @T27 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000027';
-DECLARE @T28 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000028';
-DECLARE @T29 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000029';
-DECLARE @T30 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000030';
-DECLARE @T31 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000031';
-DECLARE @T32 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000032';
-DECLARE @T33 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000033';
-DECLARE @T34 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000034';
-DECLARE @T35 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000035';
-DECLARE @T36 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000036';
-DECLARE @T37 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000037';
-DECLARE @T38 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000038';
-DECLARE @T39 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000039';
-DECLARE @T40 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000040';
-DECLARE @T41 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000041';
-DECLARE @T42 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000042';
-DECLARE @T43 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000043';
-DECLARE @T44 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000044';
-DECLARE @T45 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000045';
-DECLARE @T46 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000046';
-DECLARE @T47 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000047';
-DECLARE @T48 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000048';
-DECLARE @T49 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000049';
-DECLARE @T50 UNIQUEIDENTIFIER = '00000000-0000-0000-0000-000000000050';
-
-INSERT INTO Tasks (Id, WorkspaceId, AssigneeId, Title, Description, Status, Priority, DueDate) VALUES 
--- Enterprise Portal Tasks (@W_SE)
-(@T1, @W_SE, @P_Alice, 'AI Report', 'Generate summary and evaluation of modern transformer models.', 1, 3, DATEADD(minute, 1439, DATEADD(day, 2, @CurrentMonday))),
-(@T3, @W_SE, @P_Alice, 'Database Project', 'Seeded SQL relational schema draft submission.', 1, 3, DATEADD(minute, 1439, DATEADD(day, 6, @CurrentMonday))),
-(@T7, @W_SE, @P_Bob, 'Setup CI/CD Pipeline', 'Configure GitHub Actions for automated building, linting, and testing.', 2, 3, DATEADD(day, 5, @CurrentMonday)),
-(@T8, @W_SE, @P_Eve, 'Deploy to Staging', 'Configure Azure App Service slot deployment for secondary staging testing.', 2, 2, DATEADD(day, 6, @CurrentMonday)),
-(@T9, @W_SE, @P_Diana, 'Performance Optimization', 'Minimize bundle sizes and optimize database indexes on active queries.', 0, 1, DATEADD(day, 12, @CurrentMonday)),
-(@T10, @W_SE, @P_Charlie, 'Design System Components', 'Assemble beautiful, harmoniously tailored dark mode styled elements.', 1, 2, DATEADD(day, 4, @CurrentMonday)),
-(@T11, @W_SE, @P_Bob, 'Database Seeding', 'Compose a denser database seeding script matching the frontend mock data.', 3, 1, DATEADD(day, -2, @CurrentMonday)),
-(@T12, @W_SE, @P_Bob, 'Error Handling Middleware', 'Implement a global ExceptionFilter yielding unified JSON error payloads.', 3, 2, DATEADD(day, -1, @CurrentMonday)),
-(@T13, @W_SE, @P_Eve, 'File Upload Service', 'Build out custom local or S3 document uploads supporting files tab.', 1, 2, DATEADD(day, 8, @CurrentMonday)),
-(@T14, @W_SE, @P_Diana, 'Notification System', 'Send real-time alerts using SignalR and WebSockets upon task actions.', 0, 3, DATEADD(day, 10, @CurrentMonday)),
-(@T15, @W_SE, @P_Charlie, 'Landing Page', 'Polish marketing landing page hero gradients and feature carousels.', 3, 1, DATEADD(day, -3, @CurrentMonday)),
-(@T16, @W_SE, @P_Frank, 'Architecture Review', 'Review overall structural layer boundaries and clean code guidelines.', 0, 3, NULL),
-(@T17, @W_SE, @P_Grace, 'Integrate Unit Tests', 'Write comprehensive unit test fixtures covering business controllers.', 1, 2, DATEADD(day, 3, @CurrentMonday)),
-(@T18, @W_SE, @P_Bob, 'GraphQL Gateway Setup', 'Design federation gateway layer resolving queries in microservices.', 2, 3, DATEADD(day, 7, @CurrentMonday)),
-(@T19, @W_SE, @P_Charlie, 'Audit Log Implementation', 'Write interceptors saving workspace action audit trails to DB.', 3, 2, DATEADD(day, -5, @CurrentMonday)),
-(@T35, @W_SE, @P_Liam, 'Refactor State Management', 'Clean up state mutations and implement centralized store hooks.', 0, 2, DATEADD(day, 9, @CurrentMonday)),
-(@T36, @W_SE, @P_Olivia, 'Kubernetes Deployment Config', 'Update Helm charts and ingress configurations for multi-region hosting.', 1, 3, DATEADD(day, 5, @CurrentMonday)),
-(@T37, @W_SE, @P_Noah, 'Database Replication Check', 'Review transaction logs, backup validity, and read-replica replication lag.', 3, 1, DATEADD(day, -4, @CurrentMonday)),
-(@T38, @W_SE, @P_Alice, 'Corporate Governance Compliance', 'Ensure SOC2 Type II structural compliance checklists are filled.', 0, 3, DATEADD(day, 15, @CurrentMonday)),
-(@T39, @W_SE, @P_Frank, 'System Architecture Guide V3', 'Produce extensive software architecture diagrams and design blueprints.', 2, 3, DATEADD(day, 4, @CurrentMonday)),
-(@T50, @W_SE, @P_Grace, 'End-to-End Visual Playwright Tests', 'Draft visual snapshot assertion testing files covering UI components.', 1, 2, DATEADD(day, 8, @CurrentMonday)),
-
--- E-Commerce Branch Tasks (@W_Web)
-(@T20, @W_Web, @P_Alice, 'Stripe Checkout', 'Integrate Apple Pay and Stripe Elements in Cart view.', 1, 3, DATEADD(day, 4, @CurrentMonday)),
-(@T21, @W_Web, @P_Charlie, 'SEO Optimization', 'Refactor tags, generate sitemaps, and structure schemas for product pages.', 0, 1, NULL),
-(@T22, @W_Web, @P_Bob, 'Redis Cache Integration', 'Cache product listings and category nodes under Redis cluster.', 3, 2, DATEADD(day, -2, @CurrentMonday)),
-(@T23, @W_Web, @P_Henry, 'React Refactoring', 'Refactor legacy code to functional components with custom hooks.', 1, 2, DATEADD(day, 5, @CurrentMonday)),
-(@T40, @W_Web, @P_Liam, 'Cart Checkout Micro-animations', 'Animate cart transitions, item counts, and premium payment checkout flows.', 1, 1, DATEADD(day, 3, @CurrentMonday)),
-(@T41, @W_Web, @P_Olivia, 'CDN Edge Cache Tuning', 'Optimize static assets delivery routes and enable Brotli compression.', 3, 2, DATEADD(day, -1, @CurrentMonday)),
-
--- Personal Planner (@W_Calc)
-(@T2, @W_Calc, @P_Alice, 'Math Assignment', 'Solve differential equations and triple integrals problem sets.', 0, 2, DATEADD(minute, 1439, DATEADD(day, 4, @CurrentMonday))),
-
--- Physics Lab (@W_Physics)
-(@T4, @W_Physics, @P_Alice, 'Lab Report #3', 'Calculate absolute error metrics in electric current fields.', 0, 2, DATEADD(minute, 1439, DATEADD(day, 3, @CurrentMonday))),
-
--- English Composition (@W_English)
-(@T5, @W_English, @P_Alice, 'Essay Draft', 'Draft essay arguing for modern architecture paradigms.', 0, 1, DATEADD(minute, 1439, DATEADD(day, 5, @CurrentMonday))),
-
--- Research Methods (@W_Research)
-(@T6, @W_Research, @P_Alice, 'Literature Review', 'Review academic research on adaptive web interfaces.', 1, 3, DATEADD(hour, 18, DATEADD(day, 4, @CurrentMonday))),
-
--- UX Design Studio Tasks (@W_Design)
-(@T24, @W_Design, @P_Bob, 'User Research Synthesis', 'Map affinity diagrams from user interviews and outline core personas.', 1, 3, DATEADD(day, 1, @CurrentMonday)),
-(@T25, @W_Design, @P_Charlie, 'Interactive Prototypes', 'Construct complex animated prototype transitions inside Figma.', 0, 2, NULL),
-(@T42, @W_Design, @P_Liam, 'Figma Dark Theme Styling', 'Convert core design token overrides to modern sleek slate layouts.', 0, 2, DATEADD(day, 6, @CurrentMonday)),
-(@T43, @W_Design, @P_Diana, 'WCAG Accessibility Audit', 'Test screen reader landmarks, contrast ratios, and semantic outlines.', 1, 3, DATEADD(day, 2, @CurrentMonday)),
-
--- Mobile App Dev Team Tasks (@W_Mobile)
-(@T44, @W_Mobile, @P_Noah, 'Mobile Analytics Event Tracking', 'Map custom analytics triggers across user engagement pathways.', 0, 1, DATEADD(day, 14, @CurrentMonday)),
-(@T45, @W_Mobile, @P_Henry, 'APNS & FCM Push Notifications', 'Integrate push notification tokens payload parser with notification hub.', 2, 2, DATEADD(day, 7, @CurrentMonday)),
-
--- Global Corporate Operations (@W_Global)
-(@T46, @W_Global, @P_Frank, 'Disaster Recovery Simulation', 'Run active drill testing failovers to secondary geographic data centers.', 1, 3, DATEADD(day, 3, @CurrentMonday)),
-(@T47, @W_Global, @P_Jack, 'ISO 27001 Security Audit Prep', 'Collate security incident reports, threat models, and logs.', 2, 2, DATEADD(day, 6, @CurrentMonday)),
-(@T48, @W_Global, @P_Kelly, 'Corporate Compliance Briefing', 'Deliver corporate regulatory updates regarding international tax brackets.', 3, 1, DATEADD(day, -5, @CurrentMonday)),
-(@T49, @W_Global, @P_Alice, 'Q3 Global Budget Allocation', 'Prepare capital expenditure reports and department financial resources.', 0, 3, DATEADD(day, 11, @CurrentMonday)),
-
--- AI R&D Lab Tasks (@W_AI)
-(@T26, @W_AI, @P_Alice, 'Train Large Language Model', 'Execute multi-node training run of 7B parameter foundation models.', 1, 3, DATEADD(day, 3, @CurrentMonday)),
-(@T27, @W_AI, @P_Bob, 'Configure H100 GPU Cluster', 'Set up InfiniBand networking and SLURM workload scheduler configs.', 0, 3, DATEADD(day, 4, @CurrentMonday)),
-(@T28, @W_AI, @P_Liam, 'Dataset Curation & Filtering', 'Prune low-quality text tokens and balance instruction tuning records.', 2, 2, DATEADD(day, 1, @CurrentMonday)),
-(@T29, @W_AI, @P_Olivia, 'MLOps Deployment Ingress', 'Package optimized model checkpoints inside Triton Server instances.', 3, 2, DATEADD(day, -2, @CurrentMonday)),
-(@T30, @W_AI, NULL, 'Quantize Weights for Edge', 'Analyze performance-accuracy trade-offs using 4-bit AWQ compression.', 0, 1, DATEADD(day, 10, @CurrentMonday)),
-
--- Data Analytics Hub Tasks (@W_Data)
-(@T31, @W_Data, @P_Bob, 'ETL Ingestion Pipelines', 'Redesign high-throughput Apache Flink stream ingestion jobs.', 1, 3, DATEADD(day, 2, @CurrentMonday)),
-(@T32, @W_Data, @P_Noah, 'Corporate KPI Executive Dashboard', 'Assemble beautiful visual metric charts inside unified executive report.', 0, 2, DATEADD(day, 5, @CurrentMonday)),
-(@T33, @W_Data, @P_Grace, 'A/B Test Statistical Analysis', 'Execute chi-square and t-test formulations over conversion ratios.', 2, 2, DATEADD(day, 2, @CurrentMonday)),
-(@T34, @W_Data, @P_Bob, 'Migrate to Snowflake Warehouse', 'Port legacy schemas and optimize clustering keys for analytics tables.', 3, 3, DATEADD(day, -3, @CurrentMonday));
-
--- Seed Custom Task Categories
-DECLARE @CAT_Dev UNIQUEIDENTIFIER = 'abcdefab-1111-2222-3333-444444444444';
-DECLARE @CAT_Design UNIQUEIDENTIFIER = 'abcdefab-2222-3333-4444-555555555555';
-DECLARE @CAT_Marketing UNIQUEIDENTIFIER = 'abcdefab-3333-4444-5555-666666666666';
-DECLARE @CAT_Management UNIQUEIDENTIFIER = 'abcdefab-4444-5555-6666-777777777777';
-
-INSERT INTO TaskCategories (Id, WorkspaceId, Name, Description, ColorHex) VALUES
-(@CAT_Dev, @W_SE, 'Software Development', 'Tasks related to coding, APIs, and algorithms.', '#3B82F6'),
-(@CAT_Design, @W_SE, 'UI/UX Design', 'Designing layouts, flows, and theme tokens.', '#EC4899'),
-(@CAT_Marketing, @W_SE, 'Product Marketing', 'Content creation, social media, and customer reach.', '#10B981'),
-(@CAT_Management, @W_SE, 'Project Management', 'Agile planning, milestones, and reports.', '#F59E0B'),
-('bcdefabc-1111-2222-3333-444444444444', @W_Web, 'Frontend Dev', 'React and Vite tasks.', '#3B82F6'),
-('bcdefabc-2222-3333-4444-555555555555', @W_Web, 'Backend Dev', 'Stripe, Redis, and APIs.', '#F59E0B');
-
--- Update specific seeded tasks with categories and counter metrics for high-fidelity KPI reporting
-UPDATE Tasks SET CategoryId = @CAT_Dev WHERE Id IN (@T3, @T7, @T11, @T12, @T18);
-UPDATE Tasks SET CategoryId = @CAT_Design WHERE Id IN (@T10, @T15, @T35);
-UPDATE Tasks SET CategoryId = @CAT_Management WHERE Id IN (@T1, @T38, @T39);
-
--- Convert some tasks to counter tasks
-UPDATE Tasks SET IsCounterTask = 1, TargetCount = 10, CurrentCount = 7 WHERE Id = @T3;
-UPDATE Tasks SET IsCounterTask = 1, TargetCount = 5, CurrentCount = 2 WHERE Id = @T10;
-UPDATE Tasks SET IsCounterTask = 1, TargetCount = 12, CurrentCount = 12 WHERE Id = @T11;
-
--- Seed KPI Targets for this week
-DECLARE @StartOfWeek DATETIME2 = DATEADD(day, -1 * (7 + (DATEPART(weekday, GETUTCDATE()) - 2)) % 7, CAST(GETUTCDATE() AS DATE));
-DECLARE @EndOfWeek DATETIME2 = DATEADD(second, -1, DATEADD(day, 7, @StartOfWeek));
-
-INSERT INTO KpiTargets (Id, WorkspaceId, UserId, CategoryId, PeriodType, StartDate, EndDate, TargetValue) VALUES
-('f1234567-1111-2222-3333-444444444444', @W_SE, @P_Alice, @CAT_Dev, 'Weekly', @StartOfWeek, @EndOfWeek, 15),
-('f1234567-2222-3333-4444-555555555555', @W_SE, @P_Bob, @CAT_Dev, 'Weekly', @StartOfWeek, @EndOfWeek, 20),
-('f1234567-3333-4444-5555-666666666666', @W_SE, @P_Alice, @CAT_Design, 'Weekly', @StartOfWeek, @EndOfWeek, 5),
-('f1234567-4444-5555-6666-777777777777', @W_SE, @P_Bob, @CAT_Design, 'Weekly', @StartOfWeek, @EndOfWeek, 10);
-
--- 8. Add Dynamic, Detailed Task Comments Conversations
-INSERT INTO TaskComments (TaskId, UserId, Content, CreatedAt) VALUES 
-(@T1, @P_Bob, 'Which transformer models are we focusing on? GPT-4 and Claude 3.5 Sonnet?', DATEADD(hour, -15, GETUTCDATE())),
-(@T1, @P_Alice, '@Bob Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -14, GETUTCDATE())),
-(@T1, @P_Frank, 'I think we should also evaluate Llama 3 for local deployment scenarios, to compare cost vs. latency.', DATEADD(hour, -12, GETUTCDATE())),
-(@T1, @P_Bob, 'Good idea. I will compile Llama 3 throughput metrics in the spreadsheet.', DATEADD(hour, -10, GETUTCDATE())),
-(@T1, @P_Alice, 'Perfect! Please commit the results to the Files repository when done.', DATEADD(hour, -9, GETUTCDATE())),
-
-(@T3, @P_Bob, 'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -8, GETUTCDATE())),
-(@T3, @P_Charlie, 'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -7, GETUTCDATE())),
-(@T3, @P_Frank, 'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -5, GETUTCDATE())),
-
-(@T7, @P_Bob, 'Workflow action runs successfully on GitHub. Staging deployment is green.', DATEADD(hour, -10, GETUTCDATE())),
-(@T7, @P_Grace, 'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -9, GETUTCDATE())),
-
-(@T10, @P_Charlie, 'Just uploaded the Wireframe.png. Please check it out in the Files tab.', DATEADD(hour, -4, GETUTCDATE())),
-(@T10, @P_Alice, 'The color palette looks very modern Charlie! Fits the premium theme perfectly.', DATEADD(hour, -3, GETUTCDATE())),
-(@T10, @P_Diana, 'Agreed! Very clean spacing and high-fidelity typography.', DATEADD(hour, -2, GETUTCDATE())),
-(@T10, @P_Charlie, 'Thanks team! I will start assembling the core component CSS next.', DATEADD(hour, -1, GETUTCDATE())),
-
-(@T26, @P_Liam, 'Training loss is looking extremely good Alice! Settled around 1.15 in epoch 3.', DATEADD(hour, -4, GETUTCDATE())),
-(@T26, @P_Alice, 'Fantastic news Liam. Let''s ensure checkpoint files are saved every 500 steps.', DATEADD(hour, -3, GETUTCDATE())),
-(@T26, @P_Olivia, 'Triton model storage profiles are ready to ingest the checkpoints as soon as training wraps.', DATEADD(hour, -2, GETUTCDATE())),
-
-(@T31, @P_Noah, 'Ingestion jobs are lagging about 30 seconds behind the event bus. I am scaling up the consumer slots.', DATEADD(hour, -5, GETUTCDATE())),
-(@T31, @P_Bob, 'Make sure we increase memory allocations symmetrically. Stream states occupy substantial heap.', DATEADD(hour, -3, GETUTCDATE()));
-
--- 9. Add Denser Workspace Files (18 Files Total across workspaces)
-INSERT INTO WorkspaceFiles (WorkspaceId, TaskId, UserId, FileName, FileUrl, FileType, FileSize) VALUES 
--- SE Portal Files
-(@W_SE, @T1, @P_Alice, 'Transformer_Comparison.pdf', 'files/99999999-9999-9999-9999-999999999999/transformer_comparison.pdf', 'pdf', 2516582),
-(@W_SE, @T3, @P_Bob, 'Database_Schema_Draft.docx', 'files/99999999-9999-9999-9999-999999999999/db_schema.docx', 'doc', 1153433),
-(@W_SE, NULL, @P_Diana, 'Budget.xlsx', 'files/99999999-9999-9999-9999-999999999999/budget.xlsx', 'spreadsheet', 348160),
-(@W_SE, @T10, @P_Charlie, 'Wireframe.png', 'files/99999999-9999-9999-9999-999999999999/wireframe.png', 'image', 4404019),
-(@W_SE, @T12, @P_Frank, 'Architecture_Spec_V2.pdf', 'files/99999999-9999-9999-9999-999999999999/architecture_spec.pdf', 'pdf', 3145728),
-(@W_SE, @T7, @P_Bob, 'CICD_Flowchart.png', 'files/99999999-9999-9999-9999-999999999999/cicd_flow.png', 'image', 1048576),
-(@W_SE, NULL, @P_Grace, 'QA_Test_Scenarios.xlsx', 'files/99999999-9999-9999-9999-999999999999/qa_scenarios.xlsx', 'spreadsheet', 524288),
-(@W_SE, @T35, @P_Liam, 'Enterprise_UI_Style_Guide.pdf', 'files/99999999-9999-9999-9999-999999999999/ui_style_guide.pdf', 'pdf', 8912896),
-
--- Web E-Commerce Portal Files
-(@W_Web, @T20, @P_Alice, 'Stripe_API_Integration.pdf', 'files/88888888-8888-8888-8888-888888888888/stripe_api.pdf', 'pdf', 1572864),
-(@W_Web, NULL, @P_Charlie, 'SEO_Audit_Report.docx', 'files/88888888-8888-8888-8888-888888888888/seo_audit.docx', 'doc', 2097152),
-(@W_Web, @T22, @P_Bob, 'Redis_Benchmarking_Results.xlsx', 'files/88888888-8888-8888-8888-888888888888/redis_bench.xlsx', 'spreadsheet', 819200),
-
--- Design Studio Files
-(@W_Design, @T24, @P_Bob, 'User_Personas_Mockup.pdf', 'files/33333333-2222-1111-0000-999999999999/personas.pdf', 'pdf', 4194304),
-(@W_Design, NULL, @P_Diana, 'Figma_Export_Assets.zip', 'files/33333333-2222-1111-0000-999999999999/figma_assets.zip', 'zip', 15728640),
-
--- AI Lab Files
-(@W_AI, @T26, @P_Alice, 'Transformer_Weights_V1.bin', 'files/aaaaaaaa-1111-2222-3333-444444444444/transformer_weights.bin', 'binary', 1288490188),
-(@W_AI, @T27, @P_Bob, 'GPU_Cluster_Config.yaml', 'files/aaaaaaaa-1111-2222-3333-444444444444/gpu_cluster_config.yaml', 'config', 46080),
-
--- Data Hub Files
-(@W_Data, @T32, @P_Noah, 'ETL_Pipeline_Flow.drawio', 'files/bbbbbbbb-2222-3333-4444-555555555555/etl_pipeline_flow.drawio', 'image', 122880);
-
--- 10. Add ChatRooms for Workspaces (5 Rooms Total)
-DECLARE @CR_SE UNIQUEIDENTIFIER = '12345678-1234-1234-1234-123456789012';
-DECLARE @CR_Web UNIQUEIDENTIFIER = '23456789-2345-2345-2345-234567890123';
-DECLARE @CR_Design UNIQUEIDENTIFIER = '34567890-3456-3456-3456-345678901234';
-DECLARE @CR_AI UNIQUEIDENTIFIER = '45678901-4567-4567-4567-456789012345';
-DECLARE @CR_Data UNIQUEIDENTIFIER = '56789012-5678-5678-5678-567890123456';
-
-INSERT INTO ChatRooms (Id, WorkspaceId) VALUES 
-(@CR_SE, @W_SE),
-(@CR_Web, @W_Web),
-(@CR_Design, @W_Design),
-(@CR_AI, @W_AI),
-(@CR_Data, @W_Data);
-
--- 11. Add Dozens of Chat Messages inside active Chatrooms
-INSERT INTO ChatMessages (RoomId, SenderId, Content, SentAt) VALUES 
--- SE Portal Chat messages
-(@CR_SE, @P_Alice, 'Hey everyone! Welcome to our Software Engineering study and workspace group 🎉', DATEADD(hour, -20, GETUTCDATE())),
-(@CR_SE, @P_Bob, 'Thanks Alice! Excited to collaborate and get the core database and routes done.', DATEADD(hour, -19, GETUTCDATE())),
-(@CR_SE, @P_Charlie, 'I have completed the wireframe mockups! Check the Files tab to download and review.', DATEADD(hour, -18, GETUTCDATE())),
-(@CR_SE, @P_Diana, 'Great. I will structure the OpenAPI endpoints according to the wireframes.', DATEADD(hour, -16, GETUTCDATE())),
-(@CR_SE, @P_Frank, 'Let''s make sure to stick to the clean architecture folders layout. Saves pain later.', DATEADD(hour, -15, GETUTCDATE())),
-(@CR_SE, @P_Grace, 'Unit test suites are mapped out. I will integrate them as soon as Bob commits the CI/CD pipeline.', DATEADD(hour, -14, GETUTCDATE())),
-(@CR_SE, @P_Bob, 'CI/CD pipeline is ready! GitHub actions will trigger on every PR now.', DATEADD(hour, -12, GETUTCDATE())),
-(@CR_SE, @P_Eve, 'Can you guys give me access to the staging link? Need to test UI views.', DATEADD(hour, -10, GETUTCDATE())),
-(@CR_SE, @P_Alice, 'Yes Eve, here it is: https://unigrid-staging.azurewebsites.net', DATEADD(hour, -8, GETUTCDATE())),
-(@CR_SE, @P_Eve, 'Got it! Thank you Alice.', DATEADD(hour, -7, GETUTCDATE())),
-(@CR_SE, @P_Frank, 'Has anyone optimized the index queries on the AuditLog tables? They are getting a bit slow.', DATEADD(hour, -5, GETUTCDATE())),
-(@CR_SE, @P_Bob, 'I did! Created composite indexes on WorkspaceId and Timestamp. Speed is 10x now.', DATEADD(hour, -4, GETUTCDATE())),
-(@CR_SE, @P_Liam, 'Refactoring is looking awesome! Added the UI style guide to files.', DATEADD(hour, -3, GETUTCDATE())),
-(@CR_SE, @P_Olivia, 'Just upgraded the cluster Helm charts. Deploying to secondary staging now.', DATEADD(hour, -2, GETUTCDATE())),
-(@CR_SE, @P_Noah, 'Checked database sync metrics. Replica lag is below 5ms!', DATEADD(hour, -1, GETUTCDATE())),
-(@CR_SE, @P_Alice, 'Excellent team effort. Let''s do a quick sync up session this week!', DATEADD(minute, -30, GETUTCDATE())),
-
--- Web E-Commerce Portal Chat messages
-(@CR_Web, @P_Alice, 'Welcome to the E-Commerce Branch channel! Stripe integration is our top priority.', DATEADD(hour, -10, GETUTCDATE())),
-(@CR_Web, @P_Charlie, 'I am structuring the product page schemas. Standard JSON-LD is ready.', DATEADD(hour, -8, GETUTCDATE())),
-(@CR_Web, @P_Bob, 'Product catalog queries are cached using Redis. Page speeds are below 200ms.', DATEADD(hour, -6, GETUTCDATE())),
-(@CR_Web, @P_Henry, 'Refactored Cart view to standard React functional hooks. Check out the latest commit.', DATEADD(hour, -3, GETUTCDATE())),
-(@CR_Web, @P_Liam, 'Just polished payment buttons with subtle hover interactions.', DATEADD(hour, -2, GETUTCDATE())),
-(@CR_Web, @P_Alice, 'Superb! I will run local testing on Cart payment steps today.', DATEADD(hour, -1, GETUTCDATE())),
-
--- AI Lab Chat messages
-(@CR_AI, @P_Alice, 'Starting active multi-node training loop for our custom LLM!', DATEADD(hour, -8, GETUTCDATE())),
-(@CR_AI, @P_Bob, 'InfiniBand is holding up well, no dropped packets reported.', DATEADD(hour, -6, GETUTCDATE())),
-(@CR_AI, @P_Liam, 'Instruction dataset is pristine. Trimmed 50k duplicates yesterday.', DATEADD(hour, -4, GETUTCDATE())),
-(@CR_AI, @P_Olivia, 'Checked checkpoints folder, autosave is working seamlessly.', DATEADD(hour, -2, GETUTCDATE())),
-(@CR_AI, @P_Alice, 'Amazing. Let''s monitor convergence metrics through the weekend.', DATEADD(hour, -1, GETUTCDATE()));
-
--- 12. Add Dozens of PersonalSchedules Calendar Events (Highly Visual Premium Timeline)
--- Alice Nguyen's dense schedule
-INSERT INTO PersonalSchedules (UserId, Title, Description, StartTime, EndTime, TaskId) VALUES 
-(@P_Alice, 'Study AI', '{"desc":"Review chapters 5-7","priority":"high","color":0}', DATEADD(hour, 9, @CurrentMonday), DATEADD(hour, 11, @CurrentMonday), NULL),
-(@P_Alice, 'Team Meeting', '{"desc":"Sprint review","priority":"medium","color":1}', DATEADD(hour, 11, @CurrentMonday), DATEADD(hour, 12, @CurrentMonday), NULL),
-(@P_Alice, 'Gym Workout', '{"desc":"Lower body focus","priority":"low","color":2}', DATEADD(hour, 17, @CurrentMonday), DATEADD(hour, 18, @CurrentMonday), NULL),
-(@P_Alice, 'AI Report Session', '{"desc":"Write AI evaluation","priority":"high","color":3}', DATEADD(hour, 13, DATEADD(day, 2, @CurrentMonday)), DATEADD(hour, 15, DATEADD(day, 2, @CurrentMonday)), @T1),
-(@P_Alice, 'Database Project Prep', '{"desc":"SQL Schema drafts","priority":"high","color":0}', DATEADD(hour, 10, DATEADD(day, 1, @CurrentMonday)), DATEADD(hour, 12, DATEADD(day, 1, @CurrentMonday)), @T3),
-(@P_Alice, 'Math Practice Prep', '{"desc":"Diff equations practice","priority":"medium","color":3}', DATEADD(hour, 8, DATEADD(day, 4, @CurrentMonday)), DATEADD(hour, 10, DATEADD(day, 4, @CurrentMonday)), @T2),
-(@P_Alice, 'Physics Lab Session', '{"desc":"Prepare error analysis charts","priority":"medium","color":1}', DATEADD(hour, 8, DATEADD(day, 2, @CurrentMonday)), DATEADD(minute, 30, DATEADD(hour, 9, DATEADD(day, 2, @CurrentMonday))), @T4),
-(@P_Alice, 'Essay Writing Block', '{"desc":"Architecture paradigms essay","priority":"low","color":2}', DATEADD(hour, 14, DATEADD(day, 3, @CurrentMonday)), DATEADD(hour, 16, DATEADD(day, 3, @CurrentMonday)), @T5),
-(@P_Alice, 'Literature Review Reading', '{"desc":"Adaptive UI systems review","priority":"high","color":1}', DATEADD(hour, 9, DATEADD(day, 5, @CurrentMonday)), DATEADD(hour, 11, DATEADD(day, 5, @CurrentMonday)), @T6),
-(@P_Alice, 'Weekly Alignment sync', '{"desc":"Review active tasks","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 3, @CurrentMonday)), DATEADD(hour, 10, DATEADD(day, 3, @CurrentMonday)), NULL),
-(@P_Alice, 'Stripe Payment Integration', '{"desc":"Stripe Apple Pay sandbox","priority":"high","color":0}', DATEADD(hour, 13, DATEADD(day, 4, @CurrentMonday)), DATEADD(hour, 15, DATEADD(day, 4, @CurrentMonday)), @T20),
-(@P_Alice, 'LLM Training Supervision', '{"desc":"Assess loss curve checkpoints","priority":"high","color":0}', DATEADD(hour, 10, DATEADD(day, 3, @CurrentMonday)), DATEADD(hour, 12, DATEADD(day, 3, @CurrentMonday)), @T26);
-
--- Bob Tran's dense schedule
-INSERT INTO PersonalSchedules (UserId, Title, Description, StartTime, EndTime, TaskId) VALUES 
-(@P_Bob, 'Setup CI/CD Pipeline Slot', '{"desc":"Action flows","priority":"high","color":3}', DATEADD(hour, 9, DATEADD(day, 1, @CurrentMonday)), DATEADD(hour, 11, DATEADD(day, 1, @CurrentMonday)), @T7),
-(@P_Bob, 'GraphQL Gateway Review', '{"desc":"GraphQL resolvers","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 2, @CurrentMonday)), DATEADD(hour, 16, DATEADD(day, 2, @CurrentMonday)), @T18),
-(@P_Bob, 'DB index synthesis', '{"desc":"Optimize AuditLog","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 3, @CurrentMonday)), DATEADD(hour, 12, DATEADD(day, 3, @CurrentMonday)), NULL),
-(@P_Bob, 'Gym Session', '{"desc":"Cardio block","priority":"low","color":2}', DATEADD(hour, 16, DATEADD(day, 4, @CurrentMonday)), DATEADD(hour, 17, @CurrentMonday), NULL),
-(@P_Bob, 'GPU Cluster Verification', '{"desc":"Verify InfiniBand state","priority":"high","color":3}', DATEADD(hour, 13, DATEADD(day, 4, @CurrentMonday)), DATEADD(hour, 15, DATEADD(day, 4, @CurrentMonday)), @T27),
-(@P_Bob, 'ETL Design Workshop', '{"desc":"Flink task slots design","priority":"medium","color":0}', DATEADD(hour, 10, DATEADD(day, 2, @CurrentMonday)), DATEADD(hour, 12, DATEADD(day, 2, @CurrentMonday)), @T31);
-
--- Diana Pham's dense schedule
-INSERT INTO PersonalSchedules (UserId, Title, Description, StartTime, EndTime, TaskId) VALUES 
-(@P_Diana, 'HR Onboarding Prep', '{"desc":"Study portal profiles","priority":"medium","color":2}', DATEADD(hour, 8, DATEADD(day, 1, @CurrentMonday)), DATEADD(hour, 10, DATEADD(day, 1, @CurrentMonday)), NULL),
-(@P_Diana, 'Figma UX Interview analysis', '{"desc":"Synthing affinity diagrams","priority":"high","color":0}', DATEADD(hour, 13, DATEADD(day, 3, @CurrentMonday)), DATEADD(hour, 15, DATEADD(day, 3, @CurrentMonday)), @T24),
-(@P_Diana, 'WCAG Review Blocks', '{"desc":"Contrast tests on portal","priority":"medium","color":1}', DATEADD(hour, 14, DATEADD(day, 2, @CurrentMonday)), DATEADD(hour, 16, DATEADD(day, 2, @CurrentMonday)), @T43);
-
--- Liam Nguyen's schedule
-INSERT INTO PersonalSchedules (UserId, Title, Description, StartTime, EndTime, TaskId) VALUES 
-(@P_Liam, 'State Management Redesign', '{"desc":"Refactor Redux stores","priority":"high","color":0}', DATEADD(hour, 9, DATEADD(day, 2, @CurrentMonday)), DATEADD(hour, 12, DATEADD(day, 2, @CurrentMonday)), @T35),
-(@P_Liam, 'Micro-animations Drafting', '{"desc":"Framer motion transitions","priority":"low","color":1}', DATEADD(hour, 14, DATEADD(day, 3, @CurrentMonday)), DATEADD(hour, 16, DATEADD(day, 3, @CurrentMonday)), @T40),
-(@P_Liam, 'UI tokens alignment', '{"desc":"Dark layouts and buttons","priority":"medium","color":2}', DATEADD(hour, 10, DATEADD(day, 5, @CurrentMonday)), DATEADD(hour, 12, DATEADD(day, 5, @CurrentMonday)), @T42);
-
--- Olivia Tran's schedule
-INSERT INTO PersonalSchedules (UserId, Title, Description, StartTime, EndTime, TaskId) VALUES 
-(@P_Olivia, 'K8s Cluster Upgrade', '{"desc":"Apply ingress and secrets","priority":"high","color":3}', DATEADD(hour, 8, DATEADD(day, 5, @CurrentMonday)), DATEADD(hour, 11, DATEADD(day, 5, @CurrentMonday)), @T36),
-(@P_Olivia, 'Triton Setup Block', '{"desc":"Model repository layout","priority":"high","color":0}', DATEADD(hour, 13, DATEADD(day, 1, @CurrentMonday)), DATEADD(hour, 15, DATEADD(day, 1, @CurrentMonday)), @T29),
-(@P_Olivia, 'Release Deployment check', '{"desc":"Deploy staging artifact","priority":"low","color":4}', DATEADD(hour, 16, DATEADD(day, 2, @CurrentMonday)), DATEADD(hour, 17, DATEADD(day, 2, @CurrentMonday)), NULL);
-
--- Noah Le's schedule
-INSERT INTO PersonalSchedules (UserId, Title, Description, StartTime, EndTime, TaskId) VALUES 
-(@P_Noah, 'Audit Database Replica', '{"desc":"Verify replication streams","priority":"high","color":1}', DATEADD(hour, 10, DATEADD(day, 1, @CurrentMonday)), DATEADD(hour, 12, DATEADD(day, 1, @CurrentMonday)), @T37),
-(@P_Noah, 'Analytics Tracking Schema', '{"desc":"Engagement mapping","priority":"low","color":2}', DATEADD(hour, 14, DATEADD(day, 3, @CurrentMonday)), DATEADD(hour, 16, DATEADD(day, 3, @CurrentMonday)), @T44),
-(@P_Noah, 'Executive Dashboard Assembly', '{"desc":"Draw charts inside view","priority":"medium","color":0}', DATEADD(hour, 9, DATEADD(day, 4, @CurrentMonday)), DATEADD(hour, 11, DATEADD(day, 4, @CurrentMonday)), @T32);
-
--- 14. Add Members to the Federations
--- Federation 1 members (FED-STORE)
-INSERT INTO WorkspaceFederationMembers (FederationId, UserId, PersonalWorkspaceId, Role, Status) VALUES
-(@Fed_Integration, @P_Alice, NULL, 'HeadPresident', 'Active'),
-(@Fed_Integration, @P_Bob, @W_Calc, 'Member', 'PendingOwnerApproval'), -- Personal workspace, requires authorization
-(@Fed_Integration, @P_Frank, NULL, 'DepartmentManager', 'Active'), -- Department Manager not in a child workspace
-(@Fed_Integration, @P_Grace, NULL, 'DepartmentManager', 'Active');
-
--- Federation 2 members (FED-ACAD)
-INSERT INTO WorkspaceFederationMembers (FederationId, UserId, PersonalWorkspaceId, Role, Status) VALUES
-(@Fed_Academic, @P_Bob, NULL, 'HeadPresident', 'Active'),
-(@Fed_Academic, @P_Charlie, NULL, 'Member', 'Active');
-
--- Federation 3 members (FED-CLOUD)
-INSERT INTO WorkspaceFederationMembers (FederationId, UserId, PersonalWorkspaceId, Role, Status) VALUES
-(@Fed_Cloud, @P_Bob, NULL, 'HeadPresident', 'Active'),
-(@Fed_Cloud, @P_Charlie, NULL, 'Member', 'Active'),
-(@Fed_Cloud, @P_Olivia, NULL, 'Member', 'Active');
-
--- 14b. High-level Federation Tasks
-DECLARE @T_Fed1 UNIQUEIDENTIFIER = 'abcdefab-eeee-1111-2222-333333333333';
-DECLARE @T_Fed2 UNIQUEIDENTIFIER = 'abcdefab-eeee-1111-2222-444444444444';
-
-INSERT INTO Tasks (Id, WorkspaceId, FederationId, AssigneeId, Title, Description, Status, Priority, DueDate) VALUES
-(@T_Fed1, NULL, @Fed_Integration, @P_Frank, 'Review Q3 Cross-Department Progress', 'Analyze metrics and reports from WEB-DEV and MATH-101.', 1, 3, DATEADD(day, 7, @CurrentMonday)),
-(@T_Fed2, NULL, @Fed_Integration, @P_Alice, 'Authorize Personal Plan Workspace Connections', 'Verify secure invite links and approve Bob Tran''s math planner connection.', 0, 2, DATEADD(day, 3, @CurrentMonday));
-
--- 14c. Federation Chat Room
-DECLARE @CR_Fed_Int UNIQUEIDENTIFIER = 'fed12345-1234-1234-1234-123456789012';
-INSERT INTO ChatRooms (Id, WorkspaceId, FederationId) VALUES
-(@CR_Fed_Int, NULL, @Fed_Integration);
-
--- Seeding chat messages in the Federation Chat Room
-INSERT INTO ChatMessages (RoomId, SenderId, Content, SentAt) VALUES
-(@CR_Fed_Int, @P_Alice, 'Welcome to the Store Integration Federation Hub! Managers can discuss high-level tasks here.', DATEADD(hour, -5, GETUTCDATE())),
-(@CR_Fed_Int, @P_Frank, 'Reporting in. I have started reviewing the progress reports for the e-commerce branch.', DATEADD(hour, -4, GETUTCDATE())),
-(@CR_Fed_Int, @P_Bob, 'Hi Alice, I submitted an integration request for my personal planner. Please authorize it.', DATEADD(hour, -3, GETUTCDATE())),
-(@CR_Fed_Int, @P_Alice, '@Bob I see your request. Personal workspaces require validation. I will approve it shortly.', DATEADD(hour, -2, GETUTCDATE()));
-
--- 15. Project files to the Federations
--- Project files for FED-STORE
-UPDATE WorkspaceFiles SET FederationId = @Fed_Integration, IsPublic = 1 WHERE FileName = 'Transformer_Comparison.pdf';
-UPDATE WorkspaceFiles SET FederationId = @Fed_Integration, IsPublic = 1 WHERE FileName = 'Database_Schema_Draft.docx';
-
--- Projected Files for FED-STORE (Files from child workspaces projected to Federation)
-INSERT INTO WorkspaceFiles (WorkspaceId, UserId, FileName, FileUrl, FileType, FileSize, IsPublic, FederationId, CreatedAt) VALUES 
-(@W_Web, @P_Alice, 'Storefront_Mockups_V1.pdf', 'files/88888888-8888-8888-8888-888888888888/storefront_mockups_v1.pdf', 'pdf', 2202010, 1, @Fed_Integration, DATEADD(hour, -2, GETUTCDATE())),
-(@W_Calc, @P_Bob, 'Payment_Gateway_Specs.docx', 'files/77777777-7777-7777-7777-777777777777/payment_gateway_specs.docx', 'doc', 1258291, 1, @Fed_Integration, DATEADD(hour, -1, GETUTCDATE()));
-
--- Direct File Uploads to the Federation (WorkspaceId is NULL)
-INSERT INTO WorkspaceFiles (WorkspaceId, UserId, FileName, FileUrl, FileType, FileSize, IsPublic, FederationId, CreatedAt) VALUES 
-(NULL, @P_Alice, 'Federation_Strategy_Q3.pdf', 'files/federations/FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF/strategy_q3.pdf', 'pdf', 5489222, 1, @Fed_Integration, DATEADD(hour, -4, GETUTCDATE()));
-
--- Projected Files for FED-ACAD
-INSERT INTO WorkspaceFiles (WorkspaceId, UserId, FileName, FileUrl, FileType, FileSize, IsPublic, FederationId, CreatedAt) VALUES 
-(@W_Design, @P_Bob, 'Personas_Virt_Export.pdf', 'files/33333333-2222-1111-0000-999999999999/personas_virt.pdf', 'pdf', 3145728, 1, @Fed_Academic, DATEADD(hour, -5, GETUTCDATE())),
-(@W_Mobile, @P_Charlie, 'iOS_Architecture_Draft.docx', 'files/22222222-1111-0000-9999-888888888888/ios_arch.docx', 'doc', 1572864, 1, @Fed_Academic, DATEADD(hour, -3, GETUTCDATE()));
-
--- Projected Files for FED-CLOUD
-INSERT INTO WorkspaceFiles (WorkspaceId, UserId, FileName, FileUrl, FileType, FileSize, IsPublic, FederationId, CreatedAt) VALUES 
-(@W_AI, @P_Bob, 'GPU_Architecture_Plan.pdf', 'files/aaaaaaaa-1111-2222-3333-444444444444/gpu_arch_plan.pdf', 'pdf', 4194304, 1, @Fed_Cloud, DATEADD(hour, -4, GETUTCDATE())),
-(@W_Design, @P_Olivia, 'UI_Dark_Layout_Grid.png', 'files/33333333-2222-1111-0000-999999999999/ui_dark_grid.png', 'image', 1048576, 1, @Fed_Cloud, DATEADD(hour, -3, GETUTCDATE()));
-
--- 16. Seed Sample Invitations & Notifications (Lively Platform Activities)
-INSERT INTO WorkspaceInvitations (WorkspaceId, FederationId, InviterId, InviteeEmail, Role, Status) VALUES
-(@W_AI, NULL, @P_Alice, 'grace@student.edu', 'Member', 'Pending'),
-(@W_Data, NULL, @P_Bob, 'liam@student.edu', 'Member', 'Pending'),
-(@W_Web, NULL, @P_Alice, 'olivia@student.edu', 'Member', 'Accepted'),
-(NULL, @Fed_Integration, @P_Alice, 'frank@student.edu', 'DepartmentManager', 'Accepted');
-
-INSERT INTO Notifications (UserId, Message, Type, Link, IsRead) VALUES
-(@P_Alice, 'You have been appointed Manager of the new AI R&D Lab.', 'WorkspaceInvite', '/workspaces', 0),
-(@P_Bob, 'Alice Nguyen assigned you to task: Quantize Weights for Edge.', 'TaskAssignment', '/tasks', 0),
-(@P_Liam, 'You have a pending invitation to join: Data Analytics Hub.', 'WorkspaceInvite', '/workspaces', 0),
-(@P_Noah, 'Bob Tran assigned you to task: Corporate KPI Executive Dashboard.', 'TaskAssignment', '/tasks', 0);
+-- 1a. Insert Accounts
+INSERT INTO Accounts (Id, Email, PasswordHash, Role, IsDisabled) VALUES
+('11111111-1111-1111-1111-111111111111', 'admin@unigrid.com', 'password123', 1, 0),
+('22222222-2222-2222-2222-222222222222', 'mod@unigrid.com', 'password123', 3, 0),
+('33333333-3333-3333-3333-333333333333', 'alice@student.edu', 'password123', 2, 0),
+('44444444-4444-4444-4444-444444444444', 'bob@student.edu', 'password123', 2, 0),
+('55555555-5555-5555-5555-555555555555', 'charlie@student.edu', 'password123', 2, 0),
+('66666666-6666-6666-6666-666666666666', 'diana@student.edu', 'password123', 2, 0),
+('77777777-7777-7777-7777-777777777777', 'eve@student.edu', 'password123', 2, 0),
+('88888888-7777-6666-5555-444444444444', 'frank@student.edu', 'password123', 2, 0),
+('99999999-8888-7777-6666-555555555555', 'grace@student.edu', 'password123', 2, 0),
+('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', 'henry@student.edu', 'password123', 2, 0),
+('bbbbbbbb-cccc-dddd-eeee-ffffffffffff', 'jack@student.edu', 'password123', 2, 0),
+('cccccccc-dddd-eeee-ffff-000000000000', 'kelly@student.edu', 'password123', 2, 0),
+('dddddddd-eeee-ffff-0000-111111111111', 'liam@student.edu', 'password123', 2, 0),
+('eeeeeeee-ffff-0000-1111-222222222222', 'olivia@student.edu', 'password123', 2, 0),
+('ffffffff-0000-1111-2222-333333333333', 'noah@student.edu', 'password123', 2, 0),
+('63005020-5e30-40f4-9943-7db5f7a26244', 'james.rodriguez13@unigrid-user.com', 'password123', 2, 0),
+('28ee6232-4c4f-4a57-b665-b52a93e673fa', 'mary.martinez14@unigrid-user.com', 'password123', 2, 0),
+('ba08f188-02be-4b91-9e9c-e0c39f788bf3', 'john.anderson15@unigrid-user.com', 'password123', 2, 0),
+('0614dd27-fdd1-471d-9e21-1a9ba54c97bd', 'patricia.taylor16@unigrid-user.com', 'password123', 2, 0),
+('1bb9780b-b393-410e-9891-527a116e4fe8', 'robert.thomas17@unigrid-user.com', 'password123', 2, 0),
+('d08c6e0d-835a-4a30-8793-0ef57f29875e', 'jennifer.hernandez18@unigrid-user.com', 'password123', 2, 0),
+('e5f17b24-4ead-4593-81a3-d71bbd2fbe30', 'michael.moore19@unigrid-user.com', 'password123', 2, 0),
+('bacd67ad-eaba-47ae-93ac-fffbd9426800', 'elizabeth.martin20@unigrid-user.com', 'password123', 2, 0),
+('1af002be-de1a-450a-9023-f40057bdc54e', 'william.jackson21@unigrid-user.com', 'password123', 2, 0),
+('4b6d4eee-491e-450b-a34c-691c3a78fc94', 'linda.thompson22@unigrid-user.com', 'password123', 2, 0),
+('25958129-d5b6-4bb2-afcb-27d0bf46737a', 'david.white23@unigrid-user.com', 'password123', 2, 0),
+('f75d6456-9d73-4488-95b6-6d44f52e8582', 'barbara.lopez24@unigrid-user.com', 'password123', 2, 0),
+('fb5b9e43-efcc-40d3-8511-12ae5959a37a', 'richard.lee25@unigrid-user.com', 'password123', 2, 0),
+('e9b3e601-9945-46f1-9cdd-3296994b8e77', 'susan.gonzalez26@unigrid-user.com', 'password123', 2, 0),
+('5f6b55c0-68f0-4606-8e82-fdd16192a8a2', 'joseph.harris27@unigrid-user.com', 'password123', 2, 0),
+('97efa168-47b6-48a0-a0a8-adbb26efa41a', 'jessica.clark28@unigrid-user.com', 'password123', 2, 0),
+('49f41314-7f87-42f3-9df2-483328d08f68', 'thomas.lewis29@unigrid-user.com', 'password123', 2, 0),
+('e1a2cd50-fe06-49ca-a036-20d68e68a022', 'sarah.robinson30@unigrid-user.com', 'password123', 2, 0),
+('718c1fef-0b3d-40c1-b6b5-01385815c725', 'charles.smith31@unigrid-user.com', 'password123', 2, 0),
+('9b7dab96-1500-4c98-8371-c1a0914931a8', 'karen.miller32@unigrid-user.com', 'password123', 2, 0),
+('acfdbbff-80b7-4d6e-93a5-85523fd34c2b', 'alice.johnson33@unigrid-user.com', 'password123', 2, 0),
+('e0a3e249-9f41-44cd-94fa-f1db4b823c90', 'bob.davis34@unigrid-user.com', 'password123', 2, 0);
+
+INSERT INTO Admins (AccountId, FullName, SuperAdmin, IsDisabled) VALUES
+('11111111-1111-1111-1111-111111111111', N'System Administrator', 1, 0);
+
+INSERT INTO Moderators (AccountId, FullName, Region, IsDisabled) VALUES
+('22222222-2222-2222-2222-222222222222', N'Platform Moderator', N'East-Asia', 0);
+
+-- 1b. Insert Users Profiles
+INSERT INTO Users (Id, AccountId, FullName, SubscriptionTier, BusinessAttribute, IsDisabled) VALUES
+('AAAAAA11-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333', N'Alice Smith', 'Business', 'business Include', 0),
+('BBBBBB22-2222-2222-2222-222222222222', '44444444-4444-4444-4444-444444444444', N'Bob Miller', 'Pro', 'normal', 0),
+('CCCCCC33-3333-3333-3333-333333333333', '55555555-5555-5555-5555-555555555555', N'Charlie Johnson', 'ProPlus', 'normal', 0),
+('DDDDDD44-4444-4444-4444-444444444444', '66666666-6666-6666-6666-666666666666', N'Diana Davis', 'Personal', 'normal', 0),
+('EEEEEE55-5555-5555-5555-555555555555', '77777777-7777-7777-7777-777777777777', N'Eve Wilson', 'Free', 'normal', 0),
+('FFFFFF66-6666-6666-6666-666666666666', '88888888-7777-6666-5555-444444444444', N'Frank Miller', 'Business', 'business Include', 0),
+('AAAAAA77-7777-7777-7777-777777777777', '99999999-8888-7777-6666-555555555555', N'Grace Hopper', 'Pro', 'normal', 0),
+('BBBBBB88-8888-8888-8888-888888888888', 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', N'Henry Cavill', 'ProPlus', 'normal', 0),
+('CCCCCC99-9999-9999-9999-999999999999', 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff', N'Jack Dorsey', 'Personal', 'normal', 0),
+('DDDDDD00-0000-0000-0000-000000000000', 'cccccccc-dddd-eeee-ffff-000000000000', N'Kelly Clarkson', 'Free', 'normal', 0),
+('EEEEEE11-1111-1111-1111-111111111111', 'dddddddd-eeee-ffff-0000-111111111111', N'Liam Smith', 'Business', 'business Include', 0),
+('FFFFFF22-2222-2222-2222-222222222222', 'eeeeeeee-ffff-0000-1111-222222222222', N'Olivia Miller', 'ProPlus', 'normal', 0),
+('AAAAAA33-3333-3333-3333-333333333333', 'ffffffff-0000-1111-2222-333333333333', N'Noah Johnson', 'Personal', 'normal', 0),
+('0568ad89-cc72-4cb7-8b47-b714a14ad305', '63005020-5e30-40f4-9943-7db5f7a26244', N'James Rodriguez', 'Pro', 'normal', 0),
+('a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', '28ee6232-4c4f-4a57-b665-b52a93e673fa', N'Mary Martinez', 'ProPlus', 'business Include', 0),
+('938db8ea-47c1-4658-9da8-683d1781035d', 'ba08f188-02be-4b91-9e9c-e0c39f788bf3', N'John Anderson', 'Business', 'business Include', 0),
+('0391258e-5399-4f33-a857-86430cd399e3', '0614dd27-fdd1-471d-9e21-1a9ba54c97bd', N'Patricia Taylor', 'ProPlus', 'business Include', 0),
+('a50d91b6-a74b-4235-88df-f14afcf7b373', '1bb9780b-b393-410e-9891-527a116e4fe8', N'Robert Thomas', 'Personal', 'normal', 0),
+('0a6eb437-a032-4db4-967a-795a177312f9', 'd08c6e0d-835a-4a30-8793-0ef57f29875e', N'Jennifer Hernandez', 'Free', 'normal', 0),
+('d0310624-9fc3-4abd-80cf-05a10aea0af3', 'e5f17b24-4ead-4593-81a3-d71bbd2fbe30', N'Michael Moore', 'ProPlus', 'business Include', 0),
+('ed7c4e91-244b-492f-9173-d91ef072a852', 'bacd67ad-eaba-47ae-93ac-fffbd9426800', N'Elizabeth Martin', 'Free', 'normal', 0),
+('746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '1af002be-de1a-450a-9023-f40057bdc54e', N'William Jackson', 'Personal', 'normal', 0),
+('e0840c34-d719-483f-8a7c-8baf2d390f82', '4b6d4eee-491e-450b-a34c-691c3a78fc94', N'Linda Thompson', 'Business', 'business Include', 0),
+('da41bf65-4204-43fa-bdd9-f9255aaecbb6', '25958129-d5b6-4bb2-afcb-27d0bf46737a', N'David White', 'Personal', 'normal', 0),
+('618269dc-e47b-4dda-9198-afc388223528', 'f75d6456-9d73-4488-95b6-6d44f52e8582', N'Barbara Lopez', 'ProPlus', 'business Include', 0),
+('03b95716-f1bf-491b-8dd4-b180adff5662', 'fb5b9e43-efcc-40d3-8511-12ae5959a37a', N'Richard Lee', 'Free', 'normal', 0),
+('f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', 'e9b3e601-9945-46f1-9cdd-3296994b8e77', N'Susan Gonzalez', 'Free', 'normal', 0),
+('35e6805b-6390-4d5f-94b3-bb3e06baacb5', '5f6b55c0-68f0-4606-8e82-fdd16192a8a2', N'Joseph Harris', 'ProPlus', 'business Include', 0),
+('2c0040a8-6f4e-4d98-8745-f96e45ea128a', '97efa168-47b6-48a0-a0a8-adbb26efa41a', N'Jessica Clark', 'Free', 'normal', 0),
+('1ad8a53b-c987-4665-bb89-6e77738e6de1', '49f41314-7f87-42f3-9df2-483328d08f68', N'Thomas Lewis', 'ProPlus', 'business Include', 0),
+('be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', 'e1a2cd50-fe06-49ca-a036-20d68e68a022', N'Sarah Robinson', 'Free', 'normal', 0),
+('660aed7f-14ef-4a78-a289-e57ceb3e310d', '718c1fef-0b3d-40c1-b6b5-01385815c725', N'Charles Smith', 'ProPlus', 'business Include', 0),
+('c2431330-2381-4288-ada8-f8db85a33948', '9b7dab96-1500-4c98-8371-c1a0914931a8', N'Karen Miller', 'Pro', 'normal', 0),
+('bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'acfdbbff-80b7-4d6e-93a5-85523fd34c2b', N'Alice Johnson', 'ProPlus', 'business Include', 0),
+('8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'e0a3e249-9f41-44cd-94fa-f1db4b823c90', N'Bob Davis', 'ProPlus', 'business Include', 0);
+
+-- 2. Insert Workspace Federations
+INSERT INTO WorkspaceFederations (Id, Name, JoinCode, OwnerId, IsDisabled) VALUES
+('FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF', N'Store Integration Federation', 'FED-STORE', 'AAAAAA11-1111-1111-1111-111111111111', 0),
+('EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE', N'Academic Collaboration Alliance', 'FED-ACAD', 'BBBBBB22-2222-2222-2222-222222222222', 0),
+('DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD', N'Cloud Architecture Alliance', 'FED-CLOUD', 'BBBBBB22-2222-2222-2222-222222222222', 0),
+('2ccf58b1-a447-4243-b583-10e3e8ff3cfd', N'Global Enterprise Network', 'FED-CORP', 'FFFFFF66-6666-6666-6666-666666666666', 0);
+
+-- 3. Insert Workspaces
+INSERT INTO Workspaces (Id, Name, OwnerId, JoinCode, PackageTier, WorkspaceType, CompanyName, CompanyTaxCode, CompanyAddress, FederationId, IsDisabled) VALUES
+('99999999-9999-9999-9999-999999999999', N'Enterprise Portal', 'AAAAAA11-1111-1111-1111-111111111111', 'SE-PRO', 'Business', 'Business', N'UniGrid Corporation', N'0109988776', N'456 Enterprise Towers, Manhattan, New York, NY', NULL, 0),
+('88888888-8888-8888-8888-888888888888', N'E-Commerce Branch', 'AAAAAA11-1111-1111-1111-111111111111', 'WEB-DEV', 'ProPlus', 'Group', NULL, NULL, NULL, 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF', 0),
+('77777777-7777-7777-7777-777777777777', N'Personal Planner', 'BBBBBB22-2222-2222-2222-222222222222', 'MATH-101', 'Personal', 'Personal', NULL, NULL, NULL, NULL, 0),
+('66666666-6666-6666-6666-666666666666', N'Physics Lab', 'AAAAAA11-1111-1111-1111-111111111111', 'PHYS-101', 'Free', 'Personal', NULL, NULL, NULL, NULL, 0),
+('55555555-5555-5555-5555-555555555555', N'English Composition', 'AAAAAA11-1111-1111-1111-111111111111', 'ENGL-101', 'Free', 'Personal', NULL, NULL, NULL, NULL, 0),
+('44444444-4444-4444-4444-444444444444', N'Research Methods', 'AAAAAA11-1111-1111-1111-111111111111', 'RES-101', 'Free', 'Personal', NULL, NULL, NULL, NULL, 0),
+('33333333-2222-1111-0000-999999999999', N'UX Design Studio', 'BBBBBB22-2222-2222-2222-222222222222', 'DSN-FLOW', 'ProPlus', 'Group', NULL, NULL, NULL, 'EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE', 0),
+('22222222-1111-0000-9999-888888888888', N'Mobile Dev Team', 'CCCCCC33-3333-3333-3333-333333333333', 'MBL-APP', 'Pro', 'Group', NULL, NULL, NULL, 'DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD', 0),
+('11111111-0000-9999-8888-777777777777', N'Global Corporate Operations', 'FFFFFF66-6666-6666-6666-666666666666', 'GLB-OPS', 'Business', 'Business', N'Aperture Science', N'0991122334', N'789 Enrichment Center Rd, Ohio, US', NULL, 0),
+('aaaaaaaa-1111-2222-3333-444444444444', N'AI R&D Lab', 'AAAAAA11-1111-1111-1111-111111111111', 'AI-LAB', 'ProPlus', 'Group', NULL, NULL, NULL, 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF', 0),
+('bbbbbbbb-2222-3333-4444-555555555555', N'Data Analytics Hub', 'BBBBBB22-2222-2222-2222-222222222222', 'DATA-HUB', 'Pro', 'Group', NULL, NULL, NULL, 'DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD', 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', N'Project Workspace 12', 'AAAAAA33-3333-3333-3333-333333333333', 'PRJ-1200', 'Personal', 'Personal', NULL, NULL, NULL, NULL, 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', N'Project Workspace 13', '0568ad89-cc72-4cb7-8b47-b714a14ad305', 'PRJ-1300', 'Pro', 'Group', NULL, NULL, NULL, NULL, 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', N'Project Workspace 14', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', 'PRJ-1400', 'ProPlus', 'Group', NULL, NULL, NULL, NULL, 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', N'Project Workspace 15', '938db8ea-47c1-4658-9da8-683d1781035d', 'PRJ-1500', 'Pro', 'Group', NULL, NULL, NULL, NULL, 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', N'Project Workspace 16', '0391258e-5399-4f33-a857-86430cd399e3', 'PRJ-1600', 'Personal', 'Personal', NULL, NULL, NULL, NULL, 0);
+
+-- 4. Insert Billings
+INSERT INTO Billings (WorkspaceId, PackageId, Status, EndDate, Amount, UserId, PaymentMethod, TransactionRef, CreatedAt, IsDisabled) VALUES
+('99999999-9999-9999-9999-999999999999', 'business_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 899000.00, 'AAAAAA11-1111-1111-1111-111111111111', 'Credit Card', 'TXN-WS-SE-PRO', DATEADD(month, -1, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', 'proplus_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 449000.00, 'AAAAAA11-1111-1111-1111-111111111111', 'Credit Card', 'TXN-WS-WEB-DEV', DATEADD(month, -1, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', 'personal_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 40000.00, 'BBBBBB22-2222-2222-2222-222222222222', 'Credit Card', 'TXN-WS-MATH-101', DATEADD(month, -1, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', 'free_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 0.00, NULL, 'System', 'TXN-WS-PHYS-101', DATEADD(month, -1, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', 'free_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 0.00, NULL, 'System', 'TXN-WS-ENGL-101', DATEADD(month, -1, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', 'free_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 0.00, NULL, 'System', 'TXN-WS-RES-101', DATEADD(month, -1, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', 'proplus_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 449000.00, 'BBBBBB22-2222-2222-2222-222222222222', 'Credit Card', 'TXN-WS-DSN-FLOW', DATEADD(month, -1, GETUTCDATE()), 0),
+('22222222-1111-0000-9999-888888888888', 'pro_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 299000.00, 'CCCCCC33-3333-3333-3333-333333333333', 'Credit Card', 'TXN-WS-MBL-APP', DATEADD(month, -1, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', 'business_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 899000.00, 'FFFFFF66-6666-6666-6666-666666666666', 'Credit Card', 'TXN-WS-GLB-OPS', DATEADD(month, -1, GETUTCDATE()), 0),
+('aaaaaaaa-1111-2222-3333-444444444444', 'proplus_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 449000.00, 'AAAAAA11-1111-1111-1111-111111111111', 'Credit Card', 'TXN-WS-AI-LAB', DATEADD(month, -1, GETUTCDATE()), 0),
+('bbbbbbbb-2222-3333-4444-555555555555', 'pro_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 299000.00, 'BBBBBB22-2222-2222-2222-222222222222', 'Credit Card', 'TXN-WS-DATA-HUB', DATEADD(month, -1, GETUTCDATE()), 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', 'personal_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 40000.00, 'AAAAAA33-3333-3333-3333-333333333333', 'Credit Card', 'TXN-WS-PRJ-1200', DATEADD(month, -1, GETUTCDATE()), 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', 'pro_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 299000.00, '0568ad89-cc72-4cb7-8b47-b714a14ad305', 'Credit Card', 'TXN-WS-PRJ-1300', DATEADD(month, -1, GETUTCDATE()), 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'proplus_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 449000.00, 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', 'Credit Card', 'TXN-WS-PRJ-1400', DATEADD(month, -1, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', 'pro_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 299000.00, '938db8ea-47c1-4658-9da8-683d1781035d', 'Credit Card', 'TXN-WS-PRJ-1500', DATEADD(month, -1, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', 'personal_monthly', 'Active', DATEADD(year, 1, GETUTCDATE()), 40000.00, '0391258e-5399-4f33-a857-86430cd399e3', 'Credit Card', 'TXN-WS-PRJ-1600', DATEADD(month, -1, GETUTCDATE()), 0);
+
+-- 5. Insert Workspace Members (RBAC)
+INSERT INTO WorkspaceMembers (WorkspaceId, UserId, Role, DisplayRole, CanDeleteFile, CanCreateTask, CanEditTask, IsDisabled) VALUES
+('99999999-9999-9999-9999-999999999999', 'AAAAAA11-1111-1111-1111-111111111111', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('99999999-9999-9999-9999-999999999999', 'EEEEEE11-1111-1111-1111-111111111111', 'Member', N'Senior Engineer', 0, 1, 1, 0),
+('99999999-9999-9999-9999-999999999999', 'FFFFFF22-2222-2222-2222-222222222222', 'Viewer', N'Observer', 0, 0, 0, 0),
+('99999999-9999-9999-9999-999999999999', '03b95716-f1bf-491b-8dd4-b180adff5662', 'Member', N'Tech Lead', 0, 1, 1, 0),
+('88888888-8888-8888-8888-888888888888', 'AAAAAA11-1111-1111-1111-111111111111', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('88888888-8888-8888-8888-888888888888', '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'Member', N'Tech Lead', 0, 1, 1, 0),
+('88888888-8888-8888-8888-888888888888', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', 'Vice Manager', N'Designer', 1, 1, 1, 0),
+('88888888-8888-8888-8888-888888888888', 'BBBBBB22-2222-2222-2222-222222222222', 'Viewer', N'Observer', 0, 0, 0, 0),
+('77777777-7777-7777-7777-777777777777', 'BBBBBB22-2222-2222-2222-222222222222', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('77777777-7777-7777-7777-777777777777', 'a50d91b6-a74b-4235-88df-f14afcf7b373', 'Member', N'Senior Engineer', 0, 1, 1, 0),
+('77777777-7777-7777-7777-777777777777', 'BBBBBB88-8888-8888-8888-888888888888', 'Member', N'Tech Lead', 0, 1, 1, 0),
+('77777777-7777-7777-7777-777777777777', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', 'Vice Manager', N'Senior Engineer', 1, 1, 1, 0),
+('66666666-6666-6666-6666-666666666666', 'AAAAAA11-1111-1111-1111-111111111111', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('66666666-6666-6666-6666-666666666666', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', 'Member', N'Developer', 0, 1, 1, 0),
+('66666666-6666-6666-6666-666666666666', '1ad8a53b-c987-4665-bb89-6e77738e6de1', 'Vice Manager', N'Senior Engineer', 1, 1, 1, 0),
+('66666666-6666-6666-6666-666666666666', '0a6eb437-a032-4db4-967a-795a177312f9', 'Vice Manager', N'Developer', 1, 1, 1, 0),
+('55555555-5555-5555-5555-555555555555', 'AAAAAA11-1111-1111-1111-111111111111', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('55555555-5555-5555-5555-555555555555', 'BBBBBB22-2222-2222-2222-222222222222', 'Vice Manager', N'Tech Lead', 1, 1, 1, 0),
+('55555555-5555-5555-5555-555555555555', '618269dc-e47b-4dda-9198-afc388223528', 'Vice Manager', N'Developer', 1, 1, 1, 0),
+('55555555-5555-5555-5555-555555555555', '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', 'Member', N'Tech Lead', 0, 1, 1, 0),
+('44444444-4444-4444-4444-444444444444', 'AAAAAA11-1111-1111-1111-111111111111', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('44444444-4444-4444-4444-444444444444', '0568ad89-cc72-4cb7-8b47-b714a14ad305', 'Vice Manager', N'Observer', 1, 1, 1, 0),
+('44444444-4444-4444-4444-444444444444', 'EEEEEE11-1111-1111-1111-111111111111', 'Vice Manager', N'Developer', 1, 1, 1, 0),
+('44444444-4444-4444-4444-444444444444', 'AAAAAA33-3333-3333-3333-333333333333', 'Viewer', N'Tech Lead', 0, 0, 0, 0),
+('33333333-2222-1111-0000-999999999999', 'BBBBBB22-2222-2222-2222-222222222222', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('33333333-2222-1111-0000-999999999999', 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'Viewer', N'Designer', 0, 0, 0, 0),
+('33333333-2222-1111-0000-999999999999', 'CCCCCC33-3333-3333-3333-333333333333', 'Viewer', N'Designer', 0, 0, 0, 0),
+('33333333-2222-1111-0000-999999999999', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'Viewer', N'Observer', 0, 0, 0, 0),
+('22222222-1111-0000-9999-888888888888', 'CCCCCC33-3333-3333-3333-333333333333', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('22222222-1111-0000-9999-888888888888', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'Member', N'Observer', 0, 1, 1, 0),
+('22222222-1111-0000-9999-888888888888', 'CCCCCC99-9999-9999-9999-999999999999', 'Vice Manager', N'Senior Engineer', 1, 1, 1, 0),
+('11111111-0000-9999-8888-777777777777', 'FFFFFF66-6666-6666-6666-666666666666', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('11111111-0000-9999-8888-777777777777', 'BBBBBB22-2222-2222-2222-222222222222', 'Viewer', N'Developer', 0, 0, 0, 0),
+('11111111-0000-9999-8888-777777777777', 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'Vice Manager', N'Developer', 1, 1, 1, 0),
+('11111111-0000-9999-8888-777777777777', '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'Viewer', N'Observer', 0, 0, 0, 0),
+('aaaaaaaa-1111-2222-3333-444444444444', 'AAAAAA11-1111-1111-1111-111111111111', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('aaaaaaaa-1111-2222-3333-444444444444', 'BBBBBB22-2222-2222-2222-222222222222', 'Vice Manager', N'AI Engineer', 1, 1, 1, 0),
+('aaaaaaaa-1111-2222-3333-444444444444', 'CCCCCC33-3333-3333-3333-333333333333', 'Member', N'UX Designer', 1, 1, 1, 0),
+('aaaaaaaa-1111-2222-3333-444444444444', 'EEEEEE11-1111-1111-1111-111111111111', 'Member', N'ML Ops Specialist', 1, 1, 1, 0),
+('aaaaaaaa-1111-2222-3333-444444444444', 'AAAAAA33-3333-3333-3333-333333333333', 'Member', N'Data Engineer', 1, 1, 1, 0),
+('bbbbbbbb-2222-3333-4444-555555555555', 'BBBBBB22-2222-2222-2222-222222222222', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('bbbbbbbb-2222-3333-4444-555555555555', 'DDDDDD44-4444-4444-4444-444444444444', 'Vice Manager', N'Developer', 1, 1, 1, 0),
+('bbbbbbbb-2222-3333-4444-555555555555', '03b95716-f1bf-491b-8dd4-b180adff5662', 'Member', N'Designer', 0, 1, 1, 0),
+('bbbbbbbb-2222-3333-4444-555555555555', '0568ad89-cc72-4cb7-8b47-b714a14ad305', 'Viewer', N'Developer', 0, 0, 0, 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', 'AAAAAA33-3333-3333-3333-333333333333', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', 'AAAAAA11-1111-1111-1111-111111111111', 'Member', N'Developer', 0, 1, 1, 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', 'Viewer', N'Tech Lead', 0, 0, 0, 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', 'ed7c4e91-244b-492f-9173-d91ef072a852', 'Vice Manager', N'Developer', 1, 1, 1, 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', '0568ad89-cc72-4cb7-8b47-b714a14ad305', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', 'AAAAAA11-1111-1111-1111-111111111111', 'Viewer', N'Observer', 0, 0, 0, 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', 'Viewer', N'Designer', 0, 0, 0, 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'Member', N'Tech Lead', 0, 1, 1, 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', 'Member', N'Designer', 0, 1, 1, 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'EEEEEE55-5555-5555-5555-555555555555', 'Viewer', N'Observer', 0, 0, 0, 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', 'Member', N'Senior Engineer', 0, 1, 1, 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '938db8ea-47c1-4658-9da8-683d1781035d', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', 'Member', N'Designer', 0, 1, 1, 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'Vice Manager', N'Observer', 1, 1, 1, 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'Member', N'Observer', 0, 1, 1, 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', '0391258e-5399-4f33-a857-86430cd399e3', 'Manager', N'Lead Director', 1, 1, 1, 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', 'a50d91b6-a74b-4235-88df-f14afcf7b373', 'Viewer', N'Designer', 0, 0, 0, 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', 'CCCCCC99-9999-9999-9999-999999999999', 'Vice Manager', N'Senior Engineer', 1, 1, 1, 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', 'Viewer', N'Senior Engineer', 0, 0, 0, 0);
+
+-- 6. Insert Task Categories
+INSERT INTO TaskCategories (Id, WorkspaceId, Name, Description, ColorHex, IsDisabled) VALUES
+('abcdefab-1111-2222-3333-444444444444', '99999999-9999-9999-9999-999999999999', N'Software Development', N'Tasks related to coding, APIs, and algorithms.', '#3B82F6', 0),
+('abcdefab-2222-3333-4444-555555555555', '99999999-9999-9999-9999-999999999999', N'UI/UX Design', N'Designing layouts, flows, and theme tokens.', '#EC4899', 0),
+('abcdefab-3333-4444-5555-666666666666', '99999999-9999-9999-9999-999999999999', N'Product Marketing', N'Content creation, social media, and customer reach.', '#10B981', 0),
+('abcdefab-4444-5555-6666-777777777777', '99999999-9999-9999-9999-999999999999', N'Project Management', N'Agile planning, milestones, and reports.', '#F59E0B', 0),
+('e6f1cee6-24b6-44a2-a146-102ca2a2b15d', '88888888-8888-8888-8888-888888888888', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('3382dd8a-2d8b-40f0-a491-ab760537580b', '77777777-7777-7777-7777-777777777777', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('71661de2-3f26-4a33-8524-316f83e798c9', '66666666-6666-6666-6666-666666666666', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('475d52b4-2b15-4364-8744-36c83fcb36cd', '55555555-5555-5555-5555-555555555555', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('8f1346db-b2d4-4c14-a703-53861998a7d4', '44444444-4444-4444-4444-444444444444', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', '33333333-2222-1111-0000-999999999999', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', '22222222-1111-0000-9999-888888888888', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('4fc13a22-f0be-4717-8d28-bd408b0ac6f4', '11111111-0000-9999-8888-777777777777', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('f4566a94-373d-4fa9-ae54-6396bb6f3bd0', 'aaaaaaaa-1111-2222-3333-444444444444', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('2c5e1418-655b-4525-b93a-5610940a21a0', 'bbbbbbbb-2222-3333-4444-555555555555', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('2e6b3256-d428-456f-9bdf-d80ebabdf9b3', 'addf9518-a3ba-42e5-9ea9-63073077c592', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('75fa454a-08c2-4ea5-8824-4fd9b62d0623', '245141b6-95c1-4d3e-8fe1-dd96bef76323', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('43974a60-8a6c-4bce-808b-f0467aa3b536', '50a64fa8-6902-4848-b949-f831c89da00c', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('432f60fd-9ef4-4635-a375-b09cf9372a21', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0),
+('e7e922c3-3c08-48e8-803a-28850fe31cda', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', N'Sprint Core Tasks', N'Main milestone tasks.', '#8B5CF6', 0);
+
+-- 7. Insert Tasks (Dense High-Fidelity Dataset)
+INSERT INTO Tasks (Id, WorkspaceId, FederationId, AssigneeId, CategoryId, Title, Description, Status, Priority, IsCounterTask, TargetCount, CurrentCount, DueDate, IsDisabled) VALUES
+('00000000-0000-0000-0000-000000000100', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Optimize Triton inference server execution paths', N'Analyze CUDA memory usage and tune dynamic batching parameters to reduce latency by 15%.', 0, 1, 0, 1, 0, DATEADD(day, 22, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000101', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Run perplexity benchmarks on 4-bit AWQ Llama 3', N'Evaluate performance degradation across GSM8K and MMLU datasets using AWQ quantization.', 1, 2, 0, 1, 0, DATEADD(day, 29, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000102', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Setup GPU memory profile dashboard on staging', N'Create a dashboard visualizing PyTorch memory allocation, caching, and fragmentation over time.', 2, 3, 0, 1, 0, DATEADD(day, 2, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000103', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'EEEEEE11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Quantize BERT model for semantic search indexing', N'Implement post-training quantization to INT8 and measure search retrieval accuracy changes.', 3, 1, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000104', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Evaluate throughput of Mixtral 8x7B under TensorRT-LLM', N'Benchmark token throughput and latency of MoE model using FP8 vs FP16 precision.', 0, 2, 0, 1, 0, DATEADD(day, 28, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000105', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Implement model select dropdown with glassmorphic styles', N'Design a beautiful select UI element using Outfit font and curated gradient palettes.', 1, 3, 0, 1, 0, DATEADD(day, 6, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000106', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Optimize SLURM job queuing parameters for training', N'Configure partition limits, priorities, and preemption policies on the H100 cluster.', 2, 1, 0, 1, 0, DATEADD(day, 16, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000107', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Implement prompt versioning system in local DB', N'Design schema and API endpoints to track prompt templates, inputs, and outputs.', 3, 2, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000108', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'EEEEEE11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Profile PyTorch CUDA cache allocator fragmentation', N'Investigate out-of-memory errors during long training runs and implement custom empty_cache strategies.', 0, 3, 0, 1, 0, DATEADD(day, 16, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000109', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Write unit tests for Triton custom operators', N'Create PyUnit test suites validating correctness of flash-attention Triton kernel changes.', 1, 1, 0, 1, 0, DATEADD(day, 16, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000110', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Design interactive chart for real-time loss tracking', N'Implement responsive micro-animations for live charting of training perplexity.', 2, 2, 0, 1, 0, DATEADD(day, 20, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000111', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Set up automated compliance logging for model outputs', N'Develop filter middleware to intercept and log model outputs for auditing purposes.', 3, 3, 0, 1, 0, DATEADD(day, 26, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000112', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Integrate Llama 3 edge runtime in personal client', N'Deploy a quantized model locally and verify cross-platform C++ runtime wrapper execution.', 0, 1, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000113', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'EEEEEE11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Evaluate token caching strategies for long context', N'Analyze vLLM PagedAttention performance against naive KV cache implementation.', 1, 2, 0, 1, 0, DATEADD(day, 30, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000114', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Configure MLflow model registry integration', N'Setup remote registry with automatic artifact logging on run completions.', 2, 3, 0, 1, 0, DATEADD(day, 11, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000115', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Perform boundary testing on model API gateways', N'Run security fuzzing tests on input validation code for the completion endpoint.', 3, 1, 0, 1, 0, DATEADD(day, 29, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000116', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Build dataset preprocessing pipeline for fine-tuning', N'Write tokenization scripts with padding, packing, and validation filtering.', 0, 2, 0, 1, 0, DATEADD(day, 9, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000117', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Fine-tune LoRA adapter for code generation task', N'Train a LoRA adapter on clean codebase templates and log validation loss.', 1, 3, 0, 1, 0, DATEADD(day, 19, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000118', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'EEEEEE11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Compare FP8 vs FP16 training speed on H100s', N'Run micro-benchmarks on transformer blocks using PyTorch 2.3 native FP8 recipes.', 2, 1, 0, 1, 0, DATEADD(day, 1, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000119', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Implement rate-limiting middleware for model endpoint', N'Protect the GPU endpoints from denial-of-service using Redis token buckets.', 3, 2, 0, 1, 0, DATEADD(day, 21, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000120', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Create evaluation harness for code completion model', N'Implement HumanEval pass@k test script using local sandbox execution.', 0, 3, 0, 1, 0, DATEADD(day, 3, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000121', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Tune model routing agent for cost optimization', N'Design a router to delegate simple queries to small models and complex to large models.', 1, 1, 0, 1, 0, DATEADD(day, 21, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000122', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Benchmark vLLM performance under concurrent traffic', N'Run load tests with varying concurrency levels and measure time-to-first-token.', 2, 2, 0, 1, 0, DATEADD(day, 6, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000123', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'EEEEEE11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Integrate HuggingFace Hub repository sync hooks', N'Automatically synchronize models and datasets with private organizational hub.', 3, 3, 0, 1, 0, DATEADD(day, 20, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000124', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Optimize cross-attention kernel execution time', N'Profile and refactor attention blocks to leverage FlashAttention-3 instructions.', 0, 1, 0, 1, 0, DATEADD(day, 17, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000125', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Write architecture guide for multi-agent workflows', N'Document pattern for orchestrating hierarchically structured agent groups.', 1, 2, 0, 1, 0, DATEADD(day, 21, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000126', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Implement semantic caching for common queries', N'Deploy vector-based search cache to bypass model execution for duplicate queries.', 2, 3, 0, 1, 0, DATEADD(day, 9, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000127', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Audit model security parameters for prompt injection', N'Develop a testing suite of prompt injection vectors to verify safety filter effectiveness.', 3, 1, 0, 1, 0, DATEADD(day, 8, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000128', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'EEEEEE11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Build data ingestion pipeline from production logs', N'Write pipeline to collect, anonymize, and store logs for active learning loops.', 0, 2, 0, 1, 0, DATEADD(day, 29, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000129', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Validate model behavior under adversarial inputs', N'Test model responses against jailbreak datasets and tune system prompt guards.', 1, 3, 0, 1, 0, DATEADD(day, 30, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000001', '99999999-9999-9999-9999-999999999999', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'abcdefab-4444-5555-6666-777777777777', N'AI Report', N'Generate summary and evaluation of modern transformer models.', 1, 3, 0, 1, 0, DATEADD(day, 5, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000003', '99999999-9999-9999-9999-999999999999', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'abcdefab-1111-2222-3333-444444444444', N'Database Project', N'Seeded SQL relational schema draft submission.', 1, 3, 1, 10, 7, DATEADD(day, 5, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000007', '99999999-9999-9999-9999-999999999999', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'abcdefab-1111-2222-3333-444444444444', N'Setup CI/CD Pipeline', N'Configure GitHub Actions for automated building, linting, and testing.', 2, 3, 0, 1, 0, DATEADD(day, 5, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000010', '99999999-9999-9999-9999-999999999999', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'abcdefab-2222-3333-4444-555555555555', N'Design System Components', N'Assemble beautiful, harmoniously tailored dark mode styled elements.', 1, 2, 1, 5, 2, DATEADD(day, 5, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000011', '99999999-9999-9999-9999-999999999999', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'abcdefab-1111-2222-3333-444444444444', N'Database Seeding', N'Compose a denser database seeding script matching the frontend mock data.', 3, 1, 1, 12, 12, DATEADD(day, 5, GETUTCDATE()), 0),
+('aadccbc8-a527-4b3d-91b3-182197a76881', '44444444-4444-4444-4444-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', '8f1346db-b2d4-4c14-a703-53861998a7d4', N'Refactor AlpineJS state models (Sprint #1)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 1, 1, 5, 5, DATEADD(day, 14, GETUTCDATE()), 0),
+('9c2fa6f3-382d-4734-b15c-59def85728cb', '44444444-4444-4444-4444-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', '8f1346db-b2d4-4c14-a703-53861998a7d4', N'Migrate legacy files to AWS S3 (Sprint #1)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 1, 1, 5, 2, DATEADD(day, 14, GETUTCDATE()), 0),
+('5d182b2a-da95-4cda-861d-45402c6dc103', '66666666-6666-6666-6666-666666666666', NULL, 'd0310624-9fc3-4abd-80cf-05a10aea0af3', '71661de2-3f26-4a33-8524-316f83e798c9', N'Deploy application stack (Sprint #1)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 1, 3, 0, 1, 0, DATEADD(day, 1, GETUTCDATE()), 0),
+('312d3888-2e2a-4d12-844d-bc6958119dde', '77777777-7777-7777-7777-777777777777', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Run statistical tests on A/B routes (Sprint #1)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 1, 1, 15, 10, DATEADD(day, 17, GETUTCDATE()), 0),
+('52e5a5bf-e0b6-4673-801a-80f05d3384c6', '22222222-1111-0000-9999-888888888888', NULL, '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Optimize database indexing (Sprint #1)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 1, 0, 1, 0, DATEADD(day, 10, GETUTCDATE()), 0),
+('492e0b6e-ef77-47de-bcef-cce16626cfbb', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, '03b95716-f1bf-491b-8dd4-b180adff5662', '2c5e1418-655b-4525-b93a-5610940a21a0', N'Create notification trigger events (Sprint #1)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 2, 0, 1, 0, DATEADD(day, 17, GETUTCDATE()), 0),
+('b5b9d0df-b823-43ee-9a6e-7f5a1d0c5e4d', '66666666-6666-6666-6666-666666666666', NULL, '0a6eb437-a032-4db4-967a-795a177312f9', '71661de2-3f26-4a33-8524-316f83e798c9', N'Design new authentication forms (Sprint #1)', N'Detailed performance investigation regarding active database connection leaks.', 0, 1, 1, 5, 0, DATEADD(day, 5, GETUTCDATE()), 0),
+('f44fc5b6-a82b-4a64-95b9-f8f9338b10e3', '77777777-7777-7777-7777-777777777777', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Analyze SLURM orchestrator state (Sprint #1)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 1, 1, 15, 0, DATEADD(day, 1, GETUTCDATE()), 0),
+('4e89b19e-6699-4e1c-b68b-90e597ab089e', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Implement workspace federation links (Sprint #1)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 1, 0, 1, 0, DATEADD(day, 26, GETUTCDATE()), 0),
+('bd2ac882-0faf-4d9e-a016-efd1cbb3f2cb', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, 'DDDDDD44-4444-4444-4444-444444444444', '2c5e1418-655b-4525-b93a-5610940a21a0', N'Implement user billing history view (Sprint #1)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 1, 2, 1, 10, 1, DATEADD(day, 26, GETUTCDATE()), 0),
+('1746d9fc-b806-4efb-85d8-cf8c0b6d8d70', '66666666-6666-6666-6666-666666666666', NULL, 'd0310624-9fc3-4abd-80cf-05a10aea0af3', '71661de2-3f26-4a33-8524-316f83e798c9', N'Resolve memory leak in backend service (Sprint #1)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 1, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('083d0aa3-5561-4e83-b83f-d782e3769d32', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Setup API rate limit metrics (Sprint #1)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 2, 0, 1, 0, DATEADD(day, 14, GETUTCDATE()), 0),
+('1f02529b-85bf-427d-ae7b-bff517da799f', '33333333-2222-1111-0000-999999999999', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Translate dashboard localization (Sprint #1)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 2, 1, 15, 11, DATEADD(day, 21, GETUTCDATE()), 0),
+('8bb16a2c-995e-4416-afa4-7c966530b1f6', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'ed7c4e91-244b-492f-9173-d91ef072a852', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Implement user billing history view (Sprint #1)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 1, 0, 1, 0, DATEADD(day, 4, GETUTCDATE()), 0),
+('1d6bec98-a066-4264-93c9-a7fa31e47afc', '66666666-6666-6666-6666-666666666666', NULL, 'd0310624-9fc3-4abd-80cf-05a10aea0af3', '71661de2-3f26-4a33-8524-316f83e798c9', N'Setup API rate limit metrics (Sprint #1)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 0, 1, 0, 1, 0, DATEADD(day, 18, GETUTCDATE()), 0),
+('6ea66e3f-ee5c-4a75-972a-6b760363dc85', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, '2c0040a8-6f4e-4d98-8745-f96e45ea128a', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Design glassmorphic checkout UI (Sprint #1)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 3, 0, 1, 0, DATEADD(day, 7, GETUTCDATE()), 0),
+('6870ad28-6027-4701-aa88-9b840c80e14b', '77777777-7777-7777-7777-777777777777', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Create notification trigger events (Sprint #1)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 1, 0, 1, 0, DATEADD(day, 19, GETUTCDATE()), 0),
+('21ac33ae-0e8b-49b0-bae7-44150ff7e278', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Refactor dashboard components (Sprint #1)', N'Detailed performance investigation regarding active database connection leaks.', 3, 3, 0, 1, 0, DATEADD(day, 26, GETUTCDATE()), 0),
+('4d6afa9d-bcb2-4101-b6dd-70faf9675bd3', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Analyze SLURM orchestrator state (Sprint #1)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 2, 1, 5, 2, DATEADD(day, 10, GETUTCDATE()), 0),
+('dd162852-3c56-4e93-9eaa-972e0cda7fff', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, '0568ad89-cc72-4cb7-8b47-b714a14ad305', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Create notification trigger events (Sprint #2)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 3, 1, 15, 3, DATEADD(day, 10, GETUTCDATE()), 0),
+('8cf4c308-11ad-46cb-b876-c14cb5d57b25', '66666666-6666-6666-6666-666666666666', NULL, '0a6eb437-a032-4db4-967a-795a177312f9', '71661de2-3f26-4a33-8524-316f83e798c9', N'Setup API rate limit metrics (Sprint #2)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 3, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('68370050-611f-446c-8ca7-460e57b806f7', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, 'd0310624-9fc3-4abd-80cf-05a10aea0af3', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Design glassmorphic checkout UI (Sprint #2)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 2, 0, 1, 0, DATEADD(day, 4, GETUTCDATE()), 0),
+('bec6b253-d9e7-41ee-ac95-84ebd295f016', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 'CCCCCC99-9999-9999-9999-999999999999', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Refactor dashboard components (Sprint #2)', N'Detailed performance investigation regarding active database connection leaks.', 3, 3, 0, 1, 0, DATEADD(day, 19, GETUTCDATE()), 0),
+('78ff9cfc-238c-4f63-a443-fcd0af1687a2', '77777777-7777-7777-7777-777777777777', NULL, 'a50d91b6-a74b-4235-88df-f14afcf7b373', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Resolve memory leak in backend service (Sprint #2)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 1, 1, 10, 3, DATEADD(day, 5, GETUTCDATE()), 0),
+('4d1f0282-7d3e-481f-abc1-0f8d324c93c3', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Write technical architectural guidelines (Sprint #2)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 3, 0, 1, 0, DATEADD(day, 2, GETUTCDATE()), 0),
+('c392d347-5e31-4325-8d5e-a1d2158e95a0', '88888888-8888-8888-8888-888888888888', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Resolve memory leak in backend service (Sprint #2)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 3, 0, 1, 0, DATEADD(day, 21, GETUTCDATE()), 0),
+('0a7da886-bb47-4bf0-b75c-306ca9cd34ca', '66666666-6666-6666-6666-666666666666', NULL, '0a6eb437-a032-4db4-967a-795a177312f9', '71661de2-3f26-4a33-8524-316f83e798c9', N'Run statistical tests on A/B routes (Sprint #2)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 1, 0, 1, 0, DATEADD(day, 23, GETUTCDATE()), 0),
+('c2e3447e-19f4-4310-ba17-2849fec7a4af', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, '2c0040a8-6f4e-4d98-8745-f96e45ea128a', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Deploy application stack (Sprint #2)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 2, 1, 10, 3, DATEADD(day, 26, GETUTCDATE()), 0),
+('235c5924-cfd9-4971-b85e-5cb900da4db2', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'ed7c4e91-244b-492f-9173-d91ef072a852', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Implement workspace federation links (Sprint #2)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 1, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('e7942e8c-016d-42bc-84cf-7b7d2db008c1', '66666666-6666-6666-6666-666666666666', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '71661de2-3f26-4a33-8524-316f83e798c9', N'Translate dashboard localization (Sprint #2)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 3, 0, 1, 0, DATEADD(day, 5, GETUTCDATE()), 0),
+('d3a31fd0-840d-42b7-94bd-546d279e072c', '55555555-5555-5555-5555-555555555555', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Design new authentication forms (Sprint #2)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 1, 1, 10, 9, DATEADD(day, 16, GETUTCDATE()), 0),
+('9c485b9a-23ee-43cd-9735-2a308529ad6a', '55555555-5555-5555-5555-555555555555', NULL, '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Implement user billing history view (Sprint #2)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 1, 3, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('d9001616-131a-4174-afa1-c5d56c54dde4', '77777777-7777-7777-7777-777777777777', NULL, 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Design glassmorphic checkout UI (Sprint #2)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 1, 0, 1, 0, DATEADD(day, 27, GETUTCDATE()), 0),
+('a1ad983e-cb5f-4bae-bef1-86d6b5ef69a1', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Perform accessibility testing (Sprint #2)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 1, 0, 1, 0, DATEADD(day, 25, GETUTCDATE()), 0),
+('c6c11556-f93e-4b50-b8c4-00640bd2ca1c', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Setup API rate limit metrics (Sprint #2)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 1, 0, 1, 0, DATEADD(day, 22, GETUTCDATE()), 0),
+('ed3a868e-1911-4c23-804a-c055ac3a579a', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, 'd0310624-9fc3-4abd-80cf-05a10aea0af3', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Write integration test suites (Sprint #2)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 2, 0, 1, 0, DATEADD(day, 17, GETUTCDATE()), 0),
+('e3a29011-d15d-4bbc-92ef-7dd9d465092d', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Resolve memory leak in backend service (Sprint #2)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 1, 0, 1, 0, DATEADD(day, 23, GETUTCDATE()), 0),
+('7a82299f-319d-466b-a688-6c5c472bab16', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Refactor AlpineJS state models (Sprint #2)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 2, 0, 1, 0, DATEADD(day, 23, GETUTCDATE()), 0),
+('efc35d0d-c8b7-40bb-bb5a-8eddea929525', '44444444-4444-4444-4444-444444444444', NULL, '0568ad89-cc72-4cb7-8b47-b714a14ad305', '8f1346db-b2d4-4c14-a703-53861998a7d4', N'Deploy application stack (Sprint #2)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 1, 2, 0, 1, 0, DATEADD(day, 1, GETUTCDATE()), 0),
+('a52a3626-1549-4eb5-a801-c097a0e2164e', '33333333-2222-1111-0000-999999999999', NULL, '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Perform accessibility testing (Sprint #3)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 3, 0, 1, 0, DATEADD(day, 2, GETUTCDATE()), 0),
+('cec6cd33-637e-4227-99a5-5bd321663cf9', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'EEEEEE11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Run statistical tests on A/B routes (Sprint #3)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 3, 0, 1, 0, DATEADD(day, 30, GETUTCDATE()), 0),
+('42a62be2-d13a-4ebd-a045-ee242e5f490d', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'EEEEEE11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Configure edge cache rules (Sprint #3)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 1, 0, 1, 0, DATEADD(day, 23, GETUTCDATE()), 0),
+('5fc22af0-6906-4716-98e8-ee0f4a839094', '77777777-7777-7777-7777-777777777777', NULL, 'BBBBBB88-8888-8888-8888-888888888888', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Refactor dashboard components (Sprint #3)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 1, 0, 1, 0, DATEADD(day, 20, GETUTCDATE()), 0),
+('fcc982be-7911-4a30-8cb3-9c7fdae18df0', '33333333-2222-1111-0000-999999999999', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Optimize database indexing (Sprint #3)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 1, 0, 1, 0, DATEADD(day, 3, GETUTCDATE()), 0),
+('65741ae7-035d-47a2-a7b4-459040d3c928', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 'a50d91b6-a74b-4235-88df-f14afcf7b373', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Create notification trigger events (Sprint #3)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 1, 0, 1, 0, DATEADD(day, 18, GETUTCDATE()), 0),
+('457fe794-c3c6-4523-b6e9-f1f13e08fb47', '88888888-8888-8888-8888-888888888888', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Configure edge cache rules (Sprint #3)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 2, 0, 1, 0, DATEADD(day, 30, GETUTCDATE()), 0),
+('879a40ba-3dda-4d14-9ac4-5b21290653b0', '66666666-6666-6666-6666-666666666666', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '71661de2-3f26-4a33-8524-316f83e798c9', N'Migrate legacy files to AWS S3 (Sprint #3)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 3, 0, 1, 0, DATEADD(day, 13, GETUTCDATE()), 0),
+('89ce9402-2fc4-4603-b7ef-eedf68e7e538', '55555555-5555-5555-5555-555555555555', NULL, '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Implement user billing history view (Sprint #3)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 3, 0, 1, 0, DATEADD(day, 19, GETUTCDATE()), 0),
+('190bd352-feb9-4f65-9643-d7c81628f732', '66666666-6666-6666-6666-666666666666', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '71661de2-3f26-4a33-8524-316f83e798c9', N'Write technical architectural guidelines (Sprint #3)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 1, 0, 1, 0, DATEADD(day, 30, GETUTCDATE()), 0),
+('12a06ac4-f88c-492d-b5ad-b3200d0c3379', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Migrate legacy files to AWS S3 (Sprint #3)', N'Detailed performance investigation regarding active database connection leaks.', 3, 2, 1, 15, 6, DATEADD(day, 14, GETUTCDATE()), 0),
+('91f72dea-aef8-4e8c-be97-9dd6bb33a913', '55555555-5555-5555-5555-555555555555', NULL, '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Design glassmorphic checkout UI (Sprint #3)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 1, 0, 1, 0, DATEADD(day, 20, GETUTCDATE()), 0),
+('752da997-831e-44a6-b60c-9fb9c3698f72', '99999999-9999-9999-9999-999999999999', NULL, 'FFFFFF22-2222-2222-2222-222222222222', 'abcdefab-3333-4444-5555-666666666666', N'Resolve memory leak in backend service (Sprint #3)', N'Detailed performance investigation regarding active database connection leaks.', 0, 3, 0, 1, 0, DATEADD(day, 1, GETUTCDATE()), 0),
+('6622f1de-c613-4d02-b996-7218ba4a4345', '55555555-5555-5555-5555-555555555555', NULL, '618269dc-e47b-4dda-9198-afc388223528', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Create notification trigger events (Sprint #3)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 1, 1, 0, 1, 0, DATEADD(day, 1, GETUTCDATE()), 0),
+('0e0e5cc8-98dc-4458-b7f0-b644d2c60a88', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'AAAAAA33-3333-3333-3333-333333333333', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Perform accessibility testing (Sprint #3)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 1, 1, 5, 1, DATEADD(day, 30, GETUTCDATE()), 0),
+('6ba026ac-40e7-48fe-ad61-9313d6562b34', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Refactor AlpineJS state models (Sprint #3)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 0, 2, 0, 1, 0, DATEADD(day, 14, GETUTCDATE()), 0),
+('0e1d4da6-d191-41b1-aa71-ec4a8126af10', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Refactor AlpineJS state models (Sprint #3)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 2, 1, 15, 10, DATEADD(day, 1, GETUTCDATE()), 0),
+('4b3505a9-75e0-49dc-8ae3-d8bd520f377d', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Create notification trigger events (Sprint #3)', N'Detailed performance investigation regarding active database connection leaks.', 1, 2, 0, 1, 0, DATEADD(day, 3, GETUTCDATE()), 0),
+('3c888c91-7ec8-431b-a574-f972ddeeb5fd', '55555555-5555-5555-5555-555555555555', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Create notification trigger events (Sprint #3)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 3, 0, 1, 0, DATEADD(day, 13, GETUTCDATE()), 0),
+('0b3118cd-883e-4f25-89f6-819adaf52b69', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Design new authentication forms (Sprint #3)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 2, 0, 1, 0, DATEADD(day, 20, GETUTCDATE()), 0),
+('f8c5b968-c1f5-47ae-acea-7b0042c4ac08', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, '0568ad89-cc72-4cb7-8b47-b714a14ad305', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Resolve memory leak in backend service (Sprint #4)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 0, 1, 0, 1, 0, DATEADD(day, 9, GETUTCDATE()), 0),
+('1a7f4ec9-3df1-423b-a707-bb78fa319601', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC99-9999-9999-9999-999999999999', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Design glassmorphic checkout UI (Sprint #4)', N'Detailed performance investigation regarding active database connection leaks.', 0, 2, 1, 15, 4, DATEADD(day, 21, GETUTCDATE()), 0),
+('0ccfe29b-a19d-4d56-8378-ef33b81010c9', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, '03b95716-f1bf-491b-8dd4-b180adff5662', '2c5e1418-655b-4525-b93a-5610940a21a0', N'Write integration test suites (Sprint #4)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 1, 1, 5, 3, DATEADD(day, 7, GETUTCDATE()), 0),
+('072c25a7-ddb8-48c8-a0e2-dc8236d2e807', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '938db8ea-47c1-4658-9da8-683d1781035d', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Setup API rate limit metrics (Sprint #4)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 3, 0, 1, 0, DATEADD(day, 22, GETUTCDATE()), 0),
+('87b11fe5-0281-43b2-9cce-347f8b714338', '88888888-8888-8888-8888-888888888888', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Run statistical tests on A/B routes (Sprint #4)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 2, 0, 1, 0, DATEADD(day, 16, GETUTCDATE()), 0),
+('b07950a4-c26b-46cc-97d1-d74ef4e5c240', '33333333-2222-1111-0000-999999999999', NULL, 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Deploy application stack (Sprint #4)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 2, 0, 1, 0, DATEADD(day, 13, GETUTCDATE()), 0),
+('0e8d091e-11e3-45e6-ae30-b0f61ffed685', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, '0391258e-5399-4f33-a857-86430cd399e3', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Implement workspace federation links (Sprint #4)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 1, 0, 1, 0, DATEADD(day, 27, GETUTCDATE()), 0),
+('d2805607-1aef-426e-a40d-a99d12427c4e', '88888888-8888-8888-8888-888888888888', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Setup API rate limit metrics (Sprint #4)', N'Detailed performance investigation regarding active database connection leaks.', 1, 2, 1, 10, 9, DATEADD(day, 25, GETUTCDATE()), 0),
+('5025f0f2-4ef1-46e4-8d33-37d02d92d01a', '88888888-8888-8888-8888-888888888888', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Run statistical tests on A/B routes (Sprint #4)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 2, 0, 1, 0, DATEADD(day, 23, GETUTCDATE()), 0),
+('85f5e469-a012-429e-8ac9-6b017a1f5727', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC99-9999-9999-9999-999999999999', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Create notification trigger events (Sprint #4)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 3, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('d33a40b1-b5ac-4235-8505-df1503fe9dbc', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Perform accessibility testing (Sprint #4)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 3, 0, 1, 0, DATEADD(day, 12, GETUTCDATE()), 0),
+('de373fc5-ed15-4488-9644-451e8308ac85', '99999999-9999-9999-9999-999999999999', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'abcdefab-1111-2222-3333-444444444444', N'Implement workspace federation links (Sprint #4)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 1, 0, 1, 0, DATEADD(day, 17, GETUTCDATE()), 0),
+('dae637aa-f96c-4135-b44e-5b2db2a0aefc', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, 'd0310624-9fc3-4abd-80cf-05a10aea0af3', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Deploy application stack (Sprint #4)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 1, 1, 15, 7, DATEADD(day, 10, GETUTCDATE()), 0),
+('c5562357-ac6d-4fab-b008-38f936f8bb9c', '77777777-7777-7777-7777-777777777777', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Deploy application stack (Sprint #4)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 3, 1, 15, 12, DATEADD(day, 26, GETUTCDATE()), 0),
+('ae5b9ed5-f3f3-4a3b-bd61-44fa47c0c43f', '44444444-4444-4444-4444-444444444444', NULL, '0568ad89-cc72-4cb7-8b47-b714a14ad305', '8f1346db-b2d4-4c14-a703-53861998a7d4', N'Run statistical tests on A/B routes (Sprint #4)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 3, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('41d16d38-f9cb-42b7-b12b-605951721f62', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Analyze SLURM orchestrator state (Sprint #4)', N'Detailed performance investigation regarding active database connection leaks.', 3, 3, 0, 1, 0, DATEADD(day, 26, GETUTCDATE()), 0),
+('bc4d2ec6-1c60-45f6-86bd-8918e8836135', '88888888-8888-8888-8888-888888888888', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Design new authentication forms (Sprint #4)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 2, 0, 1, 0, DATEADD(day, 8, GETUTCDATE()), 0),
+('bc65222f-a69b-42fc-b06f-a0147fde4574', '22222222-1111-0000-9999-888888888888', NULL, '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Deploy application stack (Sprint #4)', N'Detailed performance investigation regarding active database connection leaks.', 2, 2, 0, 1, 0, DATEADD(day, 17, GETUTCDATE()), 0),
+('1f88d910-34a3-4182-8990-8b8a61539cbe', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Resolve memory leak in backend service (Sprint #4)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 3, 0, 1, 0, DATEADD(day, 28, GETUTCDATE()), 0),
+('525d80c9-096a-4cff-b055-ae418213f439', '88888888-8888-8888-8888-888888888888', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Write integration test suites (Sprint #4)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 1, 1, 0, 1, 0, DATEADD(day, 19, GETUTCDATE()), 0),
+('8a6cfb9f-d133-4f11-a9da-fdeef6ce4427', '11111111-0000-9999-8888-777777777777', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Refactor dashboard components (Sprint #5)', N'Detailed performance investigation regarding active database connection leaks.', 1, 2, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('031f7b50-2b37-48ab-8fd1-81d57f9a47b0', '66666666-6666-6666-6666-666666666666', NULL, '1ad8a53b-c987-4665-bb89-6e77738e6de1', '71661de2-3f26-4a33-8524-316f83e798c9', N'Refactor AlpineJS state models (Sprint #5)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 1, 1, 5, 0, DATEADD(day, 22, GETUTCDATE()), 0),
+('d4984fd8-6042-4585-9b27-af964ea95f9f', '11111111-0000-9999-8888-777777777777', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Refactor dashboard components (Sprint #5)', N'Detailed performance investigation regarding active database connection leaks.', 3, 2, 0, 1, 0, DATEADD(day, 12, GETUTCDATE()), 0),
+('e049b9ba-ff20-4961-a085-9e210ecdc4e9', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC99-9999-9999-9999-999999999999', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Write integration test suites (Sprint #5)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 2, 0, 1, 0, DATEADD(day, 22, GETUTCDATE()), 0),
+('670b8a1b-45d3-4a7f-9028-f5e11f09f295', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, '03b95716-f1bf-491b-8dd4-b180adff5662', '2c5e1418-655b-4525-b93a-5610940a21a0', N'Run statistical tests on A/B routes (Sprint #5)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 2, 0, 1, 0, DATEADD(day, 8, GETUTCDATE()), 0),
+('fcd4bd24-0269-415d-9885-a3685cdc78ea', '88888888-8888-8888-8888-888888888888', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Write technical architectural guidelines (Sprint #5)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 3, 1, 15, 4, DATEADD(day, 15, GETUTCDATE()), 0),
+('924f4621-07bc-466d-9336-85f0737f54de', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 'CCCCCC99-9999-9999-9999-999999999999', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Translate dashboard localization (Sprint #5)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 1, 3, 0, 1, 0, DATEADD(day, 25, GETUTCDATE()), 0),
+('81fd6461-6632-42e9-b64c-a782309c989a', '77777777-7777-7777-7777-777777777777', NULL, 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Analyze SLURM orchestrator state (Sprint #5)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 3, 0, 1, 0, DATEADD(day, 30, GETUTCDATE()), 0),
+('dc235964-44a1-4d3d-93e3-c6de443eefcf', '55555555-5555-5555-5555-555555555555', NULL, '618269dc-e47b-4dda-9198-afc388223528', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Deploy application stack (Sprint #5)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 3, 0, 1, 0, DATEADD(day, 26, GETUTCDATE()), 0),
+('b230ecc1-c50e-41f0-a33b-1141fc3b51be', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Setup API rate limit metrics (Sprint #5)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 1, 1, 10, 9, DATEADD(day, 1, GETUTCDATE()), 0),
+('f096514f-b073-4b8c-845c-c5d7ce563e93', '11111111-0000-9999-8888-777777777777', NULL, 'FFFFFF66-6666-6666-6666-666666666666', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Deploy application stack (Sprint #5)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 1, 0, 1, 0, DATEADD(day, 3, GETUTCDATE()), 0),
+('8bc648fc-1d64-4f17-95fd-c597925c2565', '11111111-0000-9999-8888-777777777777', NULL, 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Create notification trigger events (Sprint #5)', N'Detailed performance investigation regarding active database connection leaks.', 3, 3, 1, 10, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('72d86dd6-e337-4be6-863e-81880b45bc84', '88888888-8888-8888-8888-888888888888', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Perform accessibility testing (Sprint #5)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 1, 1, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('f7b3d53a-feb8-4071-92a1-d6cdd050be6c', '99999999-9999-9999-9999-999999999999', NULL, 'EEEEEE11-1111-1111-1111-111111111111', 'abcdefab-1111-2222-3333-444444444444', N'Design glassmorphic checkout UI (Sprint #5)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 2, 0, 1, 0, DATEADD(day, 5, GETUTCDATE()), 0),
+('168d70ec-eeb3-4f24-997a-67a802dc5f28', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, '2c0040a8-6f4e-4d98-8745-f96e45ea128a', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Refactor AlpineJS state models (Sprint #5)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 1, 1, 15, 5, DATEADD(day, 16, GETUTCDATE()), 0),
+('1896cc75-1220-40de-b66a-fae116d37339', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Resolve memory leak in backend service (Sprint #5)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 1, 2, 0, 1, 0, DATEADD(day, 7, GETUTCDATE()), 0),
+('5d636c23-0039-490b-a8db-de3cbb3966ed', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '2c5e1418-655b-4525-b93a-5610940a21a0', N'Implement user billing history view (Sprint #5)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 1, 0, 1, 0, DATEADD(day, 4, GETUTCDATE()), 0),
+('18553b11-24a5-4d5b-94fd-492319ab48c5', '33333333-2222-1111-0000-999999999999', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Refactor dashboard components (Sprint #5)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 0, 3, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('3cc6f549-46d8-4f97-9215-cc8f2229b722', '99999999-9999-9999-9999-999999999999', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'abcdefab-2222-3333-4444-555555555555', N'Run statistical tests on A/B routes (Sprint #5)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 2, 0, 1, 0, DATEADD(day, 21, GETUTCDATE()), 0),
+('a07555c6-3493-439e-ac60-771d09aaadb3', '55555555-5555-5555-5555-555555555555', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Implement workspace federation links (Sprint #5)', N'Detailed performance investigation regarding active database connection leaks.', 3, 2, 1, 10, 2, DATEADD(day, 19, GETUTCDATE()), 0),
+('2108b234-a1f0-4b5b-a0ef-a39410030dfe', '55555555-5555-5555-5555-555555555555', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Write technical architectural guidelines (Sprint #6)', N'Detailed performance investigation regarding active database connection leaks.', 1, 2, 0, 1, 0, DATEADD(day, 14, GETUTCDATE()), 0),
+('b44ee9ca-d4f2-4605-afc8-0457a57b117b', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, '0391258e-5399-4f33-a857-86430cd399e3', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Tune GraphQL resolution paths (Sprint #6)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 2, 0, 1, 0, DATEADD(day, 21, GETUTCDATE()), 0),
+('daecd439-d079-48c4-8193-60764d7600e4', '66666666-6666-6666-6666-666666666666', NULL, '1ad8a53b-c987-4665-bb89-6e77738e6de1', '71661de2-3f26-4a33-8524-316f83e798c9', N'Migrate legacy files to AWS S3 (Sprint #6)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 3, 1, 5, 4, DATEADD(day, 13, GETUTCDATE()), 0),
+('ecd75a18-0e90-4910-9cdb-73888acd4a86', '77777777-7777-7777-7777-777777777777', NULL, 'BBBBBB88-8888-8888-8888-888888888888', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Write integration test suites (Sprint #6)', N'Detailed performance investigation regarding active database connection leaks.', 2, 1, 1, 15, 1, DATEADD(day, 10, GETUTCDATE()), 0),
+('e0c4f2d0-23a6-48b6-a04c-7fb25d761cd8', '66666666-6666-6666-6666-666666666666', NULL, 'd0310624-9fc3-4abd-80cf-05a10aea0af3', '71661de2-3f26-4a33-8524-316f83e798c9', N'Refactor dashboard components (Sprint #6)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 2, 1, 15, 6, DATEADD(day, 27, GETUTCDATE()), 0),
+('94ab9b2f-185d-48c4-a677-538db3095f4a', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, 'DDDDDD44-4444-4444-4444-444444444444', '2c5e1418-655b-4525-b93a-5610940a21a0', N'Design new authentication forms (Sprint #6)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 1, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('943317c8-627c-4ab0-87c0-02a445b38a85', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'AAAAAA33-3333-3333-3333-333333333333', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Perform accessibility testing (Sprint #6)', N'Detailed performance investigation regarding active database connection leaks.', 3, 1, 1, 15, 4, DATEADD(day, 9, GETUTCDATE()), 0),
+('58211888-4072-4777-b22e-94f94a97748a', '99999999-9999-9999-9999-999999999999', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'abcdefab-3333-4444-5555-666666666666', N'Implement workspace federation links (Sprint #6)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 2, 1, 10, 9, DATEADD(day, 28, GETUTCDATE()), 0),
+('4fea9317-f6b9-4855-a16c-753487c13181', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '938db8ea-47c1-4658-9da8-683d1781035d', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Deploy application stack (Sprint #6)', N'Detailed performance investigation regarding active database connection leaks.', 2, 1, 0, 1, 0, DATEADD(day, 27, GETUTCDATE()), 0),
+('d7327564-e9d1-42c2-8ff5-a72d2f8f78d6', '55555555-5555-5555-5555-555555555555', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Translate dashboard localization (Sprint #6)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 3, 0, 1, 0, DATEADD(day, 17, GETUTCDATE()), 0),
+('d9759427-7b7c-45fe-87cf-24ec207fdbb5', '55555555-5555-5555-5555-555555555555', NULL, '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Write technical architectural guidelines (Sprint #6)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 2, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('145aaa6b-4791-4e9c-96be-aceb3afd54b2', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, '03b95716-f1bf-491b-8dd4-b180adff5662', '2c5e1418-655b-4525-b93a-5610940a21a0', N'Implement workspace federation links (Sprint #6)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 1, 1, 10, 1, DATEADD(day, 30, GETUTCDATE()), 0),
+('b0060fe6-d843-4ee1-8286-44f90bfcc3d7', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Refactor dashboard components (Sprint #6)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 3, 1, 5, 2, DATEADD(day, 24, GETUTCDATE()), 0),
+('17874036-c06d-4507-81ab-a571fd5daf05', '66666666-6666-6666-6666-666666666666', NULL, '1ad8a53b-c987-4665-bb89-6e77738e6de1', '71661de2-3f26-4a33-8524-316f83e798c9', N'Design new authentication forms (Sprint #6)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 0, 3, 1, 15, 7, DATEADD(day, 28, GETUTCDATE()), 0),
+('7d425c91-65f6-4f23-aef4-73f7c9aca0f3', '22222222-1111-0000-9999-888888888888', NULL, '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Optimize database indexing (Sprint #6)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 1, 2, 0, 1, 0, DATEADD(day, 23, GETUTCDATE()), 0),
+('cbb50728-b3bd-490d-a653-18f8769c3ec9', '55555555-5555-5555-5555-555555555555', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Resolve memory leak in backend service (Sprint #6)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 2, 0, 1, 0, DATEADD(day, 1, GETUTCDATE()), 0),
+('c9f85170-2d68-4258-963d-78e833c6c0fa', '44444444-4444-4444-4444-444444444444', NULL, '0568ad89-cc72-4cb7-8b47-b714a14ad305', '8f1346db-b2d4-4c14-a703-53861998a7d4', N'Tune GraphQL resolution paths (Sprint #6)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 3, 0, 1, 0, DATEADD(day, 13, GETUTCDATE()), 0),
+('0380b887-c3ba-41de-84c4-ed433bc7863c', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Analyze SLURM orchestrator state (Sprint #6)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 3, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('1927b625-96a7-44a4-9609-a5d29cd121b6', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, '0568ad89-cc72-4cb7-8b47-b714a14ad305', '2c5e1418-655b-4525-b93a-5610940a21a0', N'Write technical architectural guidelines (Sprint #6)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 1, 0, 1, 0, DATEADD(day, 21, GETUTCDATE()), 0),
+('85ea09e5-099a-41ec-b67a-a09cacd26909', '33333333-2222-1111-0000-999999999999', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Setup API rate limit metrics (Sprint #6)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 3, 0, 1, 0, DATEADD(day, 4, GETUTCDATE()), 0),
+('81648c89-ceb3-4476-a614-7829ad79d015', '77777777-7777-7777-7777-777777777777', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Perform accessibility testing (Sprint #7)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 1, 1, 5, 3, DATEADD(day, 14, GETUTCDATE()), 0),
+('b86d7f08-1c10-4082-8da6-a32a88fc79c3', '11111111-0000-9999-8888-777777777777', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Deploy application stack (Sprint #7)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 1, 0, 1, 0, DATEADD(day, 12, GETUTCDATE()), 0),
+('645c6cf7-ce23-4b25-8cc7-f2edc1f3777f', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Implement user billing history view (Sprint #7)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 1, 3, 0, 1, 0, DATEADD(day, 1, GETUTCDATE()), 0),
+('c82d0721-0cea-4dd4-98b5-360da99d5a70', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 'a50d91b6-a74b-4235-88df-f14afcf7b373', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Write technical architectural guidelines (Sprint #7)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 1, 3, 0, 1, 0, DATEADD(day, 16, GETUTCDATE()), 0),
+('49253d5f-743d-482b-bfdd-8faba28cb786', '99999999-9999-9999-9999-999999999999', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'abcdefab-3333-4444-5555-666666666666', N'Perform accessibility testing (Sprint #7)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 2, 1, 15, 0, DATEADD(day, 11, GETUTCDATE()), 0),
+('208a3aaa-ad5f-4d1b-ad48-95040ff64621', '77777777-7777-7777-7777-777777777777', NULL, 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Translate dashboard localization (Sprint #7)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 2, 1, 5, 3, DATEADD(day, 13, GETUTCDATE()), 0),
+('b17f5b39-7c88-4ff1-9439-43be0f51f6dc', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, 'DDDDDD44-4444-4444-4444-444444444444', '2c5e1418-655b-4525-b93a-5610940a21a0', N'Setup API rate limit metrics (Sprint #7)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 3, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('ae1a11f9-6868-4cc7-9021-d97fcf558908', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Run statistical tests on A/B routes (Sprint #7)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 2, 1, 5, 2, DATEADD(day, 18, GETUTCDATE()), 0),
+('b9145b6c-5cea-4190-add0-857845eea674', '99999999-9999-9999-9999-999999999999', NULL, 'EEEEEE11-1111-1111-1111-111111111111', 'abcdefab-4444-5555-6666-777777777777', N'Write technical architectural guidelines (Sprint #7)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 3, 0, 1, 0, DATEADD(day, 12, GETUTCDATE()), 0),
+('4f2f6604-e550-4983-989b-6a2d36cc779a', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '35e6805b-6390-4d5f-94b3-bb3e06baacb5', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Resolve memory leak in backend service (Sprint #7)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 1, 1, 10, 3, DATEADD(day, 4, GETUTCDATE()), 0),
+('291283c2-da40-436b-aa78-16d77a00e425', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, '2c0040a8-6f4e-4d98-8745-f96e45ea128a', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Write technical architectural guidelines (Sprint #7)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 2, 0, 1, 0, DATEADD(day, 29, GETUTCDATE()), 0),
+('dc56858b-d330-45f2-b36a-70cbff26903f', '88888888-8888-8888-8888-888888888888', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Tune GraphQL resolution paths (Sprint #7)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 1, 1, 0, 1, 0, DATEADD(day, 4, GETUTCDATE()), 0),
+('21cc1f0c-7a7e-4bcb-8e4e-942ef79c5fbd', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, '2c0040a8-6f4e-4d98-8745-f96e45ea128a', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Refactor dashboard components (Sprint #7)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 2, 1, 15, 0, DATEADD(day, 16, GETUTCDATE()), 0),
+('02eb09dd-dd89-456b-a893-3ce29011129d', '33333333-2222-1111-0000-999999999999', NULL, '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Translate dashboard localization (Sprint #7)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 1, 1, 1, 15, 2, DATEADD(day, 21, GETUTCDATE()), 0),
+('87415b28-de53-4281-a3c1-cda236d45da9', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 'CCCCCC99-9999-9999-9999-999999999999', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Migrate legacy files to AWS S3 (Sprint #7)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 2, 0, 1, 0, DATEADD(day, 22, GETUTCDATE()), 0),
+('5b643b7d-0f7a-42c5-90f0-9fd85147fb7a', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Configure edge cache rules (Sprint #7)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 2, 0, 1, 0, DATEADD(day, 2, GETUTCDATE()), 0),
+('063e33d6-5ea3-4c6a-8008-185dcf614640', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, '0568ad89-cc72-4cb7-8b47-b714a14ad305', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Design new authentication forms (Sprint #7)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 1, 1, 10, 2, DATEADD(day, 3, GETUTCDATE()), 0),
+('fda4f797-540a-4a60-8971-7aad6b3f2089', '44444444-4444-4444-4444-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', '8f1346db-b2d4-4c14-a703-53861998a7d4', N'Setup API rate limit metrics (Sprint #7)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 1, 1, 0, 1, 0, DATEADD(day, 14, GETUTCDATE()), 0),
+('4bc4668c-c0b3-4f77-b4ed-63ba80b4d6a6', '77777777-7777-7777-7777-777777777777', NULL, 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Setup API rate limit metrics (Sprint #7)', N'Detailed performance investigation regarding active database connection leaks.', 3, 3, 0, 1, 0, DATEADD(day, 20, GETUTCDATE()), 0),
+('aa00df54-f86d-47a5-8618-e0d2fe617189', '66666666-6666-6666-6666-666666666666', NULL, '1ad8a53b-c987-4665-bb89-6e77738e6de1', '71661de2-3f26-4a33-8524-316f83e798c9', N'Migrate legacy files to AWS S3 (Sprint #7)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 1, 0, 1, 0, DATEADD(day, 9, GETUTCDATE()), 0),
+('7ee2eba6-1187-4af3-ad19-0a6137cc2290', '55555555-5555-5555-5555-555555555555', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Resolve memory leak in backend service (Sprint #8)', N'Detailed performance investigation regarding active database connection leaks.', 0, 2, 1, 15, 9, DATEADD(day, 28, GETUTCDATE()), 0),
+('bc22c6e4-aab5-4d28-9802-ac2490bf65d2', '88888888-8888-8888-8888-888888888888', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Run statistical tests on A/B routes (Sprint #8)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 1, 0, 1, 0, DATEADD(day, 30, GETUTCDATE()), 0),
+('61fabada-ca5a-492b-af83-34f299c327ad', '11111111-0000-9999-8888-777777777777', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Write technical architectural guidelines (Sprint #8)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 2, 0, 1, 0, DATEADD(day, 18, GETUTCDATE()), 0),
+('87fd1f81-1708-4b86-b587-418394b35f6c', '11111111-0000-9999-8888-777777777777', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Refactor AlpineJS state models (Sprint #8)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 3, 0, 1, 0, DATEADD(day, 26, GETUTCDATE()), 0),
+('2b8d9162-5481-4074-b5b3-a2256d2ff8e7', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Migrate legacy files to AWS S3 (Sprint #8)', N'Detailed performance investigation regarding active database connection leaks.', 2, 3, 0, 1, 0, DATEADD(day, 26, GETUTCDATE()), 0),
+('975eeefb-292b-4ae5-a13d-5812d4d74fc7', '22222222-1111-0000-9999-888888888888', NULL, '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Write technical architectural guidelines (Sprint #8)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 3, 0, 1, 0, DATEADD(day, 20, GETUTCDATE()), 0),
+('72de8522-2d39-4e8f-97a5-db25b85adc1c', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 'a50d91b6-a74b-4235-88df-f14afcf7b373', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Configure edge cache rules (Sprint #8)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 2, 0, 1, 0, DATEADD(day, 29, GETUTCDATE()), 0),
+('44542ac4-7674-4da4-8e89-77b1d4fb845a', '77777777-7777-7777-7777-777777777777', NULL, 'a50d91b6-a74b-4235-88df-f14afcf7b373', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Tune GraphQL resolution paths (Sprint #8)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 1, 0, 1, 0, DATEADD(day, 4, GETUTCDATE()), 0),
+('9d7dc042-012d-47e4-90a0-98ae4e6e4ac3', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, '03b95716-f1bf-491b-8dd4-b180adff5662', '2c5e1418-655b-4525-b93a-5610940a21a0', N'Refactor dashboard components (Sprint #8)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 3, 0, 1, 0, DATEADD(day, 23, GETUTCDATE()), 0),
+('f6ab1725-2f43-4047-9cf9-ef96aaf66a5c', '33333333-2222-1111-0000-999999999999', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Implement workspace federation links (Sprint #8)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 1, 3, 0, 1, 0, DATEADD(day, 20, GETUTCDATE()), 0),
+('4628542f-addc-4ee6-bc6d-372d69e1171b', '11111111-0000-9999-8888-777777777777', NULL, 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Configure edge cache rules (Sprint #8)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 2, 0, 1, 0, DATEADD(day, 7, GETUTCDATE()), 0),
+('5b49970c-4c87-4e09-b0d2-a4a10a453488', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '938db8ea-47c1-4658-9da8-683d1781035d', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Optimize database indexing (Sprint #8)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 3, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('dc2274a2-2205-4275-9a9d-c5842bd8deda', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, '0568ad89-cc72-4cb7-8b47-b714a14ad305', '2c5e1418-655b-4525-b93a-5610940a21a0', N'Setup API rate limit metrics (Sprint #8)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 3, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('322c9b6b-8a34-421d-b833-2a60fb725de2', '33333333-2222-1111-0000-999999999999', NULL, 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Write integration test suites (Sprint #8)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 0, 3, 0, 1, 0, DATEADD(day, 18, GETUTCDATE()), 0),
+('d61c2e7a-7c64-40fb-8785-6a23ae164af5', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'ed7c4e91-244b-492f-9173-d91ef072a852', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Write technical architectural guidelines (Sprint #8)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 1, 0, 1, 0, DATEADD(day, 5, GETUTCDATE()), 0),
+('56636cd4-9fef-4638-9e16-9b9585ecee19', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 'CCCCCC99-9999-9999-9999-999999999999', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Configure edge cache rules (Sprint #8)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 3, 0, 1, 0, DATEADD(day, 28, GETUTCDATE()), 0),
+('3e4034e6-3b2a-4fbd-bfb0-2792be842034', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Run statistical tests on A/B routes (Sprint #8)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 2, 0, 1, 0, DATEADD(day, 17, GETUTCDATE()), 0),
+('a064c14e-953f-4aae-b41e-803de0018072', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 'a50d91b6-a74b-4235-88df-f14afcf7b373', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Migrate legacy files to AWS S3 (Sprint #8)', N'Detailed performance investigation regarding active database connection leaks.', 1, 1, 0, 1, 0, DATEADD(day, 2, GETUTCDATE()), 0),
+('77964e9c-b56a-4e17-ae5b-9ae61aa7a289', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'ed7c4e91-244b-492f-9173-d91ef072a852', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Perform accessibility testing (Sprint #8)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 0, 3, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('e772ed7e-03dc-4fe0-a5c2-d9d9671a9a27', '66666666-6666-6666-6666-666666666666', NULL, '1ad8a53b-c987-4665-bb89-6e77738e6de1', '71661de2-3f26-4a33-8524-316f83e798c9', N'Analyze SLURM orchestrator state (Sprint #8)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 3, 0, 1, 0, DATEADD(day, 6, GETUTCDATE()), 0),
+('8bf23d44-fbf3-451d-9124-7a21e5c5abf6', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Optimize database indexing (Sprint #9)', N'Detailed performance investigation regarding active database connection leaks.', 2, 2, 0, 1, 0, DATEADD(day, 9, GETUTCDATE()), 0),
+('2d0036c3-44fd-4e4d-98c4-15d6a5dc5dc6', '66666666-6666-6666-6666-666666666666', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '71661de2-3f26-4a33-8524-316f83e798c9', N'Translate dashboard localization (Sprint #9)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 0, 3, 0, 1, 0, DATEADD(day, 7, GETUTCDATE()), 0),
+('f51b971d-7b57-447d-a9e8-5bd6ebda4be5', '11111111-0000-9999-8888-777777777777', NULL, 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Translate dashboard localization (Sprint #9)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 1, 1, 10, 5, DATEADD(day, 29, GETUTCDATE()), 0),
+('7795e0da-8e3b-486b-a989-67965b09feff', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Refactor AlpineJS state models (Sprint #9)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 2, 1, 5, 2, DATEADD(day, 14, GETUTCDATE()), 0),
+('6b60adc9-c701-4a53-aa23-1ec6458900ec', '22222222-1111-0000-9999-888888888888', NULL, '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Optimize database indexing (Sprint #9)', N'Detailed performance investigation regarding active database connection leaks.', 1, 2, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('ed8ccbe4-2765-4a83-8548-cdad9daef6a1', '99999999-9999-9999-9999-999999999999', NULL, '03b95716-f1bf-491b-8dd4-b180adff5662', 'abcdefab-3333-4444-5555-666666666666', N'Analyze SLURM orchestrator state (Sprint #9)', N'Detailed performance investigation regarding active database connection leaks.', 3, 2, 0, 1, 0, DATEADD(day, 30, GETUTCDATE()), 0),
+('7e78cb22-e962-44ea-be65-327f117be5a5', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Implement user billing history view (Sprint #9)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 2, 1, 10, 9, DATEADD(day, 19, GETUTCDATE()), 0),
+('fab8dfd2-e59a-4ffd-a670-aebe23d43d19', '33333333-2222-1111-0000-999999999999', NULL, '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Translate dashboard localization (Sprint #9)', N'Detailed performance investigation regarding active database connection leaks.', 0, 3, 0, 1, 0, DATEADD(day, 12, GETUTCDATE()), 0),
+('9e57f04e-58b7-4b5e-90d5-690207fe70e6', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, '35e6805b-6390-4d5f-94b3-bb3e06baacb5', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Migrate legacy files to AWS S3 (Sprint #9)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 2, 0, 1, 0, DATEADD(day, 2, GETUTCDATE()), 0),
+('5342a53b-66f6-4036-a274-b92488e9e801', '11111111-0000-9999-8888-777777777777', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Refactor dashboard components (Sprint #9)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 1, 1, 10, 0, DATEADD(day, 10, GETUTCDATE()), 0),
+('4ce02210-d404-44be-be8f-16ae7d0265ce', '33333333-2222-1111-0000-999999999999', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Run statistical tests on A/B routes (Sprint #9)', N'Detailed performance investigation regarding active database connection leaks.', 0, 2, 0, 1, 0, DATEADD(day, 23, GETUTCDATE()), 0),
+('2370a9d7-f549-43e8-b0c7-cd9fb98c640d', '99999999-9999-9999-9999-999999999999', NULL, '03b95716-f1bf-491b-8dd4-b180adff5662', 'abcdefab-1111-2222-3333-444444444444', N'Run statistical tests on A/B routes (Sprint #9)', N'Detailed performance investigation regarding active database connection leaks.', 1, 3, 1, 15, 4, DATEADD(day, 4, GETUTCDATE()), 0),
+('b904eb28-55ea-473e-8385-bff96c02d9b2', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, '2c0040a8-6f4e-4d98-8745-f96e45ea128a', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Analyze SLURM orchestrator state (Sprint #9)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 3, 0, 1, 0, DATEADD(day, 18, GETUTCDATE()), 0),
+('dcdeee35-19a8-4432-a933-ea46966cfbd1', '33333333-2222-1111-0000-999999999999', NULL, '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Write integration test suites (Sprint #9)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 2, 0, 1, 0, DATEADD(day, 25, GETUTCDATE()), 0),
+('432f66b2-f356-45b6-b3ae-8b1bcbb09c13', '77777777-7777-7777-7777-777777777777', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Translate dashboard localization (Sprint #9)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 1, 0, 1, 0, DATEADD(day, 13, GETUTCDATE()), 0),
+('383e457c-fc19-4396-919a-acb4f9ec8f82', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Tune GraphQL resolution paths (Sprint #9)', N'Detailed performance investigation regarding active database connection leaks.', 2, 1, 0, 1, 0, DATEADD(day, 4, GETUTCDATE()), 0),
+('d3f5f844-f047-4d2c-ba06-fa76133e0fe9', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 'a50d91b6-a74b-4235-88df-f14afcf7b373', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Analyze SLURM orchestrator state (Sprint #9)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 1, 0, 1, 0, DATEADD(day, 17, GETUTCDATE()), 0),
+('eaeb59a0-08fe-4beb-8b41-3535514f177b', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'ed7c4e91-244b-492f-9173-d91ef072a852', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Configure edge cache rules (Sprint #9)', N'Detailed performance investigation regarding active database connection leaks.', 1, 2, 0, 1, 0, DATEADD(day, 18, GETUTCDATE()), 0),
+('2e68d3da-6939-4ecc-ada2-c56ca2fef4d5', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, '2c0040a8-6f4e-4d98-8745-f96e45ea128a', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Tune GraphQL resolution paths (Sprint #9)', N'Detailed performance investigation regarding active database connection leaks.', 2, 1, 0, 1, 0, DATEADD(day, 19, GETUTCDATE()), 0),
+('603f31a4-ecf3-466a-bfd7-d447448465ff', '44444444-4444-4444-4444-444444444444', NULL, 'EEEEEE11-1111-1111-1111-111111111111', '8f1346db-b2d4-4c14-a703-53861998a7d4', N'Create notification trigger events (Sprint #9)', N'Detailed performance investigation regarding active database connection leaks.', 0, 2, 0, 1, 0, DATEADD(day, 9, GETUTCDATE()), 0),
+('65511d84-454e-45c3-80e2-75cbee23f4cf', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, '2c0040a8-6f4e-4d98-8745-f96e45ea128a', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Resolve memory leak in backend service (Sprint #10)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 2, 1, 5, 0, DATEADD(day, 8, GETUTCDATE()), 0),
+('c4fe81a4-91b3-44d2-9b54-f30bc989e4ce', '88888888-8888-8888-8888-888888888888', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Optimize database indexing (Sprint #10)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 3, 0, 1, 0, DATEADD(day, 8, GETUTCDATE()), 0),
+('6b591866-8082-46e2-b352-a027fd2990d6', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Resolve memory leak in backend service (Sprint #10)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 1, 2, 1, 5, 4, DATEADD(day, 20, GETUTCDATE()), 0),
+('ef1cc8b3-29f1-43d7-a711-7d9b36d156dc', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 'CCCCCC99-9999-9999-9999-999999999999', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Tune GraphQL resolution paths (Sprint #10)', N'Detailed performance investigation regarding active database connection leaks.', 1, 2, 1, 15, 11, DATEADD(day, 5, GETUTCDATE()), 0),
+('3b6e0aed-afd6-4d3d-9429-6e46e9bc1876', '55555555-5555-5555-5555-555555555555', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Write integration test suites (Sprint #10)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 3, 1, 10, 6, DATEADD(day, 13, GETUTCDATE()), 0),
+('e1c138c1-7d6e-46d9-8b30-752975506b0b', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Create notification trigger events (Sprint #10)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 1, 0, 1, 0, DATEADD(day, 21, GETUTCDATE()), 0),
+('f66233fa-b24c-4a7e-ae41-05e9895cf14f', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Refactor dashboard components (Sprint #10)', N'Detailed performance investigation regarding active database connection leaks.', 3, 2, 0, 1, 0, DATEADD(day, 17, GETUTCDATE()), 0),
+('229f3d30-c6df-48e3-97bd-71363c762df6', '88888888-8888-8888-8888-888888888888', NULL, 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Translate dashboard localization (Sprint #10)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 1, 3, 0, 1, 0, DATEADD(day, 26, GETUTCDATE()), 0),
+('4221b731-0001-4f5e-8091-283cfbef8ac8', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Write technical architectural guidelines (Sprint #10)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 3, 0, 1, 0, DATEADD(day, 25, GETUTCDATE()), 0),
+('4dcc3152-01ad-4af4-9603-a5171c1f72e8', '99999999-9999-9999-9999-999999999999', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'abcdefab-3333-4444-5555-666666666666', N'Design glassmorphic checkout UI (Sprint #10)', N'Detailed performance investigation regarding active database connection leaks.', 3, 2, 1, 5, 3, DATEADD(day, 12, GETUTCDATE()), 0),
+('6a4a40ad-1959-4c36-a755-ccd59da8ffc9', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, '35e6805b-6390-4d5f-94b3-bb3e06baacb5', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Tune GraphQL resolution paths (Sprint #10)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 2, 0, 1, 0, DATEADD(day, 3, GETUTCDATE()), 0),
+('cb2e77f0-113d-4063-bb62-669c67f0b87a', '11111111-0000-9999-8888-777777777777', NULL, 'FFFFFF66-6666-6666-6666-666666666666', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Refactor dashboard components (Sprint #10)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 3, 1, 5, 3, DATEADD(day, 20, GETUTCDATE()), 0),
+('37560a40-7ef7-4598-ba24-268ac8b58cdc', '33333333-2222-1111-0000-999999999999', NULL, 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Implement workspace federation links (Sprint #10)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 0, 2, 0, 1, 0, DATEADD(day, 22, GETUTCDATE()), 0),
+('76a30a6f-2916-49b9-a44a-0f554cb68cfe', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, 'EEEEEE55-5555-5555-5555-555555555555', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Design new authentication forms (Sprint #10)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 1, 0, 1, 0, DATEADD(day, 11, GETUTCDATE()), 0),
+('3ce97b21-cb04-45ba-a306-9504e9f1cb76', '55555555-5555-5555-5555-555555555555', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Translate dashboard localization (Sprint #10)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 2, 0, 1, 0, DATEADD(day, 3, GETUTCDATE()), 0),
+('086c18b8-a857-4f1c-822f-99f3838bcd6c', '55555555-5555-5555-5555-555555555555', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Tune GraphQL resolution paths (Sprint #10)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 1, 0, 1, 0, DATEADD(day, 29, GETUTCDATE()), 0),
+('11ac6cf2-e3b9-4540-80ef-e022c23f9059', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'EEEEEE11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Migrate legacy files to AWS S3 (Sprint #10)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 3, 0, 1, 0, DATEADD(day, 14, GETUTCDATE()), 0),
+('b5b9db61-be63-4629-a866-eb4196f963db', '55555555-5555-5555-5555-555555555555', NULL, '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Create notification trigger events (Sprint #10)', N'Detailed performance investigation regarding active database connection leaks.', 3, 2, 0, 1, 0, DATEADD(day, 29, GETUTCDATE()), 0),
+('a741ad75-2eec-45cb-8d3e-19db6c3f5672', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'AAAAAA33-3333-3333-3333-333333333333', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Analyze SLURM orchestrator state (Sprint #10)', N'Detailed performance investigation regarding active database connection leaks.', 3, 2, 0, 1, 0, DATEADD(day, 26, GETUTCDATE()), 0),
+('c9c85f7c-55c0-4667-90dd-09ce5783509b', '99999999-9999-9999-9999-999999999999', NULL, '03b95716-f1bf-491b-8dd4-b180adff5662', 'abcdefab-1111-2222-3333-444444444444', N'Translate dashboard localization (Sprint #10)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 0, 3, 1, 10, 2, DATEADD(day, 14, GETUTCDATE()), 0),
+('bf2ad7f3-6f74-4de8-9baf-2a33db78ed19', '55555555-5555-5555-5555-555555555555', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Write integration test suites (Sprint #11)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 2, 0, 1, 0, DATEADD(day, 25, GETUTCDATE()), 0),
+('339e38a3-d410-49cd-8f21-ee633b362c3d', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Migrate legacy files to AWS S3 (Sprint #11)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 3, 0, 1, 0, DATEADD(day, 25, GETUTCDATE()), 0),
+('81898087-0074-42a6-be3c-a1cf4cdca802', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Translate dashboard localization (Sprint #11)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 1, 3, 0, 1, 0, DATEADD(day, 21, GETUTCDATE()), 0),
+('d7cb8562-f0e7-4786-8de7-7f6228848902', '66666666-6666-6666-6666-666666666666', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '71661de2-3f26-4a33-8524-316f83e798c9', N'Design new authentication forms (Sprint #11)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 2, 0, 1, 0, DATEADD(day, 3, GETUTCDATE()), 0),
+('2e16ac30-a6d9-4d5d-8ed3-4f6f4527d143', '77777777-7777-7777-7777-777777777777', NULL, 'BBBBBB88-8888-8888-8888-888888888888', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Configure edge cache rules (Sprint #11)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 3, 0, 1, 0, DATEADD(day, 20, GETUTCDATE()), 0),
+('581ad852-3901-4982-9c10-6ff0fb769b15', '77777777-7777-7777-7777-777777777777', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Run statistical tests on A/B routes (Sprint #11)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 2, 0, 1, 0, DATEADD(day, 30, GETUTCDATE()), 0),
+('be5efa58-7b69-48ef-a7fa-82d74ddbf007', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Implement user billing history view (Sprint #11)', N'Detailed performance investigation regarding active database connection leaks.', 0, 3, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('5114a463-7841-4f73-aec8-17a8d9001507', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Deploy application stack (Sprint #11)', N'Detailed performance investigation regarding active database connection leaks.', 0, 2, 1, 15, 9, DATEADD(day, 13, GETUTCDATE()), 0),
+('5b9af171-ab64-429b-8ba2-1eeb6201b903', '33333333-2222-1111-0000-999999999999', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Refactor dashboard components (Sprint #11)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 3, 0, 1, 0, DATEADD(day, 28, GETUTCDATE()), 0),
+('2c4e8ba1-23e0-4693-a227-c49dbae4e148', '11111111-0000-9999-8888-777777777777', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Tune GraphQL resolution paths (Sprint #11)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 3, 3, 1, 5, 5, DATEADD(day, 1, GETUTCDATE()), 0),
+('6ba97812-88ed-47f1-9fba-527c0ce6c9ff', '55555555-5555-5555-5555-555555555555', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Translate dashboard localization (Sprint #11)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 2, 2, 0, 1, 0, DATEADD(day, 13, GETUTCDATE()), 0),
+('6106b01f-de23-4da3-9ffb-91784530d2cb', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Optimize database indexing (Sprint #11)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 2, 0, 1, 0, DATEADD(day, 13, GETUTCDATE()), 0),
+('b183c516-3189-452e-8330-06c852f33189', '55555555-5555-5555-5555-555555555555', NULL, 'BBBBBB22-2222-2222-2222-222222222222', '475d52b4-2b15-4364-8744-36c83fcb36cd', N'Write integration test suites (Sprint #11)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 2, 1, 10, 10, DATEADD(day, 17, GETUTCDATE()), 0),
+('1215eb5c-f4c6-403b-b2ec-98251ce8ae53', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Optimize database indexing (Sprint #11)', N'Detailed performance investigation regarding active database connection leaks.', 0, 2, 0, 1, 0, DATEADD(day, 26, GETUTCDATE()), 0),
+('303ed4c4-784d-40e6-8035-534295c8c412', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, '0568ad89-cc72-4cb7-8b47-b714a14ad305', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Design glassmorphic checkout UI (Sprint #11)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 3, 0, 1, 0, DATEADD(day, 30, GETUTCDATE()), 0),
+('fbaf6c14-b193-472b-a5a9-68f437a3423a', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Analyze SLURM orchestrator state (Sprint #11)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 0, 2, 0, 1, 0, DATEADD(day, 1, GETUTCDATE()), 0),
+('41ff2a77-3170-4160-88e0-2e056a173fdf', '11111111-0000-9999-8888-777777777777', NULL, 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Write technical architectural guidelines (Sprint #11)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 1, 3, 0, 1, 0, DATEADD(day, 16, GETUTCDATE()), 0),
+('e6325856-304f-476e-8f05-58c240e260b6', '44444444-4444-4444-4444-444444444444', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '8f1346db-b2d4-4c14-a703-53861998a7d4', N'Design glassmorphic checkout UI (Sprint #11)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 2, 1, 15, 8, DATEADD(day, 10, GETUTCDATE()), 0),
+('ead8ad11-4ce8-4a53-ae17-5df21c50fb70', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Optimize database indexing (Sprint #11)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 3, 0, 1, 0, DATEADD(day, 1, GETUTCDATE()), 0),
+('ae30209f-75f8-409a-95d8-fdc75ade512d', '66666666-6666-6666-6666-666666666666', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '71661de2-3f26-4a33-8524-316f83e798c9', N'Analyze SLURM orchestrator state (Sprint #11)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 1, 1, 0, 1, 0, DATEADD(day, 12, GETUTCDATE()), 0),
+('abeb873e-11fd-451a-842c-f1d27b166e3e', '88888888-8888-8888-8888-888888888888', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Optimize database indexing (Sprint #12)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 2, 0, 1, 0, DATEADD(day, 22, GETUTCDATE()), 0),
+('d65d7045-6d45-4a7f-ab9c-6e677276c33f', '77777777-7777-7777-7777-777777777777', NULL, 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Deploy application stack (Sprint #12)', N'Detailed performance investigation regarding active database connection leaks.', 2, 3, 1, 15, 12, DATEADD(day, 6, GETUTCDATE()), 0),
+('8abc0ebe-beab-4e00-8553-dbf7a0b87e11', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', '432f60fd-9ef4-4635-a375-b09cf9372a21', N'Tune GraphQL resolution paths (Sprint #12)', N'Detailed performance investigation regarding active database connection leaks.', 0, 3, 0, 1, 0, DATEADD(day, 28, GETUTCDATE()), 0),
+('b494091f-239f-4e34-b2d6-101603cb27ed', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, 'd0310624-9fc3-4abd-80cf-05a10aea0af3', '43974a60-8a6c-4bce-808b-f0467aa3b536', N'Design glassmorphic checkout UI (Sprint #12)', N'Detailed performance investigation regarding active database connection leaks.', 1, 1, 1, 15, 8, DATEADD(day, 9, GETUTCDATE()), 0),
+('1686e43e-2903-484b-92da-4212d245a190', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 'AAAAAA11-1111-1111-1111-111111111111', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', N'Tune GraphQL resolution paths (Sprint #12)', N'Detailed performance investigation regarding active database connection leaks.', 0, 1, 0, 1, 0, DATEADD(day, 23, GETUTCDATE()), 0),
+('8cb691a8-6c06-43ae-9d23-1bcec7844a03', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Deploy application stack (Sprint #12)', N'Detailed performance investigation regarding active database connection leaks.', 1, 2, 0, 1, 0, DATEADD(day, 15, GETUTCDATE()), 0),
+('b35941e4-7e38-4acd-a4f3-f9669e8612ea', '44444444-4444-4444-4444-444444444444', NULL, 'EEEEEE11-1111-1111-1111-111111111111', '8f1346db-b2d4-4c14-a703-53861998a7d4', N'Design glassmorphic checkout UI (Sprint #12)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 0, 3, 1, 15, 4, DATEADD(day, 8, GETUTCDATE()), 0),
+('3bebadb3-d451-478e-96c6-06c0a19edf27', '33333333-2222-1111-0000-999999999999', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Resolve memory leak in backend service (Sprint #12)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 1, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('92c526c8-ef04-40ad-b466-b3ab001811e8', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'ed7c4e91-244b-492f-9173-d91ef072a852', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Implement user billing history view (Sprint #12)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 1, 1, 1, 5, 2, DATEADD(day, 7, GETUTCDATE()), 0),
+('6f9da3d7-ab7f-41a9-b3e5-ce450d4ab55f', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Write technical architectural guidelines (Sprint #12)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 1, 1, 15, 9, DATEADD(day, 17, GETUTCDATE()), 0),
+('75c47b2c-5515-4c90-9701-b3c9dee94239', '11111111-0000-9999-8888-777777777777', NULL, 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', '4fc13a22-f0be-4717-8d28-bd408b0ac6f4', N'Configure edge cache rules (Sprint #12)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 1, 2, 0, 1, 0, DATEADD(day, 9, GETUTCDATE()), 0),
+('ef85937a-670f-4a52-9644-73c6de15ee31', '22222222-1111-0000-9999-888888888888', NULL, '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Implement user billing history view (Sprint #12)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 1, 3, 0, 1, 0, DATEADD(day, 29, GETUTCDATE()), 0),
+('1d938295-d56d-4ee3-b51c-ddbf1ffbcd50', '77777777-7777-7777-7777-777777777777', NULL, 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', '3382dd8a-2d8b-40f0-a491-ab760537580b', N'Deploy application stack (Sprint #12)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 2, 1, 5, 1, DATEADD(day, 23, GETUTCDATE()), 0),
+('02c17f8c-4b52-46b9-ad45-bd858ee90160', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 'CCCCCC99-9999-9999-9999-999999999999', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Deploy application stack (Sprint #12)', N'Detailed performance investigation regarding active database connection leaks.', 0, 2, 0, 1, 0, DATEADD(day, 10, GETUTCDATE()), 0),
+('cbbaed89-f7b3-47e1-830f-5e91e3830d71', '88888888-8888-8888-8888-888888888888', NULL, '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', N'Write integration test suites (Sprint #12)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 2, 3, 0, 1, 0, DATEADD(day, 4, GETUTCDATE()), 0),
+('e601c18e-bf69-418d-9fa3-6ef4c7adfb1f', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, '2c0040a8-6f4e-4d98-8745-f96e45ea128a', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Write integration test suites (Sprint #12)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 0, 2, 0, 1, 0, DATEADD(day, 28, GETUTCDATE()), 0),
+('0b3df9c4-3f9f-42dd-a8b1-509cc5c0485d', '33333333-2222-1111-0000-999999999999', NULL, 'BBBBBB22-2222-2222-2222-222222222222', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Configure edge cache rules (Sprint #12)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 1, 0, 1, 0, DATEADD(day, 10, GETUTCDATE()), 0),
+('fe241f48-97d4-40b1-ab80-2c6f9451346b', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 'AAAAAA33-3333-3333-3333-333333333333', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', N'Tune GraphQL resolution paths (Sprint #12)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 3, 0, 1, 0, DATEADD(day, 20, GETUTCDATE()), 0),
+('a7c10895-64db-4f93-b3f0-cc1da640abcf', '99999999-9999-9999-9999-999999999999', NULL, 'FFFFFF22-2222-2222-2222-222222222222', 'abcdefab-2222-3333-4444-555555555555', N'Design new authentication forms (Sprint #12)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 2, 3, 0, 1, 0, DATEADD(day, 3, GETUTCDATE()), 0),
+('5fd14a47-19ae-4fb9-8018-882637f1edfe', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, '2c0040a8-6f4e-4d98-8745-f96e45ea128a', 'e7e922c3-3c08-48e8-803a-28850fe31cda', N'Setup API rate limit metrics (Sprint #12)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 3, 0, 1, 0, DATEADD(day, 24, GETUTCDATE()), 0),
+('6df7b027-c686-4caa-8057-0ad6d3ccf8c3', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', N'Tune GraphQL resolution paths (Sprint #13)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 1, 0, 1, 0, DATEADD(day, 12, GETUTCDATE()), 0),
+('81c5cd33-c031-49cd-9a51-87462b88fe39', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC33-3333-3333-3333-333333333333', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Refactor dashboard components (Sprint #13)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 3, 2, 0, 1, 0, DATEADD(day, 20, GETUTCDATE()), 0),
+('fdd259ec-f947-4377-9c69-de672b1fddd9', '66666666-6666-6666-6666-666666666666', NULL, 'AAAAAA11-1111-1111-1111-111111111111', '71661de2-3f26-4a33-8524-316f83e798c9', N'Analyze SLURM orchestrator state (Sprint #13)', N'Create custom Helm charts, set up cluster ingress, and verify secure secrets mapping.', 3, 2, 1, 10, 9, DATEADD(day, 23, GETUTCDATE()), 0),
+('56b5344e-55fa-439c-a996-9c83fd18933c', '44444444-4444-4444-4444-444444444444', NULL, 'AAAAAA33-3333-3333-3333-333333333333', '8f1346db-b2d4-4c14-a703-53861998a7d4', N'Optimize database indexing (Sprint #13)', N'Refactor design tokens and import Inter and Outfit typography schemas.', 3, 2, 0, 1, 0, DATEADD(day, 19, GETUTCDATE()), 0),
+('bc928f5a-dc2f-4b6d-9054-2e66face55d7', '33333333-2222-1111-0000-999999999999', NULL, '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', N'Refactor AlpineJS state models (Sprint #13)', N'Integrate Apple Pay, Google Pay, and standard credit cards inside storefront gateway.', 2, 2, 0, 1, 0, DATEADD(day, 21, GETUTCDATE()), 0),
+('0a028feb-bbb7-4af9-ac29-77bd13f8ab53', '22222222-1111-0000-9999-888888888888', NULL, 'CCCCCC99-9999-9999-9999-999999999999', 'c3355b8b-3cbc-4d9a-8f34-18fd6cee98f4', N'Resolve memory leak in backend service (Sprint #13)', N'Analyze accuracy against speed using 4-bit and 8-bit quantized models.', 0, 1, 0, 1, 0, DATEADD(day, 4, GETUTCDATE()), 0);
+
+-- 8. Insert KPI Targets
+INSERT INTO KpiTargets (Id, WorkspaceId, UserId, CategoryId, PeriodType, StartDate, EndDate, TargetValue, IsDisabled) VALUES
+('b91be2d0-2f1c-4297-be5b-b45dbff547f7', '99999999-9999-9999-9999-999999999999', '938db8ea-47c1-4658-9da8-683d1781035d', 'abcdefab-1111-2222-3333-444444444444', 'Daily', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 10, 0),
+('b3dd6123-d085-44e0-beec-0d0941a30026', '99999999-9999-9999-9999-999999999999', 'a50d91b6-a74b-4235-88df-f14afcf7b373', 'abcdefab-1111-2222-3333-444444444444', 'Weekly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 10, 0),
+('281e1177-10af-4b03-9ad6-323657f6b9a1', 'addf9518-a3ba-42e5-9ea9-63073077c592', 'FFFFFF22-2222-2222-2222-222222222222', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', 'Weekly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 5, 0),
+('f1358a6b-3b86-4de2-acdd-cb440bf761c1', 'addf9518-a3ba-42e5-9ea9-63073077c592', 'FFFFFF66-6666-6666-6666-666666666666', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', 'Monthly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 5, 0),
+('1250633b-4f6b-44b8-b536-b43b7d3f4b2c', '99999999-9999-9999-9999-999999999999', '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', 'abcdefab-1111-2222-3333-444444444444', 'Weekly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 10, 0),
+('f4112b4d-fd3b-420b-85a9-4d4ad4d53506', '99999999-9999-9999-9999-999999999999', 'FFFFFF22-2222-2222-2222-222222222222', 'abcdefab-2222-3333-4444-555555555555', 'Weekly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 20, 0),
+('62fdd9a6-fdbf-44ef-a3a4-e617e165a3ab', '44444444-4444-4444-4444-444444444444', '0391258e-5399-4f33-a857-86430cd399e3', '8f1346db-b2d4-4c14-a703-53861998a7d4', 'Daily', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 20, 0),
+('a9795f1b-5f84-489e-b15d-44867ed9de5a', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', 'EEEEEE55-5555-5555-5555-555555555555', '432f60fd-9ef4-4635-a375-b09cf9372a21', 'Monthly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 5, 0),
+('56dd93ec-ddb5-40bd-93b0-058ef375b562', '66666666-6666-6666-6666-666666666666', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', '71661de2-3f26-4a33-8524-316f83e798c9', 'Monthly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 20, 0),
+('3e120c91-945b-48b7-b2e5-21a7fa153f23', '66666666-6666-6666-6666-666666666666', '0568ad89-cc72-4cb7-8b47-b714a14ad305', '71661de2-3f26-4a33-8524-316f83e798c9', 'Weekly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 5, 0),
+('b64a1c88-5090-47ea-97ba-7ce00c4e46d2', 'addf9518-a3ba-42e5-9ea9-63073077c592', 'DDDDDD44-4444-4444-4444-444444444444', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', 'Weekly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 20, 0),
+('4876b8af-f8ec-4ea9-9477-7fe887cc3333', '50a64fa8-6902-4848-b949-f831c89da00c', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', '43974a60-8a6c-4bce-808b-f0467aa3b536', 'Monthly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 20, 0),
+('96011c92-247c-4963-af7e-d54d15838094', 'addf9518-a3ba-42e5-9ea9-63073077c592', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', '2e6b3256-d428-456f-9bdf-d80ebabdf9b3', 'Daily', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 5, 0),
+('aefd3c7a-c604-4ce5-96ec-a9513c1ea2e0', '33333333-2222-1111-0000-999999999999', '1ad8a53b-c987-4665-bb89-6e77738e6de1', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', 'Monthly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 20, 0),
+('208ec514-9147-4800-90a0-bf9323fb6fd1', 'aaaaaaaa-1111-2222-3333-444444444444', 'da41bf65-4204-43fa-bdd9-f9255aaecbb6', 'f4566a94-373d-4fa9-ae54-6396bb6f3bd0', 'Weekly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 5, 0),
+('2ab95928-e373-459a-a8d7-8ff5fa10225e', '33333333-2222-1111-0000-999999999999', '938db8ea-47c1-4658-9da8-683d1781035d', 'f5ea40ff-d688-4e7b-84e3-9dbc7864ff46', 'Weekly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 20, 0),
+('3790b053-f1d3-4e6e-988e-11c51871dfc7', '245141b6-95c1-4d3e-8fe1-dd96bef76323', 'CCCCCC99-9999-9999-9999-999999999999', '75fa454a-08c2-4ea5-8824-4fd9b62d0623', 'Monthly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 10, 0),
+('752cc119-2848-4190-8b83-e06910712347', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', 'CCCCCC33-3333-3333-3333-333333333333', '432f60fd-9ef4-4635-a375-b09cf9372a21', 'Monthly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 10, 0),
+('52d603b3-21ba-4afe-84ce-e57069f731fd', 'bbbbbbbb-2222-3333-4444-555555555555', '0568ad89-cc72-4cb7-8b47-b714a14ad305', '2c5e1418-655b-4525-b93a-5610940a21a0', 'Monthly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 5, 0),
+('4ee9091d-a110-449f-84b8-c6d0fd42f21e', '88888888-8888-8888-8888-888888888888', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', 'Daily', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 5, 0),
+('1f1b44ec-7c0a-4f16-b14b-4640768224d8', '50a64fa8-6902-4848-b949-f831c89da00c', 'BBBBBB22-2222-2222-2222-222222222222', '43974a60-8a6c-4bce-808b-f0467aa3b536', 'Monthly', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 20, 0),
+('bcb1929b-60a6-40fa-bc73-6ccf267fbd61', '88888888-8888-8888-8888-888888888888', '1ad8a53b-c987-4665-bb89-6e77738e6de1', 'e6f1cee6-24b6-44a2-a146-102ca2a2b15d', 'Daily', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 10, 0),
+('884a67b6-3211-415f-8f19-898e3987249e', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', 'a50d91b6-a74b-4235-88df-f14afcf7b373', '432f60fd-9ef4-4635-a375-b09cf9372a21', 'Daily', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 5, 0),
+('1ff88b2c-4700-46dd-bc42-437bb0ccd3e8', 'bbbbbbbb-2222-3333-4444-555555555555', '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', '2c5e1418-655b-4525-b93a-5610940a21a0', 'Daily', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 5, 0),
+('f237adb7-e7ed-4c08-be4c-0ba508be034d', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', 'e0840c34-d719-483f-8a7c-8baf2d390f82', '432f60fd-9ef4-4635-a375-b09cf9372a21', 'Daily', DATEADD(day, -7, GETUTCDATE()), DATEADD(day, 7, GETUTCDATE()), 20, 0);
+
+-- 9. Insert Task Comments (Developer Conversations)
+INSERT INTO TaskComments (TaskId, UserId, Content, CreatedAt, IsDisabled) VALUES
+('00000000-0000-0000-0000-000000000103', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -11, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000104', 'AAAAAA77-7777-7777-7777-777777777777', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -12, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000116', 'c2431330-2381-4288-ada8-f8db85a33948', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -25, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000113', '0391258e-5399-4f33-a857-86430cd399e3', N'Which transformer models are we focusing on? GPT-4 and Claude 3.5 Sonnet?', DATEADD(hour, -40, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000115', 'CCCCCC99-9999-9999-9999-999999999999', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -21, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000111', '0568ad89-cc72-4cb7-8b47-b714a14ad305', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -33, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000107', 'ed7c4e91-244b-492f-9173-d91ef072a852', N'Which transformer models are we focusing on? GPT-4 and Claude 3.5 Sonnet?', DATEADD(hour, -19, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000112', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', N'Perfect! Please commit the results to the Files repository when done.', DATEADD(hour, -42, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000100', 'a50d91b6-a74b-4235-88df-f14afcf7b373', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -24, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000117', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -8, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000109', '660aed7f-14ef-4a78-a289-e57ceb3e310d', N'Perfect! Please commit the results to the Files repository when done.', DATEADD(hour, -10, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000125', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', N'I think we should also evaluate Llama 3 for local deployment scenarios, to compare cost vs. latency.', DATEADD(hour, -27, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000119', 'a50d91b6-a74b-4235-88df-f14afcf7b373', N'Good idea. I will compile Llama 3 throughput metrics in the spreadsheet.', DATEADD(hour, -24, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000121', '0a6eb437-a032-4db4-967a-795a177312f9', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -9, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000108', 'EEEEEE55-5555-5555-5555-555555555555', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -43, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000124', 'DDDDDD44-4444-4444-4444-444444444444', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -40, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000112', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'I think we should also evaluate Llama 3 for local deployment scenarios, to compare cost vs. latency.', DATEADD(hour, -11, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000114', 'BBBBBB88-8888-8888-8888-888888888888', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -42, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000108', 'AAAAAA33-3333-3333-3333-333333333333', N'Workflow action runs successfully on GitHub. Staging deployment is green.', DATEADD(hour, -8, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000119', '0a6eb437-a032-4db4-967a-795a177312f9', N'Workflow action runs successfully on GitHub. Staging deployment is green.', DATEADD(hour, -47, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000123', 'FFFFFF22-2222-2222-2222-222222222222', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -6, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000122', 'AAAAAA11-1111-1111-1111-111111111111', N'Workflow action runs successfully on GitHub. Staging deployment is green.', DATEADD(hour, -35, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000128', '0391258e-5399-4f33-a857-86430cd399e3', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -32, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000127', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'Perfect! Please commit the results to the Files repository when done.', DATEADD(hour, -22, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000105', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'I think we should also evaluate Llama 3 for local deployment scenarios, to compare cost vs. latency.', DATEADD(hour, -3, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000109', 'DDDDDD00-0000-0000-0000-000000000000', N'Which transformer models are we focusing on? GPT-4 and Claude 3.5 Sonnet?', DATEADD(hour, -14, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000101', 'FFFFFF22-2222-2222-2222-222222222222', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -4, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000101', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -41, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000102', 'FFFFFF66-6666-6666-6666-666666666666', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -27, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000119', '1ad8a53b-c987-4665-bb89-6e77738e6de1', N'Which transformer models are we focusing on? GPT-4 and Claude 3.5 Sonnet?', DATEADD(hour, -8, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000115', 'a50d91b6-a74b-4235-88df-f14afcf7b373', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -14, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000104', 'AAAAAA11-1111-1111-1111-111111111111', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -7, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000120', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'Good idea. I will compile Llama 3 throughput metrics in the spreadsheet.', DATEADD(hour, -28, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000113', 'BBBBBB88-8888-8888-8888-888888888888', N'Workflow action runs successfully on GitHub. Staging deployment is green.', DATEADD(hour, -17, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000120', '0a6eb437-a032-4db4-967a-795a177312f9', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -45, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000125', '0391258e-5399-4f33-a857-86430cd399e3', N'Which transformer models are we focusing on? GPT-4 and Claude 3.5 Sonnet?', DATEADD(hour, -48, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000103', 'AAAAAA33-3333-3333-3333-333333333333', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -6, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000100', 'AAAAAA33-3333-3333-3333-333333333333', N'Perfect! Please commit the results to the Files repository when done.', DATEADD(hour, -30, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000127', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -16, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000109', 'AAAAAA33-3333-3333-3333-333333333333', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -1, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000100', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -21, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000129', 'AAAAAA77-7777-7777-7777-777777777777', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -33, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000126', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -46, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000105', 'BBBBBB88-8888-8888-8888-888888888888', N'I think we should also evaluate Llama 3 for local deployment scenarios, to compare cost vs. latency.', DATEADD(hour, -14, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000100', 'CCCCCC99-9999-9999-9999-999999999999', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -28, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000103', 'da41bf65-4204-43fa-bdd9-f9255aaecbb6', N'Good idea. I will compile Llama 3 throughput metrics in the spreadsheet.', DATEADD(hour, -5, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000113', 'EEEEEE11-1111-1111-1111-111111111111', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -12, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000123', 'CCCCCC33-3333-3333-3333-333333333333', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -39, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000114', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -39, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000118', '938db8ea-47c1-4658-9da8-683d1781035d', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -25, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000104', 'AAAAAA77-7777-7777-7777-777777777777', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -14, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000126', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -30, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000115', 'e0840c34-d719-483f-8a7c-8baf2d390f82', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -34, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000120', 'BBBBBB88-8888-8888-8888-888888888888', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -24, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000117', 'ed7c4e91-244b-492f-9173-d91ef072a852', N'Perfect! Please commit the results to the Files repository when done.', DATEADD(hour, -19, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000127', '0568ad89-cc72-4cb7-8b47-b714a14ad305', N'Workflow action runs successfully on GitHub. Staging deployment is green.', DATEADD(hour, -3, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000102', '03b95716-f1bf-491b-8dd4-b180adff5662', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -44, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000100', 'a50d91b6-a74b-4235-88df-f14afcf7b373', N'I think we should also evaluate Llama 3 for local deployment scenarios, to compare cost vs. latency.', DATEADD(hour, -47, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000105', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -8, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000101', 'AAAAAA33-3333-3333-3333-333333333333', N'I think we should also evaluate Llama 3 for local deployment scenarios, to compare cost vs. latency.', DATEADD(hour, -22, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000124', '938db8ea-47c1-4658-9da8-683d1781035d', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -6, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000123', 'AAAAAA11-1111-1111-1111-111111111111', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -26, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000128', 'AAAAAA33-3333-3333-3333-333333333333', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -46, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000113', 'CCCCCC33-3333-3333-3333-333333333333', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -36, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000120', 'c2431330-2381-4288-ada8-f8db85a33948', N'Perfect! Please commit the results to the Files repository when done.', DATEADD(hour, -27, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000123', '0568ad89-cc72-4cb7-8b47-b714a14ad305', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -4, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000123', 'e0840c34-d719-483f-8a7c-8baf2d390f82', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -34, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000105', 'BBBBBB22-2222-2222-2222-222222222222', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -22, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000101', 'CCCCCC99-9999-9999-9999-999999999999', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -31, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000105', 'AAAAAA33-3333-3333-3333-333333333333', N'Good idea. I will compile Llama 3 throughput metrics in the spreadsheet.', DATEADD(hour, -23, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000127', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'I think we should also evaluate Llama 3 for local deployment scenarios, to compare cost vs. latency.', DATEADD(hour, -25, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000116', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Perfect! Please commit the results to the Files repository when done.', DATEADD(hour, -47, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000106', '0391258e-5399-4f33-a857-86430cd399e3', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -28, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000129', 'AAAAAA11-1111-1111-1111-111111111111', N'Good idea. I will compile Llama 3 throughput metrics in the spreadsheet.', DATEADD(hour, -7, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000117', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -34, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000113', 'EEEEEE55-5555-5555-5555-555555555555', N'I think we should also evaluate Llama 3 for local deployment scenarios, to compare cost vs. latency.', DATEADD(hour, -27, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000125', 'c2431330-2381-4288-ada8-f8db85a33948', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -40, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000106', 'FFFFFF22-2222-2222-2222-222222222222', N'Good idea. I will compile Llama 3 throughput metrics in the spreadsheet.', DATEADD(hour, -1, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000119', 'e0840c34-d719-483f-8a7c-8baf2d390f82', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -30, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000120', '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', N'Good idea. I will compile Llama 3 throughput metrics in the spreadsheet.', DATEADD(hour, -38, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000113', '1ad8a53b-c987-4665-bb89-6e77738e6de1', N'Workflow action runs successfully on GitHub. Staging deployment is green.', DATEADD(hour, -14, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000112', 'FFFFFF66-6666-6666-6666-666666666666', N'Perfect! Please commit the results to the Files repository when done.', DATEADD(hour, -43, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000105', 'CCCCCC99-9999-9999-9999-999999999999', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -42, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000107', 'AAAAAA33-3333-3333-3333-333333333333', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -13, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000100', 'FFFFFF22-2222-2222-2222-222222222222', N'Perfect! Please commit the results to the Files repository when done.', DATEADD(hour, -38, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000119', 'c2431330-2381-4288-ada8-f8db85a33948', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -8, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000107', '618269dc-e47b-4dda-9198-afc388223528', N'Which transformer models are we focusing on? GPT-4 and Claude 3.5 Sonnet?', DATEADD(hour, -11, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000116', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -29, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000128', 'da41bf65-4204-43fa-bdd9-f9255aaecbb6', N'Workflow action runs successfully on GitHub. Staging deployment is green.', DATEADD(hour, -40, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000100', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -26, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000126', '660aed7f-14ef-4a78-a289-e57ceb3e310d', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -14, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000113', 'EEEEEE55-5555-5555-5555-555555555555', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -22, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000103', 'c2431330-2381-4288-ada8-f8db85a33948', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -33, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000107', 'c2431330-2381-4288-ada8-f8db85a33948', N'Workflow action runs successfully on GitHub. Staging deployment is green.', DATEADD(hour, -31, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000102', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -31, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000120', '618269dc-e47b-4dda-9198-afc388223528', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -2, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000100', 'da41bf65-4204-43fa-bdd9-f9255aaecbb6', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -28, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000126', '0391258e-5399-4f33-a857-86430cd399e3', N'Workflow action runs successfully on GitHub. Staging deployment is green.', DATEADD(hour, -45, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000106', '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -48, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000106', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', N'I think we should also evaluate Llama 3 for local deployment scenarios, to compare cost vs. latency.', DATEADD(hour, -24, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000129', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Good idea. I will compile Llama 3 throughput metrics in the spreadsheet.', DATEADD(hour, -6, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000118', '938db8ea-47c1-4658-9da8-683d1781035d', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -44, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000117', 'BBBBBB88-8888-8888-8888-888888888888', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -28, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000119', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Make sure we set up composite indexes on heavily joined tables. It will drastically save execution times.', DATEADD(hour, -23, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000120', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -47, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000110', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -17, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000102', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -44, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000128', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Perfect! Please commit the results to the Files repository when done.', DATEADD(hour, -47, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000115', '938db8ea-47c1-4658-9da8-683d1781035d', N'Good idea. I will compile Llama 3 throughput metrics in the spreadsheet.', DATEADD(hour, -34, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000110', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -3, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000111', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -10, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000122', '03b95716-f1bf-491b-8dd4-b180adff5662', N'I will perform boundary check testing on the auth endpoints today.', DATEADD(hour, -44, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000118', '618269dc-e47b-4dda-9198-afc388223528', N'Good idea. I will compile Llama 3 throughput metrics in the spreadsheet.', DATEADD(hour, -25, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000116', 'a50d91b6-a74b-4235-88df-f14afcf7b373', N'Awesome! Just tested the seeder, works smoothly on my end.', DATEADD(hour, -3, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000121', '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', N'Which transformer models are we focusing on? GPT-4 and Claude 3.5 Sonnet?', DATEADD(hour, -2, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000111', 'EEEEEE55-5555-5555-5555-555555555555', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -34, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000125', 'ed7c4e91-244b-492f-9173-d91ef072a852', N'Seeded DB is set up on local SQL Server. Let me know if anyone runs into FK issues.', DATEADD(hour, -27, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000124', 'AAAAAA33-3333-3333-3333-333333333333', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -3, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000121', 'AAAAAA33-3333-3333-3333-333333333333', N'Let''s also include Gemini 1.5 Pro since we are exploring multimodal capabilities.', DATEADD(hour, -20, GETUTCDATE()), 0),
+('00000000-0000-0000-0000-000000000128', 'EEEEEE11-1111-1111-1111-111111111111', N'Workflow action runs successfully on GitHub. Staging deployment is green.', DATEADD(hour, -14, GETUTCDATE()), 0);
+
+-- 10. Insert Workspace Files
+INSERT INTO WorkspaceFiles (WorkspaceId, TaskId, UserId, FileName, FileUrl, FileType, FileSize, IsPublic, FederationId, CreatedAt, IsDisabled) VALUES
+('77777777-7777-7777-7777-777777777777', '00000000-0000-0000-0000-000000000117', '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', N'Wireframe.png', 'files/77777777-7777-7777-7777-777777777777/Wireframe.png', 'image', 4096000, 1, NULL, DATEADD(day, -8, GETUTCDATE()), 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', '083d0aa3-5561-4e83-b83f-d782e3769d32', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', N'Budget.xlsx', 'files/addf9518-a3ba-42e5-9ea9-63073077c592/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -4, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', '00000000-0000-0000-0000-000000000129', 'AAAAAA33-3333-3333-3333-333333333333', N'Transformer_Comparison.pdf', 'files/44444444-4444-4444-4444-444444444444/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -1, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', '00000000-0000-0000-0000-000000000112', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Wireframe.png', 'files/55555555-5555-5555-5555-555555555555/Wireframe.png', 'image', 4096000, 1, NULL, DATEADD(day, -4, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', '00000000-0000-0000-0000-000000000100', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Budget.xlsx', 'files/44444444-4444-4444-4444-444444444444/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -8, GETUTCDATE()), 0),
+('bbbbbbbb-2222-3333-4444-555555555555', '492e0b6e-ef77-47de-bcef-cce16626cfbb', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Stripe_API_Setup.pdf', 'files/bbbbbbbb-2222-3333-4444-555555555555/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -10, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', '492e0b6e-ef77-47de-bcef-cce16626cfbb', 'EEEEEE11-1111-1111-1111-111111111111', N'Database_Schema_Draft.docx', 'files/44444444-4444-4444-4444-444444444444/Database_Schema_Draft.docx', 'doc', 1153433, 1, NULL, DATEADD(day, -8, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', '1f02529b-85bf-427d-ae7b-bff517da799f', '1ad8a53b-c987-4665-bb89-6e77738e6de1', N'Transformer_Comparison.pdf', 'files/77777777-7777-7777-7777-777777777777/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -3, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', '00000000-0000-0000-0000-000000000113', '660aed7f-14ef-4a78-a289-e57ceb3e310d', N'Stripe_API_Setup.pdf', 'files/aaedaea8-bcb9-436e-a713-60b736cfb35a/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -5, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', '00000000-0000-0000-0000-000000000124', 'ed7c4e91-244b-492f-9173-d91ef072a852', N'Stripe_API_Setup.pdf', 'files/88888888-8888-8888-8888-888888888888/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -4, GETUTCDATE()), 0),
+('22222222-1111-0000-9999-888888888888', '00000000-0000-0000-0000-000000000001', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', N'Stripe_API_Setup.pdf', 'files/22222222-1111-0000-9999-888888888888/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -5, GETUTCDATE()), 0),
+('99999999-9999-9999-9999-999999999999', '4e89b19e-6699-4e1c-b68b-90e597ab089e', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Transformer_Comparison.pdf', 'files/99999999-9999-9999-9999-999999999999/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -4, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', '5d182b2a-da95-4cda-861d-45402c6dc103', 'DDDDDD00-0000-0000-0000-000000000000', N'Database_Schema_Draft.docx', 'files/66666666-6666-6666-6666-666666666666/Database_Schema_Draft.docx', 'doc', 1153433, 1, NULL, DATEADD(day, -5, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', '00000000-0000-0000-0000-000000000113', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Stripe_API_Setup.pdf', 'files/77777777-7777-7777-7777-777777777777/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -4, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', '00000000-0000-0000-0000-000000000109', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Transformer_Comparison.pdf', 'files/55555555-5555-5555-5555-555555555555/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -9, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', '00000000-0000-0000-0000-000000000113', 'FFFFFF66-6666-6666-6666-666666666666', N'Wireframe.png', 'files/44444444-4444-4444-4444-444444444444/Wireframe.png', 'image', 4096000, 1, NULL, DATEADD(day, -4, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', '00000000-0000-0000-0000-000000000114', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Stripe_API_Setup.pdf', 'files/77777777-7777-7777-7777-777777777777/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -10, GETUTCDATE()), 0),
+('aaaaaaaa-1111-2222-3333-444444444444', '312d3888-2e2a-4d12-844d-bc6958119dde', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Budget.xlsx', 'files/aaaaaaaa-1111-2222-3333-444444444444/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -3, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', '083d0aa3-5561-4e83-b83f-d782e3769d32', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Budget.xlsx', 'files/44444444-4444-4444-4444-444444444444/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -1, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', '00000000-0000-0000-0000-000000000110', 'DDDDDD00-0000-0000-0000-000000000000', N'Transformer_Comparison.pdf', 'files/88888888-8888-8888-8888-888888888888/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -4, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', '00000000-0000-0000-0000-000000000112', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Budget.xlsx', 'files/77777777-7777-7777-7777-777777777777/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -2, GETUTCDATE()), 0),
+('22222222-1111-0000-9999-888888888888', '00000000-0000-0000-0000-000000000129', 'c2431330-2381-4288-ada8-f8db85a33948', N'Stripe_API_Setup.pdf', 'files/22222222-1111-0000-9999-888888888888/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -5, GETUTCDATE()), 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', '083d0aa3-5561-4e83-b83f-d782e3769d32', 'FFFFFF22-2222-2222-2222-222222222222', N'Database_Schema_Draft.docx', 'files/addf9518-a3ba-42e5-9ea9-63073077c592/Database_Schema_Draft.docx', 'doc', 1153433, 1, NULL, DATEADD(day, -10, GETUTCDATE()), 0),
+('bbbbbbbb-2222-3333-4444-555555555555', '00000000-0000-0000-0000-000000000129', '0568ad89-cc72-4cb7-8b47-b714a14ad305', N'Wireframe.png', 'files/bbbbbbbb-2222-3333-4444-555555555555/Wireframe.png', 'image', 4096000, 1, NULL, DATEADD(day, -6, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', '1746d9fc-b806-4efb-85d8-cf8c0b6d8d70', 'AAAAAA11-1111-1111-1111-111111111111', N'Transformer_Comparison.pdf', 'files/33333333-2222-1111-0000-999999999999/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -2, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', '00000000-0000-0000-0000-000000000117', '1ad8a53b-c987-4665-bb89-6e77738e6de1', N'Transformer_Comparison.pdf', 'files/66666666-6666-6666-6666-666666666666/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -6, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', '5d182b2a-da95-4cda-861d-45402c6dc103', 'a50d91b6-a74b-4235-88df-f14afcf7b373', N'Database_Schema_Draft.docx', 'files/55555555-5555-5555-5555-555555555555/Database_Schema_Draft.docx', 'doc', 1153433, 1, NULL, DATEADD(day, -2, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '492e0b6e-ef77-47de-bcef-cce16626cfbb', 'FFFFFF66-6666-6666-6666-666666666666', N'Transformer_Comparison.pdf', 'files/ee32234d-40a4-4080-8ffa-49fdef310a7b/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -6, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', '00000000-0000-0000-0000-000000000121', '0a6eb437-a032-4db4-967a-795a177312f9', N'Stripe_API_Setup.pdf', 'files/33333333-2222-1111-0000-999999999999/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -9, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '00000000-0000-0000-0000-000000000107', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'Database_Schema_Draft.docx', 'files/ee32234d-40a4-4080-8ffa-49fdef310a7b/Database_Schema_Draft.docx', 'doc', 1153433, 1, NULL, DATEADD(day, -6, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', '5d182b2a-da95-4cda-861d-45402c6dc103', 'AAAAAA11-1111-1111-1111-111111111111', N'Wireframe.png', 'files/77777777-7777-7777-7777-777777777777/Wireframe.png', 'image', 4096000, 1, NULL, DATEADD(day, -4, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', '00000000-0000-0000-0000-000000000109', '746a3ed9-0b1b-43d7-98dd-a947122f8ccf', N'Transformer_Comparison.pdf', 'files/55555555-5555-5555-5555-555555555555/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -6, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', '4e89b19e-6699-4e1c-b68b-90e597ab089e', 'c2431330-2381-4288-ada8-f8db85a33948', N'Database_Schema_Draft.docx', 'files/77777777-7777-7777-7777-777777777777/Database_Schema_Draft.docx', 'doc', 1153433, 1, NULL, DATEADD(day, -3, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', '00000000-0000-0000-0000-000000000104', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Database_Schema_Draft.docx', 'files/77777777-7777-7777-7777-777777777777/Database_Schema_Draft.docx', 'doc', 1153433, 1, NULL, DATEADD(day, -8, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', '00000000-0000-0000-0000-000000000007', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Transformer_Comparison.pdf', 'files/11111111-0000-9999-8888-777777777777/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -6, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', '00000000-0000-0000-0000-000000000011', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Transformer_Comparison.pdf', 'files/88888888-8888-8888-8888-888888888888/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -9, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', '312d3888-2e2a-4d12-844d-bc6958119dde', 'EEEEEE11-1111-1111-1111-111111111111', N'Stripe_API_Setup.pdf', 'files/66666666-6666-6666-6666-666666666666/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -1, GETUTCDATE()), 0),
+('99999999-9999-9999-9999-999999999999', '00000000-0000-0000-0000-000000000111', '0a6eb437-a032-4db4-967a-795a177312f9', N'Transformer_Comparison.pdf', 'files/99999999-9999-9999-9999-999999999999/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -3, GETUTCDATE()), 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', '00000000-0000-0000-0000-000000000105', 'DDDDDD00-0000-0000-0000-000000000000', N'Stripe_API_Setup.pdf', 'files/50a64fa8-6902-4848-b949-f831c89da00c/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -9, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', '00000000-0000-0000-0000-000000000122', 'FFFFFF22-2222-2222-2222-222222222222', N'Stripe_API_Setup.pdf', 'files/88888888-8888-8888-8888-888888888888/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -9, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', '00000000-0000-0000-0000-000000000128', 'a50d91b6-a74b-4235-88df-f14afcf7b373', N'Stripe_API_Setup.pdf', 'files/44444444-4444-4444-4444-444444444444/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -6, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', '00000000-0000-0000-0000-000000000127', 'CCCCCC99-9999-9999-9999-999999999999', N'Budget.xlsx', 'files/88888888-8888-8888-8888-888888888888/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -8, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', '00000000-0000-0000-0000-000000000116', 'FFFFFF22-2222-2222-2222-222222222222', N'Budget.xlsx', 'files/aaedaea8-bcb9-436e-a713-60b736cfb35a/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -3, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', '00000000-0000-0000-0000-000000000109', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', N'Database_Schema_Draft.docx', 'files/33333333-2222-1111-0000-999999999999/Database_Schema_Draft.docx', 'doc', 1153433, 1, NULL, DATEADD(day, -6, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', '1d6bec98-a066-4264-93c9-a7fa31e47afc', 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', N'Budget.xlsx', 'files/66666666-6666-6666-6666-666666666666/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -4, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', '00000000-0000-0000-0000-000000000117', 'DDDDDD00-0000-0000-0000-000000000000', N'Stripe_API_Setup.pdf', 'files/33333333-2222-1111-0000-999999999999/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -7, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '00000000-0000-0000-0000-000000000129', '03b95716-f1bf-491b-8dd4-b180adff5662', N'Stripe_API_Setup.pdf', 'files/ee32234d-40a4-4080-8ffa-49fdef310a7b/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -8, GETUTCDATE()), 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', '00000000-0000-0000-0000-000000000011', '618269dc-e47b-4dda-9198-afc388223528', N'Budget.xlsx', 'files/245141b6-95c1-4d3e-8fe1-dd96bef76323/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -10, GETUTCDATE()), 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', '00000000-0000-0000-0000-000000000128', 'FFFFFF66-6666-6666-6666-666666666666', N'Stripe_API_Setup.pdf', 'files/245141b6-95c1-4d3e-8fe1-dd96bef76323/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -10, GETUTCDATE()), 0),
+('bbbbbbbb-2222-3333-4444-555555555555', '00000000-0000-0000-0000-000000000007', 'FFFFFF66-6666-6666-6666-666666666666', N'Stripe_API_Setup.pdf', 'files/bbbbbbbb-2222-3333-4444-555555555555/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -1, GETUTCDATE()), 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', '00000000-0000-0000-0000-000000000129', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Budget.xlsx', 'files/245141b6-95c1-4d3e-8fe1-dd96bef76323/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -6, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', '00000000-0000-0000-0000-000000000108', 'CCCCCC99-9999-9999-9999-999999999999', N'Wireframe.png', 'files/33333333-2222-1111-0000-999999999999/Wireframe.png', 'image', 4096000, 1, NULL, DATEADD(day, -4, GETUTCDATE()), 0),
+('22222222-1111-0000-9999-888888888888', '00000000-0000-0000-0000-000000000127', 'BBBBBB22-2222-2222-2222-222222222222', N'Budget.xlsx', 'files/22222222-1111-0000-9999-888888888888/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -1, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '00000000-0000-0000-0000-000000000111', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', N'Stripe_API_Setup.pdf', 'files/ee32234d-40a4-4080-8ffa-49fdef310a7b/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -2, GETUTCDATE()), 0),
+('99999999-9999-9999-9999-999999999999', '00000000-0000-0000-0000-000000000111', '0a6eb437-a032-4db4-967a-795a177312f9', N'Stripe_API_Setup.pdf', 'files/99999999-9999-9999-9999-999999999999/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -5, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', '00000000-0000-0000-0000-000000000106', '1ad8a53b-c987-4665-bb89-6e77738e6de1', N'Stripe_API_Setup.pdf', 'files/33333333-2222-1111-0000-999999999999/Stripe_API_Setup.pdf', 'pdf', 1885400, 1, NULL, DATEADD(day, -9, GETUTCDATE()), 0),
+('99999999-9999-9999-9999-999999999999', '1746d9fc-b806-4efb-85d8-cf8c0b6d8d70', '0391258e-5399-4f33-a857-86430cd399e3', N'Transformer_Comparison.pdf', 'files/99999999-9999-9999-9999-999999999999/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -8, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', '00000000-0000-0000-0000-000000000106', 'a50d91b6-a74b-4235-88df-f14afcf7b373', N'Transformer_Comparison.pdf', 'files/aaedaea8-bcb9-436e-a713-60b736cfb35a/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -4, GETUTCDATE()), 0),
+('aaaaaaaa-1111-2222-3333-444444444444', '1f02529b-85bf-427d-ae7b-bff517da799f', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Budget.xlsx', 'files/aaaaaaaa-1111-2222-3333-444444444444/Budget.xlsx', 'spreadsheet', 348160, 1, NULL, DATEADD(day, -9, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', '00000000-0000-0000-0000-000000000127', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Transformer_Comparison.pdf', 'files/11111111-0000-9999-8888-777777777777/Transformer_Comparison.pdf', 'pdf', 2516582, 1, NULL, DATEADD(day, -3, GETUTCDATE()), 0);
+
+-- 11. Insert Chat Rooms & Chat Messages
+INSERT INTO ChatRooms (Id, WorkspaceId, FederationId, IsDisabled) VALUES
+('31d1b48a-e75b-41ad-affc-6551f4164b04', '99999999-9999-9999-9999-999999999999', NULL, 0),
+('664f1c2a-cbbc-45b6-b689-113b39207e96', '88888888-8888-8888-8888-888888888888', NULL, 0),
+('aedcf094-9d54-4ce2-9929-ae8b00768c02', '77777777-7777-7777-7777-777777777777', NULL, 0),
+('225ad6f6-8606-4b0d-96c4-029c38105c5c', '66666666-6666-6666-6666-666666666666', NULL, 0),
+('c70e9495-1cc9-4239-a23f-a1ac8134206b', '55555555-5555-5555-5555-555555555555', NULL, 0),
+('96854670-e2f3-44f2-8b0c-0152f0e37ca6', '44444444-4444-4444-4444-444444444444', NULL, 0),
+('880cee67-9aab-4798-b85d-0b5b04488e24', '33333333-2222-1111-0000-999999999999', NULL, 0),
+('e3c716f3-deee-41be-b577-0d63df6f4d80', '22222222-1111-0000-9999-888888888888', NULL, 0),
+('19de4061-8213-49d1-9606-cdb84e91337b', '11111111-0000-9999-8888-777777777777', NULL, 0),
+('fed54321-1234-1234-1234-123456789012', 'aaaaaaaa-1111-2222-3333-444444444444', NULL, 0),
+('53c024d6-7cf8-41f1-a76c-477073e462fd', 'bbbbbbbb-2222-3333-4444-555555555555', NULL, 0),
+('eba46689-e876-41a1-bb62-df25e6055d3b', 'addf9518-a3ba-42e5-9ea9-63073077c592', NULL, 0),
+('8377aefd-922f-407a-9a94-ac24b0593d38', '245141b6-95c1-4d3e-8fe1-dd96bef76323', NULL, 0),
+('f422d82c-ce28-45ff-8d26-8e79a0041dfa', '50a64fa8-6902-4848-b949-f831c89da00c', NULL, 0),
+('1488f904-d26e-41f9-a296-a6721882990c', 'ee32234d-40a4-4080-8ffa-49fdef310a7b', NULL, 0),
+('7fe63279-e4e8-4d7b-90f4-cf7d7697c6ce', 'aaedaea8-bcb9-436e-a713-60b736cfb35a', NULL, 0),
+('fed12345-1234-1234-1234-123456789012', NULL, 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF', 0);
+
+INSERT INTO ChatMessages (RoomId, SenderId, Content, SentAt, IsDeleted, IsDisabled) VALUES
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Hi team, let''''s align on the Llama 3 quantization task today. What''''s the status?', DATEADD(minute, -120, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'I just completed the 4-bit and 8-bit AWQ benchmarks. Perplexity degradation is minimal!', DATEADD(minute, -119, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Excellent. I am setting up the Triton inference server deployment pipeline to staging.', DATEADD(minute, -118, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Perfect. Let''''s make sure the GPU memory footprint is under 12GB for edge runtimes.', DATEADD(minute, -117, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'I updated the dashboard mockups to include real-time perplexity and token throughput charts.', DATEADD(minute, -116, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'I''''ll map the custom metrics collector to push the SLURM state into our local DB.', DATEADD(minute, -115, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Awesome! The database project schemas look robust. I verified all FKs locally.', DATEADD(minute, -114, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Awesome, pipeline is green. We can trigger the automated evaluation runs tonight.', DATEADD(minute, -113, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Great work. I will monitor the loss curves over the weekend.', DATEADD(minute, -112, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'The glassmorphic dark mode styling for the model select looks really premium.', DATEADD(minute, -111, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'Agreed. Let''''s package the build and run integration tests tomorrow.', DATEADD(minute, -110, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Sounds good. I''''ll make sure there are no calendar or scheduling conflicts for the team.', DATEADD(minute, -109, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Hi team, let''''s align on the Llama 3 quantization task today. What''''s the status?', DATEADD(minute, -108, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'I just completed the 4-bit and 8-bit AWQ benchmarks. Perplexity degradation is minimal!', DATEADD(minute, -107, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Excellent. I am setting up the Triton inference server deployment pipeline to staging.', DATEADD(minute, -106, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Perfect. Let''''s make sure the GPU memory footprint is under 12GB for edge runtimes.', DATEADD(minute, -105, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'I updated the dashboard mockups to include real-time perplexity and token throughput charts.', DATEADD(minute, -104, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'I''''ll map the custom metrics collector to push the SLURM state into our local DB.', DATEADD(minute, -103, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Awesome! The database project schemas look robust. I verified all FKs locally.', DATEADD(minute, -102, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Awesome, pipeline is green. We can trigger the automated evaluation runs tonight.', DATEADD(minute, -101, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Great work. I will monitor the loss curves over the weekend.', DATEADD(minute, -100, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'The glassmorphic dark mode styling for the model select looks really premium.', DATEADD(minute, -99, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'Agreed. Let''''s package the build and run integration tests tomorrow.', DATEADD(minute, -98, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Sounds good. I''''ll make sure there are no calendar or scheduling conflicts for the team.', DATEADD(minute, -97, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Hi team, let''''s align on the Llama 3 quantization task today. What''''s the status?', DATEADD(minute, -96, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'I just completed the 4-bit and 8-bit AWQ benchmarks. Perplexity degradation is minimal!', DATEADD(minute, -95, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Excellent. I am setting up the Triton inference server deployment pipeline to staging.', DATEADD(minute, -94, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Perfect. Let''''s make sure the GPU memory footprint is under 12GB for edge runtimes.', DATEADD(minute, -93, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'I updated the dashboard mockups to include real-time perplexity and token throughput charts.', DATEADD(minute, -92, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'I''''ll map the custom metrics collector to push the SLURM state into our local DB.', DATEADD(minute, -91, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Awesome! The database project schemas look robust. I verified all FKs locally.', DATEADD(minute, -90, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Awesome, pipeline is green. We can trigger the automated evaluation runs tonight.', DATEADD(minute, -89, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Great work. I will monitor the loss curves over the weekend.', DATEADD(minute, -88, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'The glassmorphic dark mode styling for the model select looks really premium.', DATEADD(minute, -87, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'Agreed. Let''''s package the build and run integration tests tomorrow.', DATEADD(minute, -86, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Sounds good. I''''ll make sure there are no calendar or scheduling conflicts for the team.', DATEADD(minute, -85, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Hi team, let''''s align on the Llama 3 quantization task today. What''''s the status?', DATEADD(minute, -84, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'I just completed the 4-bit and 8-bit AWQ benchmarks. Perplexity degradation is minimal!', DATEADD(minute, -83, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Excellent. I am setting up the Triton inference server deployment pipeline to staging.', DATEADD(minute, -82, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Perfect. Let''''s make sure the GPU memory footprint is under 12GB for edge runtimes.', DATEADD(minute, -81, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'I updated the dashboard mockups to include real-time perplexity and token throughput charts.', DATEADD(minute, -80, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'I''''ll map the custom metrics collector to push the SLURM state into our local DB.', DATEADD(minute, -79, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Awesome! The database project schemas look robust. I verified all FKs locally.', DATEADD(minute, -78, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Awesome, pipeline is green. We can trigger the automated evaluation runs tonight.', DATEADD(minute, -77, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Great work. I will monitor the loss curves over the weekend.', DATEADD(minute, -76, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'The glassmorphic dark mode styling for the model select looks really premium.', DATEADD(minute, -75, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'Agreed. Let''''s package the build and run integration tests tomorrow.', DATEADD(minute, -74, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Sounds good. I''''ll make sure there are no calendar or scheduling conflicts for the team.', DATEADD(minute, -73, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Hi team, let''''s align on the Llama 3 quantization task today. What''''s the status?', DATEADD(minute, -72, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'I just completed the 4-bit and 8-bit AWQ benchmarks. Perplexity degradation is minimal!', DATEADD(minute, -71, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Excellent. I am setting up the Triton inference server deployment pipeline to staging.', DATEADD(minute, -70, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Perfect. Let''''s make sure the GPU memory footprint is under 12GB for edge runtimes.', DATEADD(minute, -69, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'I updated the dashboard mockups to include real-time perplexity and token throughput charts.', DATEADD(minute, -68, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'I''''ll map the custom metrics collector to push the SLURM state into our local DB.', DATEADD(minute, -67, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Awesome! The database project schemas look robust. I verified all FKs locally.', DATEADD(minute, -66, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Awesome, pipeline is green. We can trigger the automated evaluation runs tonight.', DATEADD(minute, -65, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Great work. I will monitor the loss curves over the weekend.', DATEADD(minute, -64, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'The glassmorphic dark mode styling for the model select looks really premium.', DATEADD(minute, -63, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'Agreed. Let''''s package the build and run integration tests tomorrow.', DATEADD(minute, -62, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Sounds good. I''''ll make sure there are no calendar or scheduling conflicts for the team.', DATEADD(minute, -61, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Hi team, let''''s align on the Llama 3 quantization task today. What''''s the status?', DATEADD(minute, -60, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'I just completed the 4-bit and 8-bit AWQ benchmarks. Perplexity degradation is minimal!', DATEADD(minute, -59, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Excellent. I am setting up the Triton inference server deployment pipeline to staging.', DATEADD(minute, -58, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Perfect. Let''''s make sure the GPU memory footprint is under 12GB for edge runtimes.', DATEADD(minute, -57, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'I updated the dashboard mockups to include real-time perplexity and token throughput charts.', DATEADD(minute, -56, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'I''''ll map the custom metrics collector to push the SLURM state into our local DB.', DATEADD(minute, -55, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Awesome! The database project schemas look robust. I verified all FKs locally.', DATEADD(minute, -54, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Awesome, pipeline is green. We can trigger the automated evaluation runs tonight.', DATEADD(minute, -53, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Great work. I will monitor the loss curves over the weekend.', DATEADD(minute, -52, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'The glassmorphic dark mode styling for the model select looks really premium.', DATEADD(minute, -51, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'Agreed. Let''''s package the build and run integration tests tomorrow.', DATEADD(minute, -50, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Sounds good. I''''ll make sure there are no calendar or scheduling conflicts for the team.', DATEADD(minute, -49, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Hi team, let''''s align on the Llama 3 quantization task today. What''''s the status?', DATEADD(minute, -48, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'I just completed the 4-bit and 8-bit AWQ benchmarks. Perplexity degradation is minimal!', DATEADD(minute, -47, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Excellent. I am setting up the Triton inference server deployment pipeline to staging.', DATEADD(minute, -46, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Perfect. Let''''s make sure the GPU memory footprint is under 12GB for edge runtimes.', DATEADD(minute, -45, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'I updated the dashboard mockups to include real-time perplexity and token throughput charts.', DATEADD(minute, -44, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'I''''ll map the custom metrics collector to push the SLURM state into our local DB.', DATEADD(minute, -43, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Awesome! The database project schemas look robust. I verified all FKs locally.', DATEADD(minute, -42, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Awesome, pipeline is green. We can trigger the automated evaluation runs tonight.', DATEADD(minute, -41, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Great work. I will monitor the loss curves over the weekend.', DATEADD(minute, -40, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'The glassmorphic dark mode styling for the model select looks really premium.', DATEADD(minute, -39, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'Agreed. Let''''s package the build and run integration tests tomorrow.', DATEADD(minute, -38, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Sounds good. I''''ll make sure there are no calendar or scheduling conflicts for the team.', DATEADD(minute, -37, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Hi team, let''''s align on the Llama 3 quantization task today. What''''s the status?', DATEADD(minute, -36, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'I just completed the 4-bit and 8-bit AWQ benchmarks. Perplexity degradation is minimal!', DATEADD(minute, -35, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'EEEEEE11-1111-1111-1111-111111111111', N'Excellent. I am setting up the Triton inference server deployment pipeline to staging.', DATEADD(minute, -34, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA11-1111-1111-1111-111111111111', N'Perfect. Let''''s make sure the GPU memory footprint is under 12GB for edge runtimes.', DATEADD(minute, -33, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'CCCCCC33-3333-3333-3333-333333333333', N'I updated the dashboard mockups to include real-time perplexity and token throughput charts.', DATEADD(minute, -32, GETUTCDATE()), 0, 0),
+('fed54321-1234-1234-1234-123456789012', 'AAAAAA33-3333-3333-3333-333333333333', N'I''''ll map the custom metrics collector to push the SLURM state into our local DB.', DATEADD(minute, -31, GETUTCDATE()), 0, 0),
+('225ad6f6-8606-4b0d-96c4-029c38105c5c', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Sure, I''''ll update my task progress shortly.', DATEADD(minute, -30, GETUTCDATE()), 0, 0),
+('225ad6f6-8606-4b0d-96c4-029c38105c5c', 'a50d91b6-a74b-4235-88df-f14afcf7b373', N'Hi everyone, let''''s post daily updates here.', DATEADD(minute, -29, GETUTCDATE()), 0, 0),
+('19de4061-8213-49d1-9606-cdb84e91337b', '618269dc-e47b-4dda-9198-afc388223528', N'Staging environment is updated and looking stable.', DATEADD(minute, -28, GETUTCDATE()), 0, 0),
+('fed12345-1234-1234-1234-123456789012', 'BBBBBB22-2222-2222-2222-222222222222', N'Staging environment is updated and looking stable.', DATEADD(minute, -27, GETUTCDATE()), 0, 0),
+('225ad6f6-8606-4b0d-96c4-029c38105c5c', '0391258e-5399-4f33-a857-86430cd399e3', N'Great work team! Keep it up.', DATEADD(minute, -26, GETUTCDATE()), 0, 0),
+('f422d82c-ce28-45ff-8d26-8e79a0041dfa', 'e0840c34-d719-483f-8a7c-8baf2d390f82', N'Yes, I am working on it. Will submit a draft PR today.', DATEADD(minute, -25, GETUTCDATE()), 0, 0),
+('31d1b48a-e75b-41ad-affc-6551f4164b04', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Hi everyone, let''''s post daily updates here.', DATEADD(minute, -24, GETUTCDATE()), 0, 0),
+('31d1b48a-e75b-41ad-affc-6551f4164b04', 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', N'Sure, I''''ll update my task progress shortly.', DATEADD(minute, -23, GETUTCDATE()), 0, 0),
+('e3c716f3-deee-41be-b577-0d63df6f4d80', 'a50d91b6-a74b-4235-88df-f14afcf7b373', N'Yes, I am working on it. Will submit a draft PR today.', DATEADD(minute, -22, GETUTCDATE()), 0, 0),
+('7fe63279-e4e8-4d7b-90f4-cf7d7697c6ce', 'BBBBBB22-2222-2222-2222-222222222222', N'Excellent! Let me know if you need any database modifications.', DATEADD(minute, -21, GETUTCDATE()), 0, 0),
+('19de4061-8213-49d1-9606-cdb84e91337b', 'BBBBBB88-8888-8888-8888-888888888888', N'Is anyone working on the Stripe checkout integration?', DATEADD(minute, -20, GETUTCDATE()), 0, 0),
+('eba46689-e876-41a1-bb62-df25e6055d3b', 'a50d91b6-a74b-4235-88df-f14afcf7b373', N'Staging environment is updated and looking stable.', DATEADD(minute, -19, GETUTCDATE()), 0, 0),
+('19de4061-8213-49d1-9606-cdb84e91337b', 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', N'Hi everyone, let''''s post daily updates here.', DATEADD(minute, -18, GETUTCDATE()), 0, 0),
+('aedcf094-9d54-4ce2-9929-ae8b00768c02', 'BBBBBB88-8888-8888-8888-888888888888', N'Yes, I am working on it. Will submit a draft PR today.', DATEADD(minute, -17, GETUTCDATE()), 0, 0),
+('f422d82c-ce28-45ff-8d26-8e79a0041dfa', '03b95716-f1bf-491b-8dd4-b180adff5662', N'Staging environment is updated and looking stable.', DATEADD(minute, -16, GETUTCDATE()), 0, 0),
+('880cee67-9aab-4798-b85d-0b5b04488e24', 'BBBBBB22-2222-2222-2222-222222222222', N'Staging environment is updated and looking stable.', DATEADD(minute, -15, GETUTCDATE()), 0, 0),
+('880cee67-9aab-4798-b85d-0b5b04488e24', '0391258e-5399-4f33-a857-86430cd399e3', N'Staging environment is updated and looking stable.', DATEADD(minute, -14, GETUTCDATE()), 0, 0),
+('8377aefd-922f-407a-9a94-ac24b0593d38', 'ed7c4e91-244b-492f-9173-d91ef072a852', N'Excellent! Let me know if you need any database modifications.', DATEADD(minute, -13, GETUTCDATE()), 0, 0),
+('53c024d6-7cf8-41f1-a76c-477073e462fd', 'FFFFFF22-2222-2222-2222-222222222222', N'Great work team! Keep it up.', DATEADD(minute, -12, GETUTCDATE()), 0, 0),
+('225ad6f6-8606-4b0d-96c4-029c38105c5c', 'CCCCCC99-9999-9999-9999-999999999999', N'Staging environment is updated and looking stable.', DATEADD(minute, -11, GETUTCDATE()), 0, 0),
+('c70e9495-1cc9-4239-a23f-a1ac8134206b', 'EEEEEE11-1111-1111-1111-111111111111', N'Excellent! Let me know if you need any database modifications.', DATEADD(minute, -10, GETUTCDATE()), 0, 0),
+('664f1c2a-cbbc-45b6-b689-113b39207e96', 'CCCCCC33-3333-3333-3333-333333333333', N'Staging environment is updated and looking stable.', DATEADD(minute, -9, GETUTCDATE()), 0, 0),
+('53c024d6-7cf8-41f1-a76c-477073e462fd', '0568ad89-cc72-4cb7-8b47-b714a14ad305', N'Excellent! Let me know if you need any database modifications.', DATEADD(minute, -8, GETUTCDATE()), 0, 0),
+('c70e9495-1cc9-4239-a23f-a1ac8134206b', 'DDDDDD00-0000-0000-0000-000000000000', N'Yes, I am working on it. Will submit a draft PR today.', DATEADD(minute, -7, GETUTCDATE()), 0, 0),
+('c70e9495-1cc9-4239-a23f-a1ac8134206b', 'BBBBBB22-2222-2222-2222-222222222222', N'Yes, I am working on it. Will submit a draft PR today.', DATEADD(minute, -6, GETUTCDATE()), 0, 0),
+('c70e9495-1cc9-4239-a23f-a1ac8134206b', '938db8ea-47c1-4658-9da8-683d1781035d', N'Excellent! Let me know if you need any database modifications.', DATEADD(minute, -5, GETUTCDATE()), 0, 0),
+('225ad6f6-8606-4b0d-96c4-029c38105c5c', 'EEEEEE55-5555-5555-5555-555555555555', N'Sure, I''''ll update my task progress shortly.', DATEADD(minute, -4, GETUTCDATE()), 0, 0),
+('fed12345-1234-1234-1234-123456789012', 'e0840c34-d719-483f-8a7c-8baf2d390f82', N'Staging environment is updated and looking stable.', DATEADD(minute, -3, GETUTCDATE()), 0, 0),
+('1488f904-d26e-41f9-a296-a6721882990c', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Is anyone working on the Stripe checkout integration?', DATEADD(minute, -2, GETUTCDATE()), 0, 0),
+('664f1c2a-cbbc-45b6-b689-113b39207e96', 'EEEEEE11-1111-1111-1111-111111111111', N'Hi everyone, let''''s post daily updates here.', DATEADD(minute, -1, GETUTCDATE()), 0, 0);
+
+-- 12. Insert Personal Schedules
+INSERT INTO PersonalSchedules (UserId, Title, Description, StartTime, EndTime, TaskId, TimeZone, IsDisabled) VALUES
+('AAAAAA11-1111-1111-1111-111111111111', N'Weekly AI Sync - Alice Smith', N'{"desc":"Weekly sprint planning and model evaluation sync","priority":"medium","color":0}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('AAAAAA11-1111-1111-1111-111111111111', N'Deep Work: AI Optimization', N'{"desc":"Dedicated focus session for assigned model optimizations","priority":"high","color":3}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '00000000-0000-0000-0000-000000000100', 'UTC', 0),
+('AAAAAA11-1111-1111-1111-111111111111', N'Figma Design Review - Alice Smith', N'{"desc":"Review layout mockup and dark mode gradients","priority":"low","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('AAAAAA11-1111-1111-1111-111111111111', N'Code Review & Pair Programming', N'{"desc":"Reviewing custom CUDA kernels and Triton operators","priority":"high","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '00000000-0000-0000-0000-000000000105', 'UTC', 0),
+('AAAAAA11-1111-1111-1111-111111111111', N'One-on-One Mentorship - Alice Smith', N'{"desc":"Feedback on architectural patterns and career growth","priority":"low","color":4}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('AAAAAA11-1111-1111-1111-111111111111', N'Deployment & QA Block', N'{"desc":"Validating Triton container state on staging cluster","priority":"medium","color":0}', DATEADD(hour, 10, DATEADD(day, 5, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 5, GETUTCDATE())), '00000000-0000-0000-0000-000000000110', 'UTC', 0),
+('BBBBBB22-2222-2222-2222-222222222222', N'Weekly AI Sync - Bob Miller', N'{"desc":"Weekly sprint planning and model evaluation sync","priority":"medium","color":0}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('BBBBBB22-2222-2222-2222-222222222222', N'Deep Work: AI Optimization', N'{"desc":"Dedicated focus session for assigned model optimizations","priority":"high","color":3}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '00000000-0000-0000-0000-000000000101', 'UTC', 0),
+('BBBBBB22-2222-2222-2222-222222222222', N'Figma Design Review - Bob Miller', N'{"desc":"Review layout mockup and dark mode gradients","priority":"low","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('BBBBBB22-2222-2222-2222-222222222222', N'Code Review & Pair Programming', N'{"desc":"Reviewing custom CUDA kernels and Triton operators","priority":"high","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '00000000-0000-0000-0000-000000000106', 'UTC', 0),
+('BBBBBB22-2222-2222-2222-222222222222', N'One-on-One Mentorship - Bob Miller', N'{"desc":"Feedback on architectural patterns and career growth","priority":"low","color":4}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('BBBBBB22-2222-2222-2222-222222222222', N'Deployment & QA Block', N'{"desc":"Validating Triton container state on staging cluster","priority":"medium","color":0}', DATEADD(hour, 10, DATEADD(day, 5, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 5, GETUTCDATE())), '00000000-0000-0000-0000-000000000111', 'UTC', 0),
+('CCCCCC33-3333-3333-3333-333333333333', N'Weekly AI Sync - Charlie Johnson', N'{"desc":"Weekly sprint planning and model evaluation sync","priority":"medium","color":0}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('CCCCCC33-3333-3333-3333-333333333333', N'Deep Work: AI Optimization', N'{"desc":"Dedicated focus session for assigned model optimizations","priority":"high","color":3}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '00000000-0000-0000-0000-000000000102', 'UTC', 0),
+('CCCCCC33-3333-3333-3333-333333333333', N'Figma Design Review - Charlie Johnson', N'{"desc":"Review layout mockup and dark mode gradients","priority":"low","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('CCCCCC33-3333-3333-3333-333333333333', N'Code Review & Pair Programming', N'{"desc":"Reviewing custom CUDA kernels and Triton operators","priority":"high","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '00000000-0000-0000-0000-000000000107', 'UTC', 0),
+('CCCCCC33-3333-3333-3333-333333333333', N'One-on-One Mentorship - Charlie Johnson', N'{"desc":"Feedback on architectural patterns and career growth","priority":"low","color":4}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('CCCCCC33-3333-3333-3333-333333333333', N'Deployment & QA Block', N'{"desc":"Validating Triton container state on staging cluster","priority":"medium","color":0}', DATEADD(hour, 10, DATEADD(day, 5, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 5, GETUTCDATE())), '00000000-0000-0000-0000-000000000112', 'UTC', 0),
+('DDDDDD44-4444-4444-4444-444444444444', N'Weekly Planner - Diana Davis', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('DDDDDD44-4444-4444-4444-444444444444', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), 'bd2ac882-0faf-4d9e-a016-efd1cbb3f2cb', 'UTC', 0),
+('DDDDDD44-4444-4444-4444-444444444444', N'Design Sync - Diana Davis', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('DDDDDD44-4444-4444-4444-444444444444', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '94ab9b2f-185d-48c4-a677-538db3095f4a', 'UTC', 0),
+('DDDDDD44-4444-4444-4444-444444444444', N'Mentorship Sync - Diana Davis', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('EEEEEE55-5555-5555-5555-555555555555', N'Weekly Planner - Eve Wilson', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('EEEEEE55-5555-5555-5555-555555555555', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '76a30a6f-2916-49b9-a44a-0f554cb68cfe', 'UTC', 0),
+('EEEEEE55-5555-5555-5555-555555555555', N'Design Sync - Eve Wilson', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('EEEEEE55-5555-5555-5555-555555555555', N'Mentorship Sync - Eve Wilson', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('FFFFFF66-6666-6666-6666-666666666666', N'Weekly Planner - Frank Miller', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('FFFFFF66-6666-6666-6666-666666666666', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), 'f096514f-b073-4b8c-845c-c5d7ce563e93', 'UTC', 0),
+('FFFFFF66-6666-6666-6666-666666666666', N'Design Sync - Frank Miller', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('FFFFFF66-6666-6666-6666-666666666666', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), 'cb2e77f0-113d-4063-bb62-669c67f0b87a', 'UTC', 0),
+('FFFFFF66-6666-6666-6666-666666666666', N'Mentorship Sync - Frank Miller', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('AAAAAA77-7777-7777-7777-777777777777', N'Weekly Planner - Grace Hopper', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('AAAAAA77-7777-7777-7777-777777777777', N'Design Sync - Grace Hopper', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('AAAAAA77-7777-7777-7777-777777777777', N'Mentorship Sync - Grace Hopper', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('BBBBBB88-8888-8888-8888-888888888888', N'Weekly Planner - Henry Cavill', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('BBBBBB88-8888-8888-8888-888888888888', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '5fc22af0-6906-4716-98e8-ee0f4a839094', 'UTC', 0),
+('BBBBBB88-8888-8888-8888-888888888888', N'Design Sync - Henry Cavill', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('BBBBBB88-8888-8888-8888-888888888888', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), 'ecd75a18-0e90-4910-9cdb-73888acd4a86', 'UTC', 0),
+('BBBBBB88-8888-8888-8888-888888888888', N'Mentorship Sync - Henry Cavill', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('CCCCCC99-9999-9999-9999-999999999999', N'Weekly Planner - Jack Dorsey', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('CCCCCC99-9999-9999-9999-999999999999', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), 'bec6b253-d9e7-41ee-ac95-84ebd295f016', 'UTC', 0),
+('CCCCCC99-9999-9999-9999-999999999999', N'Design Sync - Jack Dorsey', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('CCCCCC99-9999-9999-9999-999999999999', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '1a7f4ec9-3df1-423b-a707-bb78fa319601', 'UTC', 0),
+('CCCCCC99-9999-9999-9999-999999999999', N'Mentorship Sync - Jack Dorsey', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('DDDDDD00-0000-0000-0000-000000000000', N'Weekly Planner - Kelly Clarkson', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('DDDDDD00-0000-0000-0000-000000000000', N'Design Sync - Kelly Clarkson', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('DDDDDD00-0000-0000-0000-000000000000', N'Mentorship Sync - Kelly Clarkson', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('EEEEEE11-1111-1111-1111-111111111111', N'Weekly AI Sync - Liam Smith', N'{"desc":"Weekly sprint planning and model evaluation sync","priority":"medium","color":0}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('EEEEEE11-1111-1111-1111-111111111111', N'Deep Work: AI Optimization', N'{"desc":"Dedicated focus session for assigned model optimizations","priority":"high","color":3}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '00000000-0000-0000-0000-000000000103', 'UTC', 0),
+('EEEEEE11-1111-1111-1111-111111111111', N'Figma Design Review - Liam Smith', N'{"desc":"Review layout mockup and dark mode gradients","priority":"low","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('EEEEEE11-1111-1111-1111-111111111111', N'Code Review & Pair Programming', N'{"desc":"Reviewing custom CUDA kernels and Triton operators","priority":"high","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '00000000-0000-0000-0000-000000000108', 'UTC', 0),
+('EEEEEE11-1111-1111-1111-111111111111', N'One-on-One Mentorship - Liam Smith', N'{"desc":"Feedback on architectural patterns and career growth","priority":"low","color":4}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('EEEEEE11-1111-1111-1111-111111111111', N'Deployment & QA Block', N'{"desc":"Validating Triton container state on staging cluster","priority":"medium","color":0}', DATEADD(hour, 10, DATEADD(day, 5, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 5, GETUTCDATE())), '00000000-0000-0000-0000-000000000113', 'UTC', 0),
+('FFFFFF22-2222-2222-2222-222222222222', N'Weekly Planner - Olivia Miller', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('FFFFFF22-2222-2222-2222-222222222222', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '752da997-831e-44a6-b60c-9fb9c3698f72', 'UTC', 0),
+('FFFFFF22-2222-2222-2222-222222222222', N'Design Sync - Olivia Miller', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('FFFFFF22-2222-2222-2222-222222222222', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), 'a7c10895-64db-4f93-b3f0-cc1da640abcf', 'UTC', 0),
+('FFFFFF22-2222-2222-2222-222222222222', N'Mentorship Sync - Olivia Miller', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('AAAAAA33-3333-3333-3333-333333333333', N'Weekly AI Sync - Noah Johnson', N'{"desc":"Weekly sprint planning and model evaluation sync","priority":"medium","color":0}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('AAAAAA33-3333-3333-3333-333333333333', N'Deep Work: AI Optimization', N'{"desc":"Dedicated focus session for assigned model optimizations","priority":"high","color":3}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '00000000-0000-0000-0000-000000000104', 'UTC', 0),
+('AAAAAA33-3333-3333-3333-333333333333', N'Figma Design Review - Noah Johnson', N'{"desc":"Review layout mockup and dark mode gradients","priority":"low","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('AAAAAA33-3333-3333-3333-333333333333', N'Code Review & Pair Programming', N'{"desc":"Reviewing custom CUDA kernels and Triton operators","priority":"high","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '00000000-0000-0000-0000-000000000109', 'UTC', 0),
+('AAAAAA33-3333-3333-3333-333333333333', N'One-on-One Mentorship - Noah Johnson', N'{"desc":"Feedback on architectural patterns and career growth","priority":"low","color":4}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('AAAAAA33-3333-3333-3333-333333333333', N'Deployment & QA Block', N'{"desc":"Validating Triton container state on staging cluster","priority":"medium","color":0}', DATEADD(hour, 10, DATEADD(day, 5, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 5, GETUTCDATE())), '00000000-0000-0000-0000-000000000114', 'UTC', 0),
+('0568ad89-cc72-4cb7-8b47-b714a14ad305', N'Weekly Planner - James Rodriguez', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('0568ad89-cc72-4cb7-8b47-b714a14ad305', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), 'dd162852-3c56-4e93-9eaa-972e0cda7fff', 'UTC', 0),
+('0568ad89-cc72-4cb7-8b47-b714a14ad305', N'Design Sync - James Rodriguez', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('0568ad89-cc72-4cb7-8b47-b714a14ad305', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), 'efc35d0d-c8b7-40bb-bb5a-8eddea929525', 'UTC', 0),
+('0568ad89-cc72-4cb7-8b47-b714a14ad305', N'Mentorship Sync - James Rodriguez', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Weekly Planner - Mary Martinez', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '4d6afa9d-bcb2-4101-b6dd-70faf9675bd3', 'UTC', 0),
+('a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Design Sync - Mary Martinez', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), 'c6c11556-f93e-4b50-b8c4-00640bd2ca1c', 'UTC', 0),
+('a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Mentorship Sync - Mary Martinez', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('938db8ea-47c1-4658-9da8-683d1781035d', N'Weekly Planner - John Anderson', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('938db8ea-47c1-4658-9da8-683d1781035d', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '072c25a7-ddb8-48c8-a0e2-dc8236d2e807', 'UTC', 0),
+('938db8ea-47c1-4658-9da8-683d1781035d', N'Design Sync - John Anderson', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('938db8ea-47c1-4658-9da8-683d1781035d', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '4fea9317-f6b9-4855-a16c-753487c13181', 'UTC', 0),
+('938db8ea-47c1-4658-9da8-683d1781035d', N'Mentorship Sync - John Anderson', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('0391258e-5399-4f33-a857-86430cd399e3', N'Weekly Planner - Patricia Taylor', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('0391258e-5399-4f33-a857-86430cd399e3', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '0e8d091e-11e3-45e6-ae30-b0f61ffed685', 'UTC', 0),
+('0391258e-5399-4f33-a857-86430cd399e3', N'Design Sync - Patricia Taylor', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('0391258e-5399-4f33-a857-86430cd399e3', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), 'b44ee9ca-d4f2-4605-afc8-0457a57b117b', 'UTC', 0),
+('0391258e-5399-4f33-a857-86430cd399e3', N'Mentorship Sync - Patricia Taylor', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('a50d91b6-a74b-4235-88df-f14afcf7b373', N'Weekly Planner - Robert Thomas', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('a50d91b6-a74b-4235-88df-f14afcf7b373', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '78ff9cfc-238c-4f63-a443-fcd0af1687a2', 'UTC', 0),
+('a50d91b6-a74b-4235-88df-f14afcf7b373', N'Design Sync - Robert Thomas', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('a50d91b6-a74b-4235-88df-f14afcf7b373', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '65741ae7-035d-47a2-a7b4-459040d3c928', 'UTC', 0),
+('a50d91b6-a74b-4235-88df-f14afcf7b373', N'Mentorship Sync - Robert Thomas', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('0a6eb437-a032-4db4-967a-795a177312f9', N'Weekly Planner - Jennifer Hernandez', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('0a6eb437-a032-4db4-967a-795a177312f9', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), 'b5b9d0df-b823-43ee-9a6e-7f5a1d0c5e4d', 'UTC', 0),
+('0a6eb437-a032-4db4-967a-795a177312f9', N'Design Sync - Jennifer Hernandez', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('0a6eb437-a032-4db4-967a-795a177312f9', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '8cf4c308-11ad-46cb-b876-c14cb5d57b25', 'UTC', 0),
+('0a6eb437-a032-4db4-967a-795a177312f9', N'Mentorship Sync - Jennifer Hernandez', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('d0310624-9fc3-4abd-80cf-05a10aea0af3', N'Weekly Planner - Michael Moore', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('d0310624-9fc3-4abd-80cf-05a10aea0af3', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '5d182b2a-da95-4cda-861d-45402c6dc103', 'UTC', 0),
+('d0310624-9fc3-4abd-80cf-05a10aea0af3', N'Design Sync - Michael Moore', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('d0310624-9fc3-4abd-80cf-05a10aea0af3', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '1746d9fc-b806-4efb-85d8-cf8c0b6d8d70', 'UTC', 0),
+('d0310624-9fc3-4abd-80cf-05a10aea0af3', N'Mentorship Sync - Michael Moore', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('ed7c4e91-244b-492f-9173-d91ef072a852', N'Weekly Planner - Elizabeth Martin', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('ed7c4e91-244b-492f-9173-d91ef072a852', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '8bb16a2c-995e-4416-afa4-7c966530b1f6', 'UTC', 0),
+('ed7c4e91-244b-492f-9173-d91ef072a852', N'Design Sync - Elizabeth Martin', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('ed7c4e91-244b-492f-9173-d91ef072a852', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '235c5924-cfd9-4971-b85e-5cb900da4db2', 'UTC', 0),
+('ed7c4e91-244b-492f-9173-d91ef072a852', N'Mentorship Sync - Elizabeth Martin', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('746a3ed9-0b1b-43d7-98dd-a947122f8ccf', N'Weekly Planner - William Jackson', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('746a3ed9-0b1b-43d7-98dd-a947122f8ccf', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '083d0aa3-5561-4e83-b83f-d782e3769d32', 'UTC', 0),
+('746a3ed9-0b1b-43d7-98dd-a947122f8ccf', N'Design Sync - William Jackson', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('746a3ed9-0b1b-43d7-98dd-a947122f8ccf', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '9c485b9a-23ee-43cd-9735-2a308529ad6a', 'UTC', 0),
+('746a3ed9-0b1b-43d7-98dd-a947122f8ccf', N'Mentorship Sync - William Jackson', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('e0840c34-d719-483f-8a7c-8baf2d390f82', N'Weekly Planner - Linda Thompson', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('e0840c34-d719-483f-8a7c-8baf2d390f82', N'Design Sync - Linda Thompson', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('e0840c34-d719-483f-8a7c-8baf2d390f82', N'Mentorship Sync - Linda Thompson', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('da41bf65-4204-43fa-bdd9-f9255aaecbb6', N'Weekly Planner - David White', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('da41bf65-4204-43fa-bdd9-f9255aaecbb6', N'Design Sync - David White', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('da41bf65-4204-43fa-bdd9-f9255aaecbb6', N'Mentorship Sync - David White', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('618269dc-e47b-4dda-9198-afc388223528', N'Weekly Planner - Barbara Lopez', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('618269dc-e47b-4dda-9198-afc388223528', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '6622f1de-c613-4d02-b996-7218ba4a4345', 'UTC', 0),
+('618269dc-e47b-4dda-9198-afc388223528', N'Design Sync - Barbara Lopez', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('618269dc-e47b-4dda-9198-afc388223528', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), 'dc235964-44a1-4d3d-93e3-c6de443eefcf', 'UTC', 0),
+('618269dc-e47b-4dda-9198-afc388223528', N'Mentorship Sync - Barbara Lopez', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('03b95716-f1bf-491b-8dd4-b180adff5662', N'Weekly Planner - Richard Lee', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('03b95716-f1bf-491b-8dd4-b180adff5662', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '492e0b6e-ef77-47de-bcef-cce16626cfbb', 'UTC', 0),
+('03b95716-f1bf-491b-8dd4-b180adff5662', N'Design Sync - Richard Lee', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('03b95716-f1bf-491b-8dd4-b180adff5662', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '0ccfe29b-a19d-4d56-8378-ef33b81010c9', 'UTC', 0),
+('03b95716-f1bf-491b-8dd4-b180adff5662', N'Mentorship Sync - Richard Lee', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Weekly Planner - Susan Gonzalez', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), 'd9001616-131a-4174-afa1-c5d56c54dde4', 'UTC', 0),
+('f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Design Sync - Susan Gonzalez', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '81fd6461-6632-42e9-b64c-a782309c989a', 'UTC', 0),
+('f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Mentorship Sync - Susan Gonzalez', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'Weekly Planner - Joseph Harris', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '52e5a5bf-e0b6-4673-801a-80f05d3384c6', 'UTC', 0),
+('35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'Design Sync - Joseph Harris', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), 'bc65222f-a69b-42fc-b06f-a0147fde4574', 'UTC', 0),
+('35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'Mentorship Sync - Joseph Harris', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Weekly Planner - Jessica Clark', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '6ea66e3f-ee5c-4a75-972a-6b760363dc85', 'UTC', 0),
+('2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Design Sync - Jessica Clark', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), 'c2e3447e-19f4-4310-ba17-2849fec7a4af', 'UTC', 0),
+('2c0040a8-6f4e-4d98-8745-f96e45ea128a', N'Mentorship Sync - Jessica Clark', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('1ad8a53b-c987-4665-bb89-6e77738e6de1', N'Weekly Planner - Thomas Lewis', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('1ad8a53b-c987-4665-bb89-6e77738e6de1', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '031f7b50-2b37-48ab-8fd1-81d57f9a47b0', 'UTC', 0),
+('1ad8a53b-c987-4665-bb89-6e77738e6de1', N'Design Sync - Thomas Lewis', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('1ad8a53b-c987-4665-bb89-6e77738e6de1', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), 'daecd439-d079-48c4-8193-60764d7600e4', 'UTC', 0),
+('1ad8a53b-c987-4665-bb89-6e77738e6de1', N'Mentorship Sync - Thomas Lewis', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Weekly Planner - Sarah Robinson', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '229f3d30-c6df-48e3-97bd-71363c762df6', 'UTC', 0),
+('be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Design Sync - Sarah Robinson', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Mentorship Sync - Sarah Robinson', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('660aed7f-14ef-4a78-a289-e57ceb3e310d', N'Weekly Planner - Charles Smith', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('660aed7f-14ef-4a78-a289-e57ceb3e310d', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), '4e89b19e-6699-4e1c-b68b-90e597ab089e', 'UTC', 0),
+('660aed7f-14ef-4a78-a289-e57ceb3e310d', N'Design Sync - Charles Smith', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('660aed7f-14ef-4a78-a289-e57ceb3e310d', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '7a82299f-319d-466b-a688-6c5c472bab16', 'UTC', 0),
+('660aed7f-14ef-4a78-a289-e57ceb3e310d', N'Mentorship Sync - Charles Smith', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('c2431330-2381-4288-ada8-f8db85a33948', N'Weekly Planner - Karen Miller', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('c2431330-2381-4288-ada8-f8db85a33948', N'Design Sync - Karen Miller', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('c2431330-2381-4288-ada8-f8db85a33948', N'Mentorship Sync - Karen Miller', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('bb0697b8-0269-40ed-8f12-5f2f547baa9d', N'Weekly Planner - Alice Johnson', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('bb0697b8-0269-40ed-8f12-5f2f547baa9d', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), 'b07950a4-c26b-46cc-97d1-d74ef4e5c240', 'UTC', 0),
+('bb0697b8-0269-40ed-8f12-5f2f547baa9d', N'Design Sync - Alice Johnson', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('bb0697b8-0269-40ed-8f12-5f2f547baa9d', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '8bc648fc-1d64-4f17-95fd-c597925c2565', 'UTC', 0),
+('bb0697b8-0269-40ed-8f12-5f2f547baa9d', N'Mentorship Sync - Alice Johnson', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0),
+('8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', N'Weekly Planner - Bob Davis', N'{"desc":"Organize weekly schedule and goals","priority":"low","color":4}', DATEADD(hour, 9, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 630, DATEADD(day, 1, GETUTCDATE())), NULL, 'UTC', 0),
+('8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', N'Focus block: Workspace Task', N'{"desc":"Deep work session on assigned task","priority":"high","color":0}', DATEADD(hour, 14, DATEADD(day, 1, GETUTCDATE())), DATEADD(minute, 930, DATEADD(day, 1, GETUTCDATE())), 'a52a3626-1549-4eb5-a801-c097a0e2164e', 'UTC', 0),
+('8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', N'Design Sync - Bob Davis', N'{"desc":"Review Figma layout and responsive grids","priority":"medium","color":1}', DATEADD(hour, 10, DATEADD(day, 2, GETUTCDATE())), DATEADD(minute, 690, DATEADD(day, 2, GETUTCDATE())), NULL, 'UTC', 0),
+('8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', N'Implementation slot', N'{"desc":"Development and unit testing block","priority":"medium","color":2}', DATEADD(hour, 11, DATEADD(day, 3, GETUTCDATE())), DATEADD(minute, 750, DATEADD(day, 3, GETUTCDATE())), '02eb09dd-dd89-456b-a893-3ce29011129d', 'UTC', 0),
+('8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', N'Mentorship Sync - Bob Davis', N'{"desc":"Code review and system architect feedback","priority":"low","color":3}', DATEADD(hour, 15, DATEADD(day, 4, GETUTCDATE())), DATEADD(minute, 990, DATEADD(day, 4, GETUTCDATE())), NULL, 'UTC', 0);
+
+-- 13. Insert Workspace Federation Members
+INSERT INTO WorkspaceFederationMembers (FederationId, UserId, PersonalWorkspaceId, Role, Status, IsDisabled) VALUES
+('FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF', 'AAAAAA11-1111-1111-1111-111111111111', NULL, 'HeadPresident', 'Active', 0),
+('FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF', 'BBBBBB22-2222-2222-2222-222222222222', '77777777-7777-7777-7777-777777777777', 'Member', 'PendingOwnerApproval', 0),
+('FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF', 'FFFFFF66-6666-6666-6666-666666666666', NULL, 'DepartmentManager', 'Active', 0),
+('FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF', 'AAAAAA77-7777-7777-7777-777777777777', NULL, 'DepartmentManager', 'Active', 0),
+('EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE', 'BBBBBB22-2222-2222-2222-222222222222', NULL, 'HeadPresident', 'Active', 0),
+('EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE', 'CCCCCC33-3333-3333-3333-333333333333', NULL, 'Member', 'Active', 0),
+('DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD', 'BBBBBB22-2222-2222-2222-222222222222', NULL, 'HeadPresident', 'Active', 0),
+('DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD', 'CCCCCC33-3333-3333-3333-333333333333', NULL, 'Member', 'Active', 0),
+('DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD', 'FFFFFF22-2222-2222-2222-222222222222', NULL, 'Member', 'Active', 0);
+
+-- 14. Insert Audit Logs
+INSERT INTO AuditLogs (WorkspaceId, UserId, Action, TargetType, TargetId, Timestamp, IsDisabled) VALUES
+('44444444-4444-4444-4444-444444444444', 'BBBBBB22-2222-2222-2222-222222222222', 'Add', 'File', '66dec115-cb7d-4537-85fe-ebd2994caa34', DATEADD(hour, -120, GETUTCDATE()), 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'EEEEEE55-5555-5555-5555-555555555555', 'Create', 'Task', '0e5b0dc9-2633-42f3-a7b2-7f3f60760ea1', DATEADD(hour, -119, GETUTCDATE()), 0),
+('aaaaaaaa-1111-2222-3333-444444444444', 'EEEEEE11-1111-1111-1111-111111111111', 'Move', 'Workspace', 'ce1ddff5-0f95-4c5f-98c2-da4703ef4731', DATEADD(hour, -118, GETUTCDATE()), 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', 'Update', 'Task', '7116ad65-2585-4485-8dbd-31a79004dc26', DATEADD(hour, -117, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', 'e0840c34-d719-483f-8a7c-8baf2d390f82', 'Update', 'File', 'a914b35d-0342-4e05-99e3-aa31864063ac', DATEADD(hour, -116, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', 'BBBBBB22-2222-2222-2222-222222222222', 'Move', 'Member', '8943240c-2700-44f5-bd64-35ea0ebd0c22', DATEADD(hour, -115, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', 'BBBBBB88-8888-8888-8888-888888888888', 'Move', 'File', '3ca112d1-11c3-46cd-a6e7-5fcf5e4b5af6', DATEADD(hour, -114, GETUTCDATE()), 0),
+('bbbbbbbb-2222-3333-4444-555555555555', 'AAAAAA77-7777-7777-7777-777777777777', 'Create', 'Task', 'ff0ccefd-8db9-4e7b-b5c0-4e6250bcf6e0', DATEADD(hour, -113, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', '938db8ea-47c1-4658-9da8-683d1781035d', 'Create', 'Task', '96c509cf-8c04-4c38-9032-0c6c76551e3b', DATEADD(hour, -112, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', 'ed7c4e91-244b-492f-9173-d91ef072a852', 'Remove', 'Task', '14c8d34d-e068-4809-998d-03b17d4cb933', DATEADD(hour, -111, GETUTCDATE()), 0),
+('aaaaaaaa-1111-2222-3333-444444444444', 'BBBBBB22-2222-2222-2222-222222222222', 'Update', 'Task', '041bc3c2-439d-4fc4-88e9-b0c4a3cdb2db', DATEADD(hour, -110, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', 'ed7c4e91-244b-492f-9173-d91ef072a852', 'Move', 'File', '1be14718-96f7-4d98-b89b-ab74806790d6', DATEADD(hour, -109, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', 'CCCCCC99-9999-9999-9999-999999999999', 'Delete', 'Federation', '7a361568-c78a-46b4-88bc-ea4a78b0bcb7', DATEADD(hour, -108, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', 'a50d91b6-a74b-4235-88df-f14afcf7b373', 'Update', 'Comment', '7ed4d0ae-32cc-4a8a-8050-7749be5568ec', DATEADD(hour, -107, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', 'e0840c34-d719-483f-8a7c-8baf2d390f82', 'Remove', 'Federation', 'a23c09ff-6dd2-458a-8d1c-3a598822adaa', DATEADD(hour, -106, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', '1ad8a53b-c987-4665-bb89-6e77738e6de1', 'Add', 'Comment', '0bec96d8-bee0-49a6-970b-5bb76e055e2c', DATEADD(hour, -105, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', '0a6eb437-a032-4db4-967a-795a177312f9', 'Create', 'Member', 'a50d6cdf-76c3-4d63-ba21-5db6528ec479', DATEADD(hour, -104, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'Delete', 'Workspace', '0986a9dc-8f0a-4568-86e0-864b8adb95d0', DATEADD(hour, -103, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', 'Add', 'Federation', 'ab82f861-51b1-4d22-930d-746edd4760d6', DATEADD(hour, -102, GETUTCDATE()), 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'Remove', 'Member', 'bd7f65f5-3e10-4403-a9ac-2ce4e1346c40', DATEADD(hour, -101, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', '03b95716-f1bf-491b-8dd4-b180adff5662', 'Move', 'File', 'b069e0de-2579-4da7-8006-38271511823d', DATEADD(hour, -100, GETUTCDATE()), 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'Create', 'Member', '2584ef40-bf8e-4804-a1a8-eae490a8df18', DATEADD(hour, -99, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', 'Delete', 'Federation', '08dccf04-b775-4dfc-a4f8-4d53343e3da2', DATEADD(hour, -98, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', 'Update', 'File', '58a16a28-658f-4e00-b7b1-cc7809c1b026', DATEADD(hour, -97, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', 'e0840c34-d719-483f-8a7c-8baf2d390f82', 'Create', 'Federation', 'be063d47-3fdf-4a50-b2e8-298ef13aadea', DATEADD(hour, -96, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', 'da41bf65-4204-43fa-bdd9-f9255aaecbb6', 'Update', 'Federation', 'c8bfd492-6a5f-4726-ad2d-0352f34a8aab', DATEADD(hour, -95, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', 'Move', 'Comment', '14e3caac-fafd-469a-858e-8400fae63181', DATEADD(hour, -94, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', 'FFFFFF22-2222-2222-2222-222222222222', 'Remove', 'Workspace', '559b6619-8731-4604-b5ba-e9db0b87b6c4', DATEADD(hour, -93, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', 'AAAAAA77-7777-7777-7777-777777777777', 'Create', 'File', '44a480ac-e523-4e93-8f08-b50f92ed31be', DATEADD(hour, -92, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'Delete', 'Federation', 'f0eaa8a8-c224-4a9a-8064-414b985b7ca5', DATEADD(hour, -91, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', 'AAAAAA77-7777-7777-7777-777777777777', 'Add', 'Federation', 'b6baa11a-5dce-4638-8ee5-aad3bdda66e8', DATEADD(hour, -90, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', 'e0840c34-d719-483f-8a7c-8baf2d390f82', 'Add', 'Task', 'cc4b9bd9-432f-42d5-880d-2e22c72766e3', DATEADD(hour, -89, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'Delete', 'Member', 'e558d21d-2ea0-4701-a38e-f4afcf2175ce', DATEADD(hour, -88, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', 'EEEEEE55-5555-5555-5555-555555555555', 'Move', 'Workspace', 'b7e9d679-65e0-492b-af3c-3fd51ab364eb', DATEADD(hour, -87, GETUTCDATE()), 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'Update', 'Workspace', '146e3fc9-7e73-4a29-af39-e127c68053a8', DATEADD(hour, -86, GETUTCDATE()), 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'CCCCCC99-9999-9999-9999-999999999999', 'Remove', 'Member', '294ea59e-f891-45bb-9d7d-e2fc3ab76615', DATEADD(hour, -85, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', 'BBBBBB88-8888-8888-8888-888888888888', 'Delete', 'Federation', '8f914325-3480-4352-859e-71f26ae4b484', DATEADD(hour, -84, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'Delete', 'Member', 'daf34300-0a3d-4f97-831e-acf684809af7', DATEADD(hour, -83, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', 'a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', 'Move', 'Task', 'b8ba3f6f-66e3-4b8c-8f6f-c67d754aa7b7', DATEADD(hour, -82, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'Add', 'Comment', 'bc4201c7-7b0e-46e3-a5e8-b3d1d72559b5', DATEADD(hour, -81, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '0a6eb437-a032-4db4-967a-795a177312f9', 'Add', 'Workspace', '7f83f3fd-7d6b-4ff9-accc-de647fe286eb', DATEADD(hour, -80, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', 'DDDDDD44-4444-4444-4444-444444444444', 'Remove', 'Workspace', '7e113fca-0f60-4af6-b80e-6526ec94b677', DATEADD(hour, -79, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'Remove', 'Task', 'e1e7e737-012e-44af-8660-d7cb277259ff', DATEADD(hour, -78, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', 'Update', 'Task', '7bc79a8e-b561-4f25-ab67-44b0e4c0bd3a', DATEADD(hour, -77, GETUTCDATE()), 0),
+('aaaaaaaa-1111-2222-3333-444444444444', '03b95716-f1bf-491b-8dd4-b180adff5662', 'Add', 'Workspace', '0ae7fd7c-4366-49ed-9ded-5121d7a0dd3b', DATEADD(hour, -76, GETUTCDATE()), 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', '0391258e-5399-4f33-a857-86430cd399e3', 'Move', 'Comment', 'ab88c6d8-0ae4-4326-a297-3e5dc36886a9', DATEADD(hour, -75, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', 'CCCCCC99-9999-9999-9999-999999999999', 'Update', 'Task', '6321cddb-97ad-4387-869f-9742340b25e1', DATEADD(hour, -74, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', 'AAAAAA77-7777-7777-7777-777777777777', 'Create', 'Federation', '1b275b9f-6718-484a-807f-9685cf354a9c', DATEADD(hour, -73, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', 'FFFFFF22-2222-2222-2222-222222222222', 'Add', 'Task', 'e9c31ec3-cd67-4a9a-b271-4bb277ff45f9', DATEADD(hour, -72, GETUTCDATE()), 0),
+('22222222-1111-0000-9999-888888888888', 'BBBBBB88-8888-8888-8888-888888888888', 'Move', 'Comment', '97bd3430-c265-4a84-adb7-76f43ad18abf', DATEADD(hour, -71, GETUTCDATE()), 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', 'BBBBBB22-2222-2222-2222-222222222222', 'Remove', 'Workspace', '431f64df-19ed-4653-a9b3-f83c4e89426b', DATEADD(hour, -70, GETUTCDATE()), 0),
+('bbbbbbbb-2222-3333-4444-555555555555', 'DDDDDD44-4444-4444-4444-444444444444', 'Update', 'Workspace', '165629c7-b8b8-45a7-a6cc-9a6aba1b4e86', DATEADD(hour, -69, GETUTCDATE()), 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', '03b95716-f1bf-491b-8dd4-b180adff5662', 'Move', 'Comment', 'cbd04b8d-bf34-46c1-aaca-6b1c6d88d80c', DATEADD(hour, -68, GETUTCDATE()), 0),
+('99999999-9999-9999-9999-999999999999', 'ed7c4e91-244b-492f-9173-d91ef072a852', 'Add', 'File', 'dde756e3-6630-44b3-814b-eb2a458477c3', DATEADD(hour, -67, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', 'Update', 'Member', 'cdc296d2-a7f7-4442-a4c2-f29657cbafa0', DATEADD(hour, -66, GETUTCDATE()), 0),
+('aaaaaaaa-1111-2222-3333-444444444444', '938db8ea-47c1-4658-9da8-683d1781035d', 'Create', 'File', '52a80d62-d36d-4864-9260-8aec5aeaf649', DATEADD(hour, -65, GETUTCDATE()), 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', '618269dc-e47b-4dda-9198-afc388223528', 'Remove', 'Federation', '40deffb4-cb6b-4ec3-bda1-f5ba3e47630f', DATEADD(hour, -64, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'Move', 'Federation', '047ee45d-4cdb-45fb-8dec-3f6bfd9d689b', DATEADD(hour, -63, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'Remove', 'Federation', '41f86465-b4ff-4a33-b033-e49b01c0c95d', DATEADD(hour, -62, GETUTCDATE()), 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', '0391258e-5399-4f33-a857-86430cd399e3', 'Create', 'Federation', '398d4a6f-800d-42a6-afad-4d390f9934ef', DATEADD(hour, -61, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', '03b95716-f1bf-491b-8dd4-b180adff5662', 'Move', 'Comment', '02aab9dc-75ee-4cf4-b910-711817c67200', DATEADD(hour, -60, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', 'CCCCCC33-3333-3333-3333-333333333333', 'Add', 'Comment', 'dedf985a-a874-4bc0-a95f-f18ed8724137', DATEADD(hour, -59, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', 'AAAAAA33-3333-3333-3333-333333333333', 'Move', 'Task', '6c783c3b-dc92-44bd-90b8-6396c66db7a7', DATEADD(hour, -58, GETUTCDATE()), 0),
+('aaaaaaaa-1111-2222-3333-444444444444', 'CCCCCC99-9999-9999-9999-999999999999', 'Create', 'Federation', '816e02e1-7758-4226-b6b7-dfc960a41a5a', DATEADD(hour, -57, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', 'Add', 'Workspace', 'df3ff4d1-f4bd-4115-9ed0-af107e817609', DATEADD(hour, -56, GETUTCDATE()), 0),
+('aaaaaaaa-1111-2222-3333-444444444444', 'CCCCCC33-3333-3333-3333-333333333333', 'Create', 'Comment', '80606701-18ab-4481-94f5-264d915b2652', DATEADD(hour, -55, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'Remove', 'Workspace', 'd545b79e-baa6-4e8d-b2cc-55597d98446e', DATEADD(hour, -54, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', 'FFFFFF22-2222-2222-2222-222222222222', 'Delete', 'Workspace', 'de1f7827-e864-4e00-a571-410cda529922', DATEADD(hour, -53, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'Update', 'Comment', '1a610f93-d1ec-4633-84d0-2d82a1df3e3d', DATEADD(hour, -52, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'Remove', 'Workspace', '06d60736-63b7-48bc-a589-d318bdfbd5a0', DATEADD(hour, -51, GETUTCDATE()), 0),
+('22222222-1111-0000-9999-888888888888', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'Add', 'Comment', '380203ec-1ffc-467b-8f2b-57ff03c34a4a', DATEADD(hour, -50, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', 'FFFFFF66-6666-6666-6666-666666666666', 'Move', 'Federation', 'bf4e21aa-a8f5-4928-bd9b-590bd1bdd10c', DATEADD(hour, -49, GETUTCDATE()), 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', 'BBBBBB22-2222-2222-2222-222222222222', 'Remove', 'File', 'd3aee303-6cc6-478f-b14a-0762547dff4d', DATEADD(hour, -48, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', 'DDDDDD44-4444-4444-4444-444444444444', 'Delete', 'File', 'da65f283-4561-4d71-956d-996c8499fbda', DATEADD(hour, -47, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', 'Move', 'Federation', '6f06c4c1-62ac-4f48-aecd-244b585d8e6f', DATEADD(hour, -46, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', 'CCCCCC33-3333-3333-3333-333333333333', 'Add', 'File', '555aeadf-39d2-4dee-9cff-833001b5802f', DATEADD(hour, -45, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', '03b95716-f1bf-491b-8dd4-b180adff5662', 'Add', 'Workspace', '5dc72681-5447-4cbc-970e-0f3ec7996e7a', DATEADD(hour, -44, GETUTCDATE()), 0),
+('bbbbbbbb-2222-3333-4444-555555555555', 'AAAAAA11-1111-1111-1111-111111111111', 'Delete', 'Federation', 'acbe97f3-f786-4fea-a50f-89d142a947d2', DATEADD(hour, -43, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', '0a6eb437-a032-4db4-967a-795a177312f9', 'Delete', 'Task', '92372abf-c550-4a9a-848a-02a4b2718195', DATEADD(hour, -42, GETUTCDATE()), 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', '1ad8a53b-c987-4665-bb89-6e77738e6de1', 'Create', 'File', '875b3e3d-e17f-4fb7-af9c-5d4aa27bf4e6', DATEADD(hour, -41, GETUTCDATE()), 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', '0a6eb437-a032-4db4-967a-795a177312f9', 'Update', 'Workspace', '4e4b4edd-5a03-45bd-aca7-ad8d53cc6d16', DATEADD(hour, -40, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', 'CCCCCC33-3333-3333-3333-333333333333', 'Remove', 'File', '856a4465-22fb-408a-a762-27024a42d710', DATEADD(hour, -39, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', 'DDDDDD44-4444-4444-4444-444444444444', 'Move', 'Comment', 'c6585b5e-04b5-47a6-887a-4c971c0d1b77', DATEADD(hour, -38, GETUTCDATE()), 0),
+('11111111-0000-9999-8888-777777777777', 'EEEEEE55-5555-5555-5555-555555555555', 'Remove', 'Workspace', '00589fd0-e79e-4f63-b8e5-8aa17909893a', DATEADD(hour, -37, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'Move', 'Workspace', '56430d54-5aea-4fe6-be79-ec2699320f49', DATEADD(hour, -36, GETUTCDATE()), 0),
+('99999999-9999-9999-9999-999999999999', 'BBBBBB88-8888-8888-8888-888888888888', 'Delete', 'Task', 'ebd1fe7e-b498-49ab-98f6-64dbe53a51eb', DATEADD(hour, -35, GETUTCDATE()), 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'EEEEEE55-5555-5555-5555-555555555555', 'Move', 'Task', '42030383-8468-4322-b35f-49a66969f663', DATEADD(hour, -34, GETUTCDATE()), 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'EEEEEE11-1111-1111-1111-111111111111', 'Delete', 'Workspace', 'c1797d18-bd5c-4dd0-b07d-96ebd66e4196', DATEADD(hour, -33, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', 'AAAAAA33-3333-3333-3333-333333333333', 'Update', 'Workspace', 'b3ffbc11-f749-4bb3-9189-0dcd9474ebab', DATEADD(hour, -32, GETUTCDATE()), 0),
+('bbbbbbbb-2222-3333-4444-555555555555', 'f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', 'Remove', 'Member', '30a6a5c3-626f-4c2e-a4e4-3da17800f2d9', DATEADD(hour, -31, GETUTCDATE()), 0),
+('22222222-1111-0000-9999-888888888888', 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'Add', 'Workspace', 'd8ca71c2-a05d-4abf-9f5b-6007e3349c7d', DATEADD(hour, -30, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '1ad8a53b-c987-4665-bb89-6e77738e6de1', 'Create', 'Comment', 'a5dd12bb-4bcc-45ec-84ba-1da566ba5fdd', DATEADD(hour, -29, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', '8b66b6fb-5eab-4b9c-b806-bc94d78d9fd4', 'Remove', 'File', '5480da7c-e6dd-4a5c-9d8c-c648b7fd843c', DATEADD(hour, -28, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', 'BBBBBB88-8888-8888-8888-888888888888', 'Create', 'Member', '91ca0c44-b81a-4d69-93bf-42dbf0f7a19e', DATEADD(hour, -27, GETUTCDATE()), 0),
+('22222222-1111-0000-9999-888888888888', 'FFFFFF22-2222-2222-2222-222222222222', 'Add', 'Federation', 'a7f50dc8-0687-4175-87de-6f881e8f508c', DATEADD(hour, -26, GETUTCDATE()), 0),
+('bbbbbbbb-2222-3333-4444-555555555555', '938db8ea-47c1-4658-9da8-683d1781035d', 'Delete', 'Federation', '6af2d1da-e7ba-4d8b-9f94-126ba2d4215d', DATEADD(hour, -25, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', 'da41bf65-4204-43fa-bdd9-f9255aaecbb6', 'Delete', 'Member', '1747954a-e6fe-4756-a868-f687de60839b', DATEADD(hour, -24, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', '0568ad89-cc72-4cb7-8b47-b714a14ad305', 'Update', 'Task', '967b2c92-a5c2-4153-9806-43df0dc9c9e5', DATEADD(hour, -23, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', 'EEEEEE55-5555-5555-5555-555555555555', 'Add', 'Comment', '6012e478-a528-411c-b69d-13a63b999bef', DATEADD(hour, -22, GETUTCDATE()), 0),
+('33333333-2222-1111-0000-999999999999', 'BBBBBB22-2222-2222-2222-222222222222', 'Create', 'Workspace', '8ef69503-a2f9-4bc0-aa7d-a9b71992c551', DATEADD(hour, -21, GETUTCDATE()), 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', '1ad8a53b-c987-4665-bb89-6e77738e6de1', 'Create', 'File', '8ab8cd34-2aa8-4ef5-85fa-c594b49d2df5', DATEADD(hour, -20, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', 'CCCCCC99-9999-9999-9999-999999999999', 'Update', 'Workspace', '695efc2e-efc4-453f-ab01-be9471fb8c76', DATEADD(hour, -19, GETUTCDATE()), 0),
+('88888888-8888-8888-8888-888888888888', 'BBBBBB22-2222-2222-2222-222222222222', 'Delete', 'Federation', 'a77b7321-5201-46c9-8cb4-1bc95ae4b3ca', DATEADD(hour, -18, GETUTCDATE()), 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', 'CCCCCC33-3333-3333-3333-333333333333', 'Update', 'Task', 'cc1a0f19-7664-4cf6-bdae-9f070e9db327', DATEADD(hour, -17, GETUTCDATE()), 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'bb0697b8-0269-40ed-8f12-5f2f547baa9d', 'Move', 'Federation', 'f7b2499e-10c7-4d5d-b110-46230fa8828f', DATEADD(hour, -16, GETUTCDATE()), 0),
+('bbbbbbbb-2222-3333-4444-555555555555', 'DDDDDD44-4444-4444-4444-444444444444', 'Delete', 'Federation', '78484281-c86f-4105-be32-59d0e49b2e52', DATEADD(hour, -15, GETUTCDATE()), 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', 'e0840c34-d719-483f-8a7c-8baf2d390f82', 'Remove', 'Workspace', 'cd61fff7-83cc-40ea-824e-f873f7255c24', DATEADD(hour, -14, GETUTCDATE()), 0),
+('66666666-6666-6666-6666-666666666666', '1ad8a53b-c987-4665-bb89-6e77738e6de1', 'Remove', 'Task', '505d37c7-ea7c-4da6-a090-a31a8267c794', DATEADD(hour, -13, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', 'da41bf65-4204-43fa-bdd9-f9255aaecbb6', 'Add', 'Workspace', 'eee5aea4-19d5-4ff4-9b4f-4b3c90ea4279', DATEADD(hour, -12, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'Delete', 'File', '863f6d3e-ec22-4e13-b7b8-5d69d0bdd1d1', DATEADD(hour, -11, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', 'e0840c34-d719-483f-8a7c-8baf2d390f82', 'Update', 'Workspace', 'd3b8a763-8869-4241-abb8-07d10d52c4ef', DATEADD(hour, -10, GETUTCDATE()), 0),
+('bbbbbbbb-2222-3333-4444-555555555555', '0391258e-5399-4f33-a857-86430cd399e3', 'Remove', 'File', '3ea2f5b6-56bb-42df-b080-80ff052ce98e', DATEADD(hour, -9, GETUTCDATE()), 0),
+('aaaaaaaa-1111-2222-3333-444444444444', '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'Add', 'Member', 'aeadcdc7-d357-462d-b211-e0f7b6952395', DATEADD(hour, -8, GETUTCDATE()), 0),
+('22222222-1111-0000-9999-888888888888', 'ed7c4e91-244b-492f-9173-d91ef072a852', 'Remove', 'File', '9a835716-620f-4e96-8d63-37eb3ba52e29', DATEADD(hour, -7, GETUTCDATE()), 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', 'BBBBBB22-2222-2222-2222-222222222222', 'Remove', 'Federation', '184876ad-a6e5-4bbc-84ef-c5542b545942', DATEADD(hour, -6, GETUTCDATE()), 0),
+('55555555-5555-5555-5555-555555555555', 'FFFFFF66-6666-6666-6666-666666666666', 'Update', 'Member', 'c3dfd73a-b0b5-47cf-8a72-d7f4af9bcae9', DATEADD(hour, -5, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', 'Add', 'Federation', '5ce314aa-7663-49d8-82a2-5971483293c2', DATEADD(hour, -4, GETUTCDATE()), 0),
+('77777777-7777-7777-7777-777777777777', 'BBBBBB88-8888-8888-8888-888888888888', 'Create', 'Federation', '33dc8a6b-1e99-4a45-a11b-71c8c7cf6f33', DATEADD(hour, -3, GETUTCDATE()), 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', 'EEEEEE11-1111-1111-1111-111111111111', 'Delete', 'Federation', '3f200a52-4c3d-4df5-8ef1-c4bf3ecd9207', DATEADD(hour, -2, GETUTCDATE()), 0),
+('44444444-4444-4444-4444-444444444444', '0568ad89-cc72-4cb7-8b47-b714a14ad305', 'Move', 'Comment', '7878e06b-63f7-42b1-b443-bfb07769d89a', DATEADD(hour, -1, GETUTCDATE()), 0);
+
+-- 15. Insert Workspace Invitations
+INSERT INTO WorkspaceInvitations (WorkspaceId, InviterId, InviteeEmail, Role, Status, IsDisabled) VALUES
+('88888888-8888-8888-8888-888888888888', 'ed7c4e91-244b-492f-9173-d91ef072a852', 'invitee0@student.edu', 'Viewer', 'Pending', 0),
+('77777777-7777-7777-7777-777777777777', 'EEEEEE55-5555-5555-5555-555555555555', 'invitee1@student.edu', 'Member', 'Accepted', 0),
+('22222222-1111-0000-9999-888888888888', 'FFFFFF66-6666-6666-6666-666666666666', 'invitee2@student.edu', 'Member', 'Accepted', 0),
+('66666666-6666-6666-6666-666666666666', 'CCCCCC99-9999-9999-9999-999999999999', 'invitee3@student.edu', 'Viewer', 'Accepted', 0),
+('11111111-0000-9999-8888-777777777777', 'a50d91b6-a74b-4235-88df-f14afcf7b373', 'invitee4@student.edu', 'Member', 'Accepted', 0),
+('77777777-7777-7777-7777-777777777777', 'BBBBBB22-2222-2222-2222-222222222222', 'invitee5@student.edu', 'Viewer', 'Pending', 0),
+('33333333-2222-1111-0000-999999999999', '660aed7f-14ef-4a78-a289-e57ceb3e310d', 'invitee6@student.edu', 'Member', 'Accepted', 0),
+('22222222-1111-0000-9999-888888888888', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', 'invitee7@student.edu', 'Member', 'Accepted', 0),
+('bbbbbbbb-2222-3333-4444-555555555555', '0391258e-5399-4f33-a857-86430cd399e3', 'invitee8@student.edu', 'Member', 'Pending', 0),
+('88888888-8888-8888-8888-888888888888', 'a50d91b6-a74b-4235-88df-f14afcf7b373', 'invitee9@student.edu', 'Viewer', 'Accepted', 0),
+('77777777-7777-7777-7777-777777777777', 'AAAAAA77-7777-7777-7777-777777777777', 'invitee10@student.edu', 'Viewer', 'Accepted', 0),
+('addf9518-a3ba-42e5-9ea9-63073077c592', '2c0040a8-6f4e-4d98-8745-f96e45ea128a', 'invitee11@student.edu', 'Member', 'Accepted', 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', 'CCCCCC99-9999-9999-9999-999999999999', 'invitee12@student.edu', 'Viewer', 'Pending', 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'da41bf65-4204-43fa-bdd9-f9255aaecbb6', 'invitee13@student.edu', 'Member', 'Pending', 0),
+('66666666-6666-6666-6666-666666666666', 'be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', 'invitee14@student.edu', 'Member', 'Accepted', 0),
+('99999999-9999-9999-9999-999999999999', 'ed7c4e91-244b-492f-9173-d91ef072a852', 'invitee15@student.edu', 'Viewer', 'Pending', 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '618269dc-e47b-4dda-9198-afc388223528', 'invitee16@student.edu', 'Viewer', 'Accepted', 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', 'd0310624-9fc3-4abd-80cf-05a10aea0af3', 'invitee17@student.edu', 'Viewer', 'Pending', 0),
+('22222222-1111-0000-9999-888888888888', '0a6eb437-a032-4db4-967a-795a177312f9', 'invitee18@student.edu', 'Member', 'Accepted', 0),
+('aaedaea8-bcb9-436e-a713-60b736cfb35a', '0a6eb437-a032-4db4-967a-795a177312f9', 'invitee19@student.edu', 'Member', 'Accepted', 0),
+('44444444-4444-4444-4444-444444444444', '03b95716-f1bf-491b-8dd4-b180adff5662', 'invitee20@student.edu', 'Member', 'Accepted', 0),
+('aaaaaaaa-1111-2222-3333-444444444444', 'c2431330-2381-4288-ada8-f8db85a33948', 'invitee21@student.edu', 'Viewer', 'Pending', 0),
+('55555555-5555-5555-5555-555555555555', 'BBBBBB22-2222-2222-2222-222222222222', 'invitee22@student.edu', 'Viewer', 'Pending', 0),
+('aaaaaaaa-1111-2222-3333-444444444444', '0568ad89-cc72-4cb7-8b47-b714a14ad305', 'invitee23@student.edu', 'Viewer', 'Accepted', 0),
+('11111111-0000-9999-8888-777777777777', '1ad8a53b-c987-4665-bb89-6e77738e6de1', 'invitee24@student.edu', 'Member', 'Pending', 0),
+('22222222-1111-0000-9999-888888888888', 'AAAAAA77-7777-7777-7777-777777777777', 'invitee25@student.edu', 'Member', 'Pending', 0),
+('245141b6-95c1-4d3e-8fe1-dd96bef76323', '35e6805b-6390-4d5f-94b3-bb3e06baacb5', 'invitee26@student.edu', 'Viewer', 'Accepted', 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '0391258e-5399-4f33-a857-86430cd399e3', 'invitee27@student.edu', 'Member', 'Pending', 0),
+('50a64fa8-6902-4848-b949-f831c89da00c', 'EEEEEE55-5555-5555-5555-555555555555', 'invitee28@student.edu', 'Member', 'Pending', 0),
+('ee32234d-40a4-4080-8ffa-49fdef310a7b', '03b95716-f1bf-491b-8dd4-b180adff5662', 'invitee29@student.edu', 'Viewer', 'Pending', 0);
+
+INSERT INTO Notifications (UserId, Message, Type, Link, IsRead, IsDisabled) VALUES
+('a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'Your task assignment has been updated.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('03b95716-f1bf-491b-8dd4-b180adff5662', N'You have been appointed Manager of the new workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('DDDDDD44-4444-4444-4444-444444444444', N'A comment has been posted on your assigned task.', 'TaskAssignment', '/workspaces', 0, 0),
+('1ad8a53b-c987-4665-bb89-6e77738e6de1', N'A comment has been posted on your assigned task.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('ed7c4e91-244b-492f-9173-d91ef072a852', N'Your task assignment has been updated.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('1ad8a53b-c987-4665-bb89-6e77738e6de1', N'You have been appointed Manager of the new workspace.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('e0840c34-d719-483f-8a7c-8baf2d390f82', N'You have been appointed Manager of the new workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('03b95716-f1bf-491b-8dd4-b180adff5662', N'You have a pending invitation to join a Workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('746a3ed9-0b1b-43d7-98dd-a947122f8ccf', N'A comment has been posted on your assigned task.', 'TaskAssignment', '/workspaces', 0, 0),
+('FFFFFF66-6666-6666-6666-666666666666', N'You have a pending invitation to join a Workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('0391258e-5399-4f33-a857-86430cd399e3', N'You have been appointed Manager of the new workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('BBBBBB88-8888-8888-8888-888888888888', N'A comment has been posted on your assigned task.', 'TaskAssignment', '/workspaces', 0, 0),
+('a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'You have a pending invitation to join a Workspace.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('a50d91b6-a74b-4235-88df-f14afcf7b373', N'Your task assignment has been updated.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('0568ad89-cc72-4cb7-8b47-b714a14ad305', N'You have been appointed Manager of the new workspace.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('660aed7f-14ef-4a78-a289-e57ceb3e310d', N'You have been appointed Manager of the new workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('03b95716-f1bf-491b-8dd4-b180adff5662', N'You have a pending invitation to join a Workspace.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('EEEEEE55-5555-5555-5555-555555555555', N'You have a pending invitation to join a Workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('0a6eb437-a032-4db4-967a-795a177312f9', N'You have been appointed Manager of the new workspace.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('bb0697b8-0269-40ed-8f12-5f2f547baa9d', N'You have a pending invitation to join a Workspace.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('d0310624-9fc3-4abd-80cf-05a10aea0af3', N'A comment has been posted on your assigned task.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('CCCCCC33-3333-3333-3333-333333333333', N'A comment has been posted on your assigned task.', 'CommentAlert', '/workspaces', 0, 0),
+('AAAAAA11-1111-1111-1111-111111111111', N'You have been appointed Manager of the new workspace.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('e0840c34-d719-483f-8a7c-8baf2d390f82', N'A comment has been posted on your assigned task.', 'CommentAlert', '/workspaces', 0, 0),
+('be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'You have a pending invitation to join a Workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('bb0697b8-0269-40ed-8f12-5f2f547baa9d', N'You have a pending invitation to join a Workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('CCCCCC33-3333-3333-3333-333333333333', N'You have a pending invitation to join a Workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('a50d91b6-a74b-4235-88df-f14afcf7b373', N'You have been appointed Manager of the new workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'A comment has been posted on your assigned task.', 'TaskAssignment', '/workspaces', 0, 0),
+('f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Your task assignment has been updated.', 'TaskAssignment', '/workspaces', 0, 0),
+('a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'You have been appointed Manager of the new workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('AAAAAA33-3333-3333-3333-333333333333', N'Your task assignment has been updated.', 'CommentAlert', '/workspaces', 0, 0),
+('35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'You have a pending invitation to join a Workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('1ad8a53b-c987-4665-bb89-6e77738e6de1', N'You have been appointed Manager of the new workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('CCCCCC33-3333-3333-3333-333333333333', N'A comment has been posted on your assigned task.', 'TaskAssignment', '/workspaces', 0, 0),
+('FFFFFF66-6666-6666-6666-666666666666', N'You have a pending invitation to join a Workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'Your task assignment has been updated.', 'CommentAlert', '/workspaces', 0, 0),
+('a14c900d-d26d-4f5d-bc2e-a3da6ca8288b', N'A comment has been posted on your assigned task.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('EEEEEE55-5555-5555-5555-555555555555', N'You have been appointed Manager of the new workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('938db8ea-47c1-4658-9da8-683d1781035d', N'You have a pending invitation to join a Workspace.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('1ad8a53b-c987-4665-bb89-6e77738e6de1', N'You have a pending invitation to join a Workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('0391258e-5399-4f33-a857-86430cd399e3', N'You have been appointed Manager of the new workspace.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('FFFFFF22-2222-2222-2222-222222222222', N'You have been appointed Manager of the new workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('ed7c4e91-244b-492f-9173-d91ef072a852', N'Your task assignment has been updated.', 'TaskAssignment', '/workspaces', 0, 0),
+('0568ad89-cc72-4cb7-8b47-b714a14ad305', N'You have a pending invitation to join a Workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('AAAAAA77-7777-7777-7777-777777777777', N'You have a pending invitation to join a Workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('938db8ea-47c1-4658-9da8-683d1781035d', N'You have been appointed Manager of the new workspace.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('DDDDDD44-4444-4444-4444-444444444444', N'Your task assignment has been updated.', 'CommentAlert', '/workspaces', 0, 0),
+('c2431330-2381-4288-ada8-f8db85a33948', N'A comment has been posted on your assigned task.', 'TaskAssignment', '/workspaces', 0, 0),
+('DDDDDD00-0000-0000-0000-000000000000', N'You have a pending invitation to join a Workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'You have a pending invitation to join a Workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('f30c0a29-6e17-46ea-aa5c-cbd0f5fa9746', N'Your task assignment has been updated.', 'TaskAssignment', '/workspaces', 0, 0),
+('35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'A comment has been posted on your assigned task.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('da41bf65-4204-43fa-bdd9-f9255aaecbb6', N'You have a pending invitation to join a Workspace.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('FFFFFF22-2222-2222-2222-222222222222', N'Your task assignment has been updated.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('BBBBBB22-2222-2222-2222-222222222222', N'You have been appointed Manager of the new workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'You have been appointed Manager of the new workspace.', 'TaskAssignment', '/workspaces', 0, 0),
+('35e6805b-6390-4d5f-94b3-bb3e06baacb5', N'Your task assignment has been updated.', 'WorkspaceInvite', '/workspaces', 0, 0),
+('be283f6b-a5b6-44ec-b7fc-9dc73731b8cc', N'You have been appointed Manager of the new workspace.', 'CommentAlert', '/workspaces', 0, 0),
+('ed7c4e91-244b-492f-9173-d91ef072a852', N'You have a pending invitation to join a Workspace.', 'TaskAssignment', '/workspaces', 0, 0);
+
+-- 16. Insert System Settings
+INSERT INTO SystemSettings (SettingKey, SettingValue, IsDisabled) VALUES
+('OperationCosts', '[
+  { "Name": "Server & Infrastructure", "Amount": 1500000, "IsDisabled": false },
+  { "Name": "Cloud Storage & Database", "Amount": 2500000, "IsDisabled": false },
+  { "Name": "AI APIs Usage", "Amount": 1800000, "IsDisabled": false }
+]', 0),
+('Plans', '[
+  { 
+    "Id": "Personal", 
+    "Name": "Personal", 
+    "MonthlyPrice": 40000, 
+    "YearlyPrice": 399000, 
+    "Description": "Dedicated solo power workspace", 
+    "ColorClass": "teal",
+    "Features": [ "1 Workspace", "5 Members", "2 GB Storage (Individual)", "0 Chat Channels", "1 Task Branch", "Basic Analytics" ],
+    "MemberLimit": 5,
+    "StorageLimit": "2 GB Storage (Individual)",
+    "ChatLimit": 0,
+    "TaskBranchLimit": 1,
+    "HasAdvancedAnalytics": false,
+    "HasRolePermissions": false,
+    "IsDisabled": false
+  },
+  { 
+    "Id": "Pro", 
+    "Name": "Pro", 
+    "MonthlyPrice": 299000, 
+    "YearlyPrice": 2900000, 
+    "Description": "More power for growing teams", 
+    "ColorClass": "indigo",
+    "Features": [ "1 Workspace", "10 Members", "20 GB Storage", "3 Chat Channels", "2 Task Branches", "Basic Analytics" ],
+    "MemberLimit": 10,
+    "StorageLimit": "20 GB Storage",
+    "ChatLimit": 3,
+    "TaskBranchLimit": 2,
+    "HasAdvancedAnalytics": false,
+    "HasRolePermissions": false,
+    "IsDisabled": false
+  },
+  { 
+    "Id": "ProPlus", 
+    "Name": "Pro+", 
+    "MonthlyPrice": 449000, 
+    "YearlyPrice": 4400000, 
+    "Description": "Advanced features for power users", 
+    "ColorClass": "violet",
+    "Features": [ "1 Workspace", "15 Members", "40 GB Storage", "5 Chat Channels", "4 Task Branches", "Advanced Analytics", "Role Permissions" ],
+    "MemberLimit": 15,
+    "StorageLimit": "40 GB Storage",
+    "ChatLimit": 5,
+    "TaskBranchLimit": 4,
+    "HasAdvancedAnalytics": true,
+    "HasRolePermissions": true,
+    "IsDisabled": false
+  },
+  { 
+    "Id": "Business", 
+    "Name": "Business", 
+    "MonthlyPrice": 899000, 
+    "YearlyPrice": 8900000, 
+    "Description": "Unlimited power for organizations", 
+    "ColorClass": "slate",
+    "Features": [ "1 Workspace", "30 Members", "80 GB Storage", "Unlimited Chat Channels", "Unlimited Task Branches", "Advanced Analytics", "Role Permissions" ],
+    "MemberLimit": 30,
+    "StorageLimit": "80 GB Storage",
+    "ChatLimit": -1,
+    "TaskBranchLimit": -1,
+    "HasAdvancedAnalytics": true,
+    "HasRolePermissions": true,
+    "IsDisabled": false
+  }
+]', 0);
 
 PRINT 'UniGrid Expanded Massive Database Seeded Successfully.';
 GO

@@ -1,5 +1,108 @@
 {
-  "ServerFee": 1500000.0,
-  "CloudFee": 2500000.0,
-  "AiApiFee": 1800000.0
+  "OperationCosts": [
+    {
+      "Name": "Server \u0026 Infrastructure",
+      "Amount": 1500000
+    },
+    {
+      "Name": "Cloud Storage \u0026 Database",
+      "Amount": 2500000
+    },
+    {
+      "Name": "AI APIs Usage",
+      "Amount": 1800000
+    }
+  ],
+  "Plans": [
+    {
+      "Id": "Personal",
+      "Name": "Personal",
+      "MonthlyPrice": 40000,
+      "YearlyPrice": 399000,
+      "Description": "Dedicated solo power workspace",
+      "ColorClass": "teal",
+      "Features": [
+        "1 Workspace",
+        "5 Members",
+        "2 GB Storage (Individual)",
+        "0 Chat Channels",
+        "1 Task Branch",
+        "Basic Analytics"
+      ],
+      "MemberLimit": 5,
+      "StorageLimit": "2 GB Storage (Individual)",
+      "ChatLimit": 0,
+      "TaskBranchLimit": 1,
+      "HasAdvancedAnalytics": false,
+      "HasRolePermissions": false
+    },
+    {
+      "Id": "Pro",
+      "Name": "Pro",
+      "MonthlyPrice": 299000,
+      "YearlyPrice": 2900000,
+      "Description": "More power for growing teams",
+      "ColorClass": "indigo",
+      "Features": [
+        "1 Workspace",
+        "10 Members",
+        "20 GB Storage",
+        "3 Chat Channels",
+        "2 Task Branches",
+        "Basic Analytics"
+      ],
+      "MemberLimit": 10,
+      "StorageLimit": "20 GB Storage",
+      "ChatLimit": 3,
+      "TaskBranchLimit": 2,
+      "HasAdvancedAnalytics": false,
+      "HasRolePermissions": false
+    },
+    {
+      "Id": "ProPlus",
+      "Name": "Pro\u002B",
+      "MonthlyPrice": 449000,
+      "YearlyPrice": 4400000,
+      "Description": "Advanced features for power users",
+      "ColorClass": "violet",
+      "Features": [
+        "1 Workspace",
+        "15 Members",
+        "40 GB Storage",
+        "5 Chat Channels",
+        "4 Task Branches",
+        "Advanced Analytics",
+        "Role Permissions"
+      ],
+      "MemberLimit": 15,
+      "StorageLimit": "40 GB Storage",
+      "ChatLimit": 5,
+      "TaskBranchLimit": 4,
+      "HasAdvancedAnalytics": true,
+      "HasRolePermissions": true
+    },
+    {
+      "Id": "Business",
+      "Name": "Business",
+      "MonthlyPrice": 899000,
+      "YearlyPrice": 8900000,
+      "Description": "Unlimited power for organizations",
+      "ColorClass": "slate",
+      "Features": [
+        "1 Workspace",
+        "30 Members",
+        "80 GB Storage",
+        "Unlimited Chat Channels",
+        "Unlimited Task Branches",
+        "Advanced Analytics",
+        "Role Permissions"
+      ],
+      "MemberLimit": 30,
+      "StorageLimit": "80 GB Storage",
+      "ChatLimit": -1,
+      "TaskBranchLimit": -1,
+      "HasAdvancedAnalytics": true,
+      "HasRolePermissions": true
+    }
+  ]
 }

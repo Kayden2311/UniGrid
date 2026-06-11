@@ -19,20 +19,20 @@ public class WorkspaceRepository : IWorkspaceRepository
     {
         return await _context.Workspaces
             .Include(w => w.Owner)
-            .FirstOrDefaultAsync(w => w.JoinCode == joinCode);
+            .FirstOrDefaultAsync(w => !w.IsDisabled && w.JoinCode == joinCode);
     }
 
     public async System.Threading.Tasks.Task<Workspace?> GetByIdAsync(Guid id)
     {
         return await _context.Workspaces
             .Include(w => w.Owner)
-            .FirstOrDefaultAsync(w => w.Id == id);
+            .FirstOrDefaultAsync(w => !w.IsDisabled && w.Id == id);
     }
 
     public async System.Threading.Tasks.Task<List<Workspace>> GetUserWorkspacesAsync(Guid userId)
     {
         return await _context.Workspaces
-            .Where(w => w.OwnerId == userId || w.WorkspaceMembers.Any(m => m.UserId == userId))
+            .Where(w => !w.IsDisabled && (w.OwnerId == userId || w.WorkspaceMembers.Any(m => m.UserId == userId)))
             .ToListAsync();
     }
 
@@ -48,6 +48,7 @@ public class WorkspaceRepository : IWorkspaceRepository
 
     public void Remove(Workspace workspace)
     {
-        _context.Workspaces.Remove(workspace);
+        workspace.IsDisabled = true;
+        _context.Workspaces.Update(workspace);
     }
 }

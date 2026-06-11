@@ -4,6 +4,12 @@
     ViewData["Title"] = "Pricing";
 }
 
+@{
+    var businessPlan = Model.Settings.Plans.FirstOrDefault(p => p.Id.Equals("Business", StringComparison.OrdinalIgnoreCase) || p.Name.Equals("Business", StringComparison.OrdinalIgnoreCase));
+    var businessMonthlyVal = businessPlan?.MonthlyPrice ?? 899000;
+    var businessYearlyVal = businessPlan?.YearlyPrice ?? 8900000;
+    var businessFeatures = businessPlan != null ? System.Text.Json.JsonSerializer.Serialize(businessPlan.Features) : "[]";
+}
 <div class="space-y-16 py-8 px-6 md:px-12 max-w-7xl mx-auto" 
      x-data="{ 
         billing: 'monthly', 
@@ -17,6 +23,17 @@
         selectedPriceYearly: '',
         selectedFeatures: [],
         
+        // Dynamic subscription plan settings from Admin panel
+        businessMonthly: @businessMonthlyVal,
+        businessYearly: @businessYearlyVal,
+
+        formatPrice(val) {
+            if (val >= 1000000) {
+                return (val / 1000000).toFixed(1).replace('.0', '') + 'M';
+            }
+            return (val / 1000) + 'K';
+        },
+
         // Checkout state variables
         checkoutLoading: false,
         paymentConfirming: false,
@@ -210,215 +227,63 @@
             }
         </div>
 
-        <!-- Personal Plan -->
-        <div class="glass p-6 rounded-[2.5rem] flex flex-col h-full border-t-8 border-teal-400 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 duration-300 @(Model.CurrentPlan == "Personal" ? "ring-4 ring-teal-500/20" : "")">
-            <div class="mb-6">
-                <h3 class="text-xl font-black text-slate-800 mb-2">Personal</h3>
-                <p class="text-xs text-teal-600 font-bold uppercase tracking-widest">For solo users</p>
-            </div>
-            <div class="mb-6">
-                <div class="flex items-baseline gap-1">
-                    <span class="text-4xl font-black text-slate-800" x-text="billing == 'monthly' ? '40K' : '399K'">40K</span>
-                    <span class="text-slate-400 font-bold text-sm">VND</span>
-                </div>
-                <p class="text-xs text-teal-500/80 font-bold mt-1" x-text="billing == 'monthly' ? '≈ 40K VND / month' : '≈ 33K VND / year'"></p>
-                <p class="text-sm text-slate-500 mt-3 leading-relaxed">Dedicated solo power workspace</p>
-            </div>
-            <ul class="space-y-4 mb-8 flex-1 border-t border-slate-100 pt-6">
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 1 Workspace
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 5 Members
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 2 GB Storage (Individual)
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium text-slate-300">
-                    <i data-lucide="x" class="w-4 h-4 text-slate-300 shrink-0"></i> 0 Chat Channels
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 1 Task Branch
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Basic Analytics
-                </li>
-            </ul>
-            @if (User.Identity?.IsAuthenticated == true) {
-                @if (Model.CurrentPlan == "Personal") {
-                    <button disabled class="w-full py-4 bg-teal-50 text-teal-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
-                } else if (Model.GetPlanRank(Model.CurrentPlan) > 1) {
-                    <!-- Hidden for downgraded plan -->
-                } else {
-                    <button @@click="triggerUpgrade('Personal', '40K', '399K', ['1 Workspace', '5 Members', '2 GB Individual Storage', '0 Chat Channels', '1 Task Branch', 'Basic Analytics'])" 
-                            class="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold shadow-lg shadow-teal-100 hover:bg-teal-700 transition-all">Upgrade Now</button>
-                }
-            } else {
-                <button @@click="triggerUpgrade('Personal', '40K', '399K', ['1 Workspace', '5 Members', '2 GB Individual Storage', '0 Chat Channels', '1 Task Branch', 'Basic Analytics'])" 
-                        class="w-full py-4 bg-teal-600 text-white rounded-2xl font-bold shadow-lg shadow-teal-100 hover:bg-teal-700 transition-all">Upgrade Now</button>
-            }
-        </div>
+        <!-- Dynamic Plans from Config -->
+        @foreach (var plan in Model.Settings.Plans.Where(p => !p.IsDisabled))
+        {
+            var planBorder = PlanColorHelper.GetBorderClass(plan.ColorClass);
+            var planText = PlanColorHelper.GetTextClass(plan.ColorClass);
+            var planBg = PlanColorHelper.GetBgClass(plan.ColorClass);
+            var planShadow = PlanColorHelper.GetShadowClass(plan.ColorClass);
+            var planRing = PlanColorHelper.GetRingClass(plan.ColorClass);
+            var isCurrent = Model.CurrentPlan.Equals(plan.Id, StringComparison.OrdinalIgnoreCase) || Model.CurrentPlan.Equals(plan.Name, StringComparison.OrdinalIgnoreCase);
+            var planRank = Model.GetPlanRank(plan.Id);
+            var currentRank = Model.GetPlanRank(Model.CurrentPlan);
 
-        <!-- Pro Plan -->
-        <div class="glass p-8 rounded-[3rem] flex flex-col h-full border-t-8 border-indigo-400 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 duration-300 @(Model.CurrentPlan == "Pro" ? "ring-4 ring-indigo-500/20" : "")">
-            <div class="mb-6">
-                <h3 class="text-xl font-black text-slate-800 mb-2">Pro</h3>
-                <p class="text-xs text-indigo-600 font-bold uppercase tracking-widest">For professionals</p>
-            </div>
-            <div class="mb-6">
-                <div class="flex items-baseline gap-1">
-                    <span class="text-4xl font-black text-slate-800" x-text="billing == 'monthly' ? '299K' : '2.9M'">299K</span>
-                    <span class="text-slate-400 font-bold text-sm">VND</span>
+            <div class="glass p-8 rounded-[3rem] flex flex-col h-full border-t-8 @planBorder shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 duration-300 @(isCurrent ? $"ring-4 {planRing}" : "")">
+                <div class="mb-6">
+                    <h3 class="text-xl font-black text-slate-800 mb-2">@plan.Name</h3>
+                    <p class="text-xs @planText font-bold uppercase tracking-widest">@plan.Description</p>
                 </div>
-                <p class="text-xs text-indigo-500/80 font-bold mt-1" x-text="billing == 'monthly' ? '≈ 30K VND / member' : '≈ 24K VND / member'"></p>
-                <p class="text-sm text-slate-500 mt-3 leading-relaxed">More power for growing teams</p>
-            </div>
-            <ul class="space-y-4 mb-8 flex-1 border-t border-slate-100 pt-6">
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 1 Workspace
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 10 Members
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 20 GB Storage
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 3 Chat Channels
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 2 Task Branches
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Basic Analytics
-                </li>
-            </ul>
-            @if (User.Identity?.IsAuthenticated == true) {
-                @if (Model.CurrentPlan == "Pro") {
-                    <button disabled class="w-full py-4 bg-indigo-50 text-indigo-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
-                } else if (Model.GetPlanRank(Model.CurrentPlan) > 1) {
-                    <!-- Hidden for downgraded plan -->
-                } else {
-                    <button @@click="triggerUpgrade('Pro', '299K', '2.9M', ['1 Workspace', '10 Members', '20 GB Storage', '3 Chat Channels', '2 Task Branches', 'Basic Analytics'])" 
-                            class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">Upgrade Now</button>
-                }
-            } else {
-                <button @@click="triggerUpgrade('Pro', '299K', '2.9M', ['1 Workspace', '10 Members', '20 GB Storage', '3 Chat Channels', '2 Task Branches', 'Basic Analytics'])" 
-                        class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">Upgrade Now</button>
-            }
-        </div>
-
-        <!-- Pro+ Plan (Popular) -->
-        <div class="glass p-8 rounded-[3rem] flex flex-col h-full border-t-8 border-violet-500 relative transition-all hover:shadow-2xl hover:-translate-y-1 duration-300 shadow-xl shadow-violet-500/5 @(Model.CurrentPlan == "ProPlus" ? "ring-4 ring-violet-500/20" : "")">
-            <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">Most Popular</div>
-            <div class="mb-6">
-                <h3 class="text-xl font-black text-slate-800 mb-2">Pro+</h3>
-                <p class="text-xs text-violet-600 font-bold uppercase tracking-widest">For power users</p>
-            </div>
-            <div class="mb-6">
-                <div class="flex items-baseline gap-1">
-                    <span class="text-4xl font-black text-slate-800" x-text="billing == 'monthly' ? '449K' : '4.4M'">449K</span>
-                    <span class="text-slate-400 font-bold text-sm">VND</span>
+                <div class="mb-6">
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-4xl font-black text-slate-800" x-text="billing == 'monthly' ? formatPrice(@plan.MonthlyPrice) : formatPrice(@plan.YearlyPrice)"></span>
+                        <span class="text-slate-400 font-bold text-sm">VND</span>
+                    </div>
+                    <p class="text-xs @planText font-bold mt-1" x-text="billing == 'monthly' ? '≈ ' + formatPrice(@plan.MonthlyPrice) + ' VND / month' : '≈ ' + formatPrice(Math.round(@plan.YearlyPrice/12)) + ' VND / month'"></p>
+                    <p class="text-sm text-slate-500 mt-3 leading-relaxed">Workspace capacity: @plan.MemberLimit members</p>
                 </div>
-                <p class="text-xs text-violet-500/80 font-bold mt-1" x-text="billing == 'monthly' ? '≈ 30K VND / member' : '≈ 24K VND / member'"></p>
-                <p class="text-sm text-slate-500 mt-3 leading-relaxed">Advanced features for power users</p>
-            </div>
-            <ul class="space-y-4 mb-8 flex-1 border-t border-slate-100 pt-6">
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 1 Workspace
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 15 Members
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 40 GB Storage
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 5 Chat Channels
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 4 Task Branches
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Advanced Analytics
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Role Permissions
-                </li>
-            </ul>
-            @if (User.Identity?.IsAuthenticated == true) {
-                @if (Model.CurrentPlan == "ProPlus") {
-                    <button disabled class="w-full py-4 bg-violet-50 text-violet-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
-                } else if (Model.GetPlanRank(Model.CurrentPlan) > 2) {
-                    <!-- Hidden for downgraded plan -->
+                <ul class="space-y-4 mb-8 flex-1 border-t border-slate-100 pt-6">
+                    @foreach (var feature in plan.Features)
+                    {
+                        <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                            <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> @feature
+                        </li>
+                    }
+                </ul>
+                @if (User.Identity?.IsAuthenticated == true) {
+                    @if (isCurrent) {
+                        <button disabled class="w-full py-4 bg-slate-100 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+                    } else if (currentRank > planRank) {
+                        <button @@click="triggerUpgrade('@plan.Id', formatPrice(@plan.MonthlyPrice), formatPrice(@plan.YearlyPrice), @Html.Raw(System.Text.Json.JsonSerializer.Serialize(plan.Features).Replace("\"", "'")))" 
+                                class="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50 transition-all">Select Plan</button>
+                    } else {
+                        <button @@click="triggerUpgrade('@plan.Id', formatPrice(@plan.MonthlyPrice), formatPrice(@plan.YearlyPrice), @Html.Raw(System.Text.Json.JsonSerializer.Serialize(plan.Features).Replace("\"", "'")))" 
+                                class="w-full py-4 @planBg text-white rounded-2xl font-bold shadow-lg @planShadow transition-all">Upgrade Now</button>
+                    }
                 } else {
-                    <button @@click="triggerUpgrade('ProPlus', '449K', '4.4M', ['1 Workspace', '15 Members', '40 GB Storage', '5 Chat Channels', '4 Task Branches', 'Advanced Analytics', 'Role Permissions'])" 
-                            class="w-full py-4 bg-violet-600 text-white rounded-2xl font-bold shadow-lg shadow-violet-100 hover:bg-violet-700 transition-all">Upgrade Now</button>
+                    <button @@click="triggerUpgrade('@plan.Id', formatPrice(@plan.MonthlyPrice), formatPrice(@plan.YearlyPrice), @Html.Raw(System.Text.Json.JsonSerializer.Serialize(plan.Features).Replace("\"", "'")))" 
+                            class="w-full py-4 @planBg text-white rounded-2xl font-bold shadow-lg @planShadow transition-all">Upgrade Now</button>
                 }
-            } else {
-                <button @@click="triggerUpgrade('ProPlus', '449K', '4.4M', ['1 Workspace', '15 Members', '40 GB Storage', '5 Chat Channels', '4 Task Branches', 'Advanced Analytics', 'Role Permissions'])" 
-                        class="w-full py-4 bg-violet-600 text-white rounded-2xl font-bold shadow-lg shadow-violet-100 hover:bg-violet-700 transition-all">Upgrade Now</button>
-            }
-        </div>
-
-        <!-- Business Plan -->
-        <div class="glass p-8 rounded-[3rem] flex flex-col h-full border-t-8 border-slate-850 shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 duration-300 @(Model.CurrentPlan == "Business" ? "ring-4 ring-slate-800/20" : "")">
-            <div class="mb-6">
-                <h3 class="text-xl font-black text-slate-800 mb-2">Business</h3>
-                <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">For organizations</p>
             </div>
-            <div class="mb-6">
-                <div class="flex items-baseline gap-1">
-                    <span class="text-4xl font-black text-slate-800" x-text="billing == 'monthly' ? '899K' : '8.9M'">899K</span>
-                    <span class="text-slate-400 font-bold text-sm">VND</span>
-                </div>
-                <p class="text-xs text-slate-500 font-bold mt-1" x-text="billing == 'monthly' ? '≈ 30K VND / member' : '≈ 24K VND / member'"></p>
-                <p class="text-sm text-slate-400 mt-3 leading-relaxed">Unlimited power for organizations</p>
-            </div>
-            <ul class="space-y-4 mb-8 flex-1 border-t border-slate-100 pt-6">
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 1 Workspace
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 30 Members
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> 80 GB Storage
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Unlimited Chat Channels
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Unlimited Task Branches
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Advanced Analytics
-                </li>
-                <li class="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                    <i data-lucide="check" class="w-4 h-4 text-emerald-500 shrink-0"></i> Role Permissions
-                </li>
-            </ul>
-            @if (User.Identity?.IsAuthenticated == true) {
-                @if (Model.CurrentPlan == "Business") {
-                    <button disabled class="w-full py-4 bg-slate-800/10 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
-                } else {
-                    <button @@click="triggerBusinessUpgrade()" 
-                            class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-900 transition-all">Contact Us</button>
-                }
-            } else {
-                <button @@click="triggerBusinessUpgrade()" 
-                        class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold shadow-lg shadow-slate-200 hover:bg-slate-900 transition-all">Contact Us</button>
-            }
-        </div>
+        }
     </div>
 
-    <!-- Confirm Upgrade Modal -->
-    <div x-show="showConfirmModal" x-transition x-cloak class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
+    <div x-show="showConfirmModal" x-transition x-cloak class="fixed inset-0 z-50 overflow-y-auto flex items-start sm:items-center justify-center p-4">
         <!-- Backdrop -->
         <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @@click="if (!paymentConfirming && !paymentSuccess) showConfirmModal = false"></div>
         
         <!-- Modal Content -->
-        <div class="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-2xl relative z-10 w-full max-w-lg transform transition-all duration-300">
+        <div class="bg-white rounded-[2rem] sm:rounded-[2.5rem] border border-slate-100 p-6 sm:p-8 shadow-2xl relative z-10 w-full max-w-lg transform transition-all duration-300 my-8 sm:my-0 max-h-[90vh] flex flex-col overflow-hidden">
             <button x-show="!paymentConfirming && !paymentSuccess" @@click="showConfirmModal = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors">
                 <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -455,7 +320,7 @@
             </div>
 
             <!-- Main Checkout View -->
-            <div x-show="!checkoutLoading && !errorMessage && !paymentSuccess" class="space-y-6">
+            <div x-show="!checkoutLoading && !errorMessage && !paymentSuccess" class="space-y-6 overflow-y-auto pr-1">
                 <!-- Header -->
                 <div class="flex items-center gap-3">
                     <div class="h-10 w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shadow-sm">
@@ -516,20 +381,19 @@
         </div>
     </div>
 
-    <!-- Business Upgrade Selection Modal -->
-    <div x-show="showBusinessModal" x-transition x-cloak class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
+    <div x-show="showBusinessModal" x-transition x-cloak class="fixed inset-0 z-50 overflow-y-auto flex items-start sm:items-center justify-center p-4">
         <!-- Backdrop -->
         <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @@click="showBusinessModal = false"></div>
         
         <!-- Modal Content -->
-        <div class="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-2xl relative z-10 w-full max-w-2xl transform transition-all duration-300">
+        <div class="bg-white rounded-[2rem] sm:rounded-[2.5rem] border border-slate-100 p-6 sm:p-8 shadow-2xl relative z-10 w-full max-w-2xl transform transition-all duration-300 my-8 sm:my-0 max-h-[90vh] flex flex-col overflow-hidden">
             <button @@click="showBusinessModal = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors">
                 <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
             
-            <div class="space-y-6">
+            <div class="space-y-6 overflow-y-auto pr-1">
                 <div class="h-12 w-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-md">
                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -547,11 +411,11 @@
                         <div class="space-y-3">
                             <span class="px-2.5 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black rounded-full uppercase tracking-wider">Choice 1: Group Workspace</span>
                             <h4 class="text-lg font-black text-slate-850">Direct Upgrade to Group Workspace</h4>
-                            <p class="text-xs text-slate-500 leading-relaxed font-semibold">Automatically upgrade the current workspace to a Group Workspace (Pro/Pro Plus) for <span class="text-indigo-600 font-bold">899,000 VND / month</span>. Includes up to 30 members, 80 GB of storage, and instant access to premium features.</p>
+                            <p class="text-xs text-slate-500 leading-relaxed font-semibold">Automatically upgrade the current workspace to a Group Workspace (Pro/Pro Plus) for <span class="text-indigo-600 font-bold" x-text="businessMonthly.toLocaleString('vi-VN') + ' VND / month'">899,000 VND / month</span>. Includes up to 30 members, 80 GB of storage, and instant access to premium features.</p>
                         </div>
-                        <button @@click="showBusinessModal = false; triggerUpgrade('Business', '899K', '8.9M', ['1 Workspace', '30 Members', '80 GB Storage', 'Unlimited Chat', 'Unlimited Task Branches', 'Advanced Analytics', 'Role Permissions', 'Priority Support'])" 
-                                class="w-full mt-6 py-3 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all cursor-pointer">
-                            Upgrade Now (899K/month)
+                        <button @@click="showBusinessModal = false; triggerUpgrade('Business', formatPrice(businessMonthly), formatPrice(businessYearly), @Html.Raw(businessFeatures.Replace("\"", "'")))" 
+                                class="w-full mt-6 py-3 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all cursor-pointer flex items-center justify-center gap-1">
+                            <span>Upgrade Now (</span><span x-text="formatPrice(businessMonthly)"></span><span>/month)</span>
                         </button>
                     </div>
 

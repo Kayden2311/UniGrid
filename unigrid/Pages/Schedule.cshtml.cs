@@ -68,7 +68,7 @@ public class ScheduleModel : PageModel
 
             // Fetch Personal Schedule
             PersonalEvents = await _context.PersonalSchedules
-                .Where(p => p.UserId == userProfile.Id)
+                .Where(p => !p.IsDisabled && p.UserId == userProfile.Id)
                 .ToListAsync();
 
             return Page();
@@ -84,6 +84,7 @@ public class ScheduleModel : PageModel
         return await _context.PersonalSchedules.AnyAsync(p =>
             p.UserId == userId &&
             p.Id != ignoreEventId &&
+            !p.IsDisabled &&
             p.StartTime < utcEnd &&
             p.EndTime > utcStart
         );
@@ -250,7 +251,7 @@ public class ScheduleModel : PageModel
             }
         }
 
-        var personalSchedule = await _context.PersonalSchedules.FirstOrDefaultAsync(p => p.UserId == userProfile.Id && p.TaskId == taskId);
+        var personalSchedule = await _context.PersonalSchedules.FirstOrDefaultAsync(p => !p.IsDisabled && p.UserId == userProfile.Id && p.TaskId == taskId);
         var ignoreId = personalSchedule?.Id ?? Guid.Empty;
 
         if (await HasConflictAsync(userProfile.Id, ignoreId, startTime, endTime))
