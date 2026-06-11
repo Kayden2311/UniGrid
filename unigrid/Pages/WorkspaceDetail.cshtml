@@ -219,7 +219,7 @@
         <button @@click="activeTab = 'kpi'"
                 :class="activeTab === 'kpi' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
                 class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
-            <i data-lucide="bar-chart-3" class="w-4 h-4"></i> KPI & Categories
+            <i data-lucide="bar-chart-3" class="w-4 h-4"></i> KPI Dashboard
         </button>
     </div>
 
@@ -2458,6 +2458,277 @@
     </div>
 
     <!-- ════════════════════════════════════════ -->
+    <!-- ─── TAB 6: KPI DASHBOARD ─── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="activeTab === 'kpi'" class="space-y-6" x-transition>
+        <!-- Controls & Filter -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-[2.5rem] border border-slate-200 bg-white shadow-sm">
+            <div>
+                <h2 class="text-lg font-black text-slate-800">Workspace KPI Performance</h2>
+                <p class="text-xs font-semibold text-slate-400">Monitor and compare member contributions by category.</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <template x-if="currentUserRole === 'Owner' || currentUserRole === 'Manager'">
+                    <div class="flex gap-2">
+                        <button type="button" @@click="assignKpiOpen = true"
+                                class="text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2.5 rounded-xl shadow shadow-indigo-150 transition-all flex items-center gap-1.5 cursor-pointer">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Assign KPI
+                        </button>
+                        <button type="button" @@click="manageCategoriesOpen = true"
+                                class="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl border border-slate-200 transition-all flex items-center gap-1.5 cursor-pointer">
+                            <i data-lucide="settings" class="w-3.5 h-3.5"></i> KPI Settings
+                        </button>
+                    </div>
+                </template>
+                <div class="h-6 w-px bg-slate-200"></div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Period:</span>
+                <div class="flex gap-1.5">
+                    <template x-for="period in ['Weekly', 'Monthly']" :key="period">
+                        <button type="button" @@click="selectedKpiPeriodFilter = period"
+                                :class="selectedKpiPeriodFilter === period ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
+                                class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" x-text="period"></button>
+                    </template>
+                </div>
+                
+                <div class="h-6 w-px bg-slate-200"></div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Timeframe:</span>
+                <div class="flex gap-1.5">
+                    <button type="button" @@click="selectedKpiTimeframe = 'current'"
+                            :class="selectedKpiTimeframe === 'current' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
+                            class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+                            x-text="selectedKpiPeriodFilter === 'Weekly' ? 'This Week' : 'This Month'"></button>
+                    <button type="button" @@click="selectedKpiTimeframe = 'previous'"
+                            :class="selectedKpiTimeframe === 'previous' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
+                            class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
+                            x-text="selectedKpiPeriodFilter === 'Weekly' ? 'Last Week' : 'Last Month'"></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grid Layout: Main Charts & Leaderboard -->
+        <div class="grid lg:grid-cols-3 gap-6">
+            <!-- KPI Performance Chart (Left & Mid) -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Overall performance comparison -->
+                <div class="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+                            <i data-lucide="trending-up" class="w-4.5 h-4.5 text-indigo-600"></i>
+                            Compare Achieved KPI vs Target (By Member)
+                        </h3>
+                    </div>
+                    
+                    <div class="w-full">
+                        <template x-if="workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner').length === 0">
+                            <div class="text-xs text-slate-400 text-center py-10 font-bold italic">No members in this workspace to assign KPIs.</div>
+                        </template>
+                        
+                        <template x-if="workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner').length > 0">
+                            <div class="grid sm:grid-cols-2 gap-4">
+                                <template x-for="m in workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner')" :key="m.id">
+                                    <div class="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4" x-data="{ get metrics() { return getMemberKpiMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe); } }">
+                                        <div class="flex items-center gap-2.5">
+                                            <div class="h-7 w-7 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] font-black text-indigo-600"
+                                                 x-text="m.fullName.split(' ').map(n => n[0]).join('')"></div>
+                                            <span class="text-xs font-bold text-slate-700" x-text="m.fullName"></span>
+                                        </div>
+                                        
+                                        <div class="space-y-3">
+                                            <!-- Target vs Achieved -->
+                                            <div class="space-y-1">
+                                                <div class="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                                                    <span>Target Value</span>
+                                                    <span class="text-slate-700 font-bold" x-text="metrics.targetSum"></span>
+                                                </div>
+                                                <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                    <div class="h-full bg-indigo-600 rounded-full transition-all duration-500"
+                                                         :style="'width: ' + (metrics.targetSum > 0 ? '100%' : '0%')"></div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="space-y-1">
+                                                <div class="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                                                    <span>Actual Achieved</span>
+                                                    <span class="text-slate-700 font-bold" x-text="metrics.achievedSum"></span>
+                                                </div>
+                                                <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                    <div class="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                                                         :style="'width: ' + (metrics.targetSum > 0 ? Math.min(100, metrics.rate) + '%' : '0%')"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- KPI List by Employee -->
+                <div class="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm">
+                    <div class="mb-6">
+                        <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+                            <i data-lucide="users" class="w-4.5 h-4.5 text-indigo-600"></i>
+                            KPIs by Employee
+                        </h3>
+                    </div>
+                    
+                    <div class="space-y-6">
+                        <template x-for="m in workspaceMembers.filter(m => (m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner') && ((currentUserRole === 'Owner' || currentUserRole === 'Manager') || m.id.toLowerCase() === currentUserId.toLowerCase()))" :key="m.id">
+                            <div class="p-5 rounded-[2rem] border border-slate-100 bg-slate-50/50 space-y-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="h-8 w-8 rounded-full bg-indigo-100/50 flex items-center justify-center text-[10px] font-black text-indigo-700"
+                                         x-text="m.fullName.split(' ').map(n => n[0]).join('')"></div>
+                                    <div>
+                                        <h4 class="text-xs font-black text-slate-700" x-text="m.fullName"></h4>
+                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider" x-text="m.role"></p>
+                                    </div>
+                                </div>
+                                
+                                <div class="grid sm:grid-cols-2 gap-4">
+                                    <!-- List member targets -->
+                                    <template x-for="target in kpiTargets.filter(t => t.userId === m.id).sort((a, b) => {
+                                        const order = { 'Daily': 1, 'Weekly': 2, 'Monthly': 3 };
+                                        return (order[a.periodType] || 99) - (order[b.periodType] || 99);
+                                    })" :key="target.id">
+                                        <div class="p-4 rounded-2xl border border-slate-150/70 bg-white space-y-3 relative overflow-hidden shadow-sm">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span :style="'background-color: ' + (demoCategories.find(c => c.id === target.categoryId)?.color || '#94a3b8')" class="h-2 w-2 rounded-full"></span>
+                                                    <span class="text-xs font-black text-slate-700" x-text="demoCategories.find(c => c.id === target.categoryId)?.name || 'Category'"></span>
+                                                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                                                          :class="target.periodType === 'Daily' ? 'bg-rose-50 text-rose-600 border border-rose-100/50' : 
+                                                                  target.periodType === 'Weekly' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100/50' : 
+                                                                  'bg-purple-50 text-purple-600 border border-purple-100/50'"
+                                                          x-text="target.periodType"></span>
+                                                </div>
+                                                <span class="text-xs font-black text-slate-800" x-text="(selectedKpiTimeframe === 'previous' ? (target.prevAchievedValue !== undefined ? target.prevAchievedValue : Math.round(target.targetValue * 0.7)) : target.achievedValue) + ' / ' + target.targetValue"></span>
+                                            </div>
+                                            
+                                            <div class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                <div class="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                                                     :style="'width: ' + Math.min(100, Math.round(((selectedKpiTimeframe === 'previous' ? (target.prevAchievedValue !== undefined ? target.prevAchievedValue : Math.round(target.targetValue * 0.7)) : target.achievedValue) * 100) / target.targetValue)) + '%'"></div>
+                                            </div>
+                                            
+                                            <div class="flex items-center justify-between pt-1">
+                                                <template x-if="selectedKpiTimeframe === 'current' && kpiRequests.find(r => r.userId === m.id && r.categoryId === target.categoryId && r.periodType === target.periodType && r.status === 'pending')">
+                                                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-100 animate-pulse">
+                                                        Pending Approval (<span x-text="kpiRequests.find(r => r.userId === m.id && r.categoryId === target.categoryId && r.periodType === target.periodType && r.status === 'pending').requestType === 'increment' ? '+' + (kpiRequests.find(r => r.userId === m.id && r.categoryId === target.categoryId && r.periodType === target.periodType && r.status === 'pending').incrementValue || 1) : 'Done'"></span>)
+                                                    </span>
+                                                </template>
+                                                
+                                                <template x-if="selectedKpiTimeframe === 'current' && currentUserRole !== 'Owner' && currentUserRole !== 'Manager' && m.id.toLowerCase() === currentUserId.toLowerCase() && !kpiRequests.find(r => r.userId === m.id && r.categoryId === target.categoryId && r.periodType === target.periodType && r.status === 'pending')">
+                                                    <div class="flex items-center gap-2" x-data="{ count: Math.min(1, target.targetValue - target.achievedValue) }">
+                                                        <div class="flex items-center border border-slate-200 rounded-lg bg-slate-50 overflow-hidden h-7">
+                                                            <button type="button" @@click="if (count > 1) count--" class="px-2.5 py-0.5 text-xs font-black text-slate-500 hover:bg-slate-100 transition-all select-none">-</button>
+                                                            <span class="px-1.5 text-xs font-black text-slate-700 w-5 text-center" x-text="count"></span>
+                                                            <button type="button" @@click="if (count < (target.targetValue - target.achievedValue)) count++" class="px-2.5 py-0.5 text-xs font-black text-slate-500 hover:bg-slate-100 transition-all select-none">+</button>
+                                                        </div>
+                                                        <button type="button" 
+                                                                @@click="handleRequestKpiUpdate(m.id, target.categoryId, target.periodType, 'increment', count)"
+                                                                :disabled="target.achievedValue >= target.targetValue"
+                                                                class="text-[9px] font-black px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed uppercase transition-all shadow-sm">
+                                                            Request +<span x-text="count"></span>
+                                                        </button>
+                                                    </div>
+                                                </template>
+                                                
+                                                <span class="text-[10px] font-bold text-slate-400" x-text="Math.min(100, Math.round(((selectedKpiTimeframe === 'previous' ? (target.prevAchievedValue !== undefined ? target.prevAchievedValue : Math.round(target.targetValue * 0.7)) : target.achievedValue) * 100) / target.targetValue)) + '%'"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    
+                                    <template x-if="kpiTargets.filter(t => t.userId === m.id).length === 0">
+                                        <div class="col-span-2 text-xs text-slate-400 italic py-2">No KPIs assigned.</div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI Leaderboard & Approval Panel (Right) -->
+            <div class="space-y-6">
+                <!-- Approval Panel (Corporate Verification) -->
+                <template x-if="currentUserRole === 'Owner' || currentUserRole === 'Manager'">
+                    <div class="bg-amber-50/25 border border-amber-100 rounded-[2.5rem] p-6 shadow-sm bg-white">
+                        <div class="flex items-center gap-2 pb-3 border-b border-amber-100/50 mb-4 text-amber-600">
+                            <i data-lucide="clock" class="w-4.5 h-4.5"></i>
+                            <h3 class="text-sm font-black uppercase tracking-wider">Pending KPI Verifications</h3>
+                        </div>
+                        
+                        <div class="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                            <template x-for="req in kpiRequests.filter(r => r.status === 'pending')" :key="req.id">
+                                <div class="p-4 bg-white border border-slate-200/60 rounded-2xl space-y-2.5 text-xs shadow-sm">
+                                    <div class="flex items-center justify-between">
+                                        <span class="font-black text-slate-700" x-text="req.userName"></span>
+                                        <span class="text-[9px] font-bold text-slate-400" x-text="req.timestamp"></span>
+                                    </div>
+                                    <p class="text-[11px] font-semibold text-slate-500 leading-normal">
+                                        Requested approval to mark <strong class="text-slate-800" x-text="demoCategories.find(c => c.id === req.categoryId)?.name"></strong> KPI (<span class="font-bold text-indigo-600" x-text="req.periodType || 'Weekly'"></span>) as <span x-text="req.requestType === 'increment' ? 'progress +' + (req.incrementValue || 1) : 'fully completed'"></span>.
+                                    </p>
+                                    <div class="flex gap-1.5 justify-end pt-1 border-t border-slate-50">
+                                        <button type="button" @@click="handleRejectKpi(req.id)"
+                                                class="text-[9px] font-black px-2.5 py-1.5 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-lg uppercase transition-all">
+                                            Reject
+                                        </button>
+                                        <button type="button" @@click="handleApproveKpi(req.id)"
+                                                class="text-[9px] font-black px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg uppercase shadow-sm shadow-emerald-100 transition-all">
+                                            Approve
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                            
+                            <template x-if="kpiRequests.filter(r => r.status === 'pending').length === 0">
+                                <p class="text-xs text-slate-400 text-center py-8 font-bold italic">No pending KPI verifications.</p>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Leaderboard Card -->
+                <div class="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm">
+                    <div class="mb-6 flex items-center gap-2 text-indigo-600">
+                        <i data-lucide="crown" class="w-4.5 h-4.5 text-amber-500"></i>
+                        <h3 class="text-base font-black text-slate-800">KPI Leaderboard</h3>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <template x-for="(m, idx) in workspaceMembers.filter(m => m.role !== 'Owner').map(m => {
+                            const metrics = getMemberKpiMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe);
+                            return { id: m.id, fullName: m.fullName, targetSum: metrics.targetSum, actualSum: metrics.achievedSum, rate: metrics.rate };
+                        }).sort((a, b) => b.rate - a.rate)" :key="m.id">
+                            <div class="flex items-center gap-3 p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50">
+                                <span class="text-xs font-black w-5 shrink-0 text-center"
+                                      :class="idx === 0 ? 'text-amber-500 text-sm' : idx === 1 ? 'text-slate-400' : idx === 2 ? 'text-amber-700' : 'text-slate-400'"
+                                      x-text="'#' + (idx + 1)"></span>
+                                <div class="h-7 w-7 rounded-full bg-indigo-50 border border-slate-100 flex items-center justify-center text-[10px] font-black text-indigo-650"
+                                     x-text="m.fullName.split(' ').map(n => n[0]).join('')"></div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-xs font-black text-slate-700 truncate leading-none mb-1" x-text="m.fullName"></p>
+                                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide" x-text="m.actualSum + ' / ' + m.targetSum + ' KPI'"></span>
+                                </div>
+                                <div class="text-right shrink-0">
+                                    <p class="text-xs font-black text-indigo-600" x-text="m.rate + '%'"></p>
+                                    <div class="h-1 w-12 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                        <div class="h-full bg-indigo-600 rounded-full" :style="'width: ' + m.rate + '%'"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        
+                        <template x-if="workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner').length === 0">
+                            <p class="text-xs text-slate-400 text-center py-6 font-bold italic">No members to rank.</p>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
     <!-- ─── CREATE TASK DIALOG MODAL ─── -->
     <!-- ════════════════════════════════════════ -->
     <div x-show="createOpen" 
@@ -2914,76 +3185,184 @@
         </div>
     </div>
 
-    <!-- ─── SECURE INVITE CODE MODAL ─── -->
-    <div x-show="showInviteCode" 
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── ASSIGN KPI DIALOG MODAL ──────────── -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="assignKpiOpen" 
          class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
          style="display: none;"
          x-transition x-cloak>
         
         <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-md p-8 relative flex flex-col gap-6"
-             @@click.away="showInviteCode = false">
+             @@click.away="assignKpiOpen = false">
             
-            <button @@click="showInviteCode = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all cursor-pointer">
+            <button @@click="assignKpiOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
 
             <div class="flex items-center gap-3">
-                <div class="h-10 w-10 rounded-full bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600">
-                    <i data-lucide="shield-check" class="w-5 h-5"></i>
+                <div class="h-10 w-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
                 </div>
-                <div>
-                    <h3 class="text-lg font-black text-slate-800">Secure Invite Code</h3>
-                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Workspace Invite Link</p>
-                </div>
+                <h3 class="text-lg font-black text-slate-800">Assign KPI Target</h3>
             </div>
 
             <div class="space-y-4">
-                <p class="text-[11px] font-bold text-slate-500 leading-normal">
-                    This code is private and should not be shared publicly. Use it to connect this workspace to the Federation Portal or share it directly with members you wish to invite.
-                </p>
-
-                <!-- Invite Code field -->
                 <div class="space-y-1">
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Invite Code</label>
-                    <div class="flex gap-2">
-                        <input type="text" readonly value="@Model.Workspace.InviteCode" id="workspace-invite-code-input"
-                               class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-700 outline-none">
-                        <button type="button" 
-                                @@click="
-                                    navigator.clipboard.writeText('@Model.Workspace.InviteCode');
-                                    alert('Invite Code copied to clipboard!');
-                                "
-                                class="px-4 bg-indigo-50 border border-indigo-150 text-indigo-650 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer">
-                            <i data-lucide="copy" class="w-4 h-4"></i> Copy
-                        </button>
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">KPI Category</label>
+                    <select x-model="kpiFormCategory" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                        <template x-for="cat in demoCategories" :key="cat.id">
+                            <option :value="cat.id" x-text="cat.name"></option>
+                        </template>
+                    </select>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Target Value</label>
+                        <input type="number" min="1" x-model.number="kpiFormTarget" placeholder="e.g. 10"
+                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
+                    
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Period Type</label>
+                        <select x-model="kpiFormPeriod" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                            <option value="Daily">Daily</option>
+                            <option value="Weekly">Weekly</option>
+                            <option value="Monthly">Monthly</option>
+                        </select>
                     </div>
                 </div>
 
-                <!-- Invite Link field -->
-                <div class="space-y-1">
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Direct Invite Link</label>
-                    <div class="flex gap-2">
-                        @{
-                            var inviteLink = $"{Request.Scheme}://{Request.Host}/Workspaces?handler=JoinByInviteCode&inviteCode={Model.Workspace.InviteCode}";
-                        }
-                        <input type="text" readonly value="@inviteLink" id="workspace-invite-link-input"
-                               class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-700 outline-none">
-                        <button type="button" 
-                                @@click="
-                                    navigator.clipboard.writeText('@inviteLink');
-                                    alert('Invite Link copied to clipboard!');
-                                "
-                                class="px-4 bg-indigo-50 border border-indigo-150 text-indigo-650 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer">
-                            <i data-lucide="link" class="w-4 h-4"></i> Copy Link
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Select Members</label>
+                        <button type="button" @@click="toggleSelectAllKpiFormMembers()"
+                                class="text-[10px] font-black text-indigo-650 hover:text-indigo-700 uppercase tracking-wider">
+                            <span x-text="kpiFormMembers.length === workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner').length ? 'Deselect All' : 'Select All'"></span>
                         </button>
+                    </div>
+                    <div class="space-y-2 max-h-40 overflow-y-auto border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
+                        <template x-for="m in workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner')" :key="m.id">
+                            <label class="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white transition-all cursor-pointer select-none">
+                                <input type="checkbox" :value="m.id" x-model="kpiFormMembers"
+                                       class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-650 focus:ring-indigo-500 transition-all">
+                                <span class="text-xs font-bold text-slate-700" x-text="m.fullName + ' (' + m.role + ')'"></span>
+                            </label>
+                        </template>
                     </div>
                 </div>
             </div>
 
             <div class="flex gap-3">
-                <button type="button" 
-                        @@click="showInviteCode = false" 
-                        class="flex-1 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-bold shadow-md transition-all cursor-pointer">
+                <button type="button" @@click="handleAssignKpi()" :disabled="kpiFormMembers.length === 0"
+                        class="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-2xl font-bold shadow shadow-indigo-150 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                    Assign KPI Targets
+                </button>
+                <button type="button" @@click="assignKpiOpen = false" 
+                        class="flex-1 py-3.5 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-2xl font-bold transition-all cursor-pointer">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- ─── MANAGE KPI CATEGORIES DIALOG MODAL ─ -->
+    <!-- ════════════════════════════════════════ -->
+    <div x-show="manageCategoriesOpen" 
+         class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
+         style="display: none;"
+         x-transition x-cloak>
+        
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-md p-8 relative flex flex-col gap-6"
+             @@click.away="manageCategoriesOpen = false">
+            
+            <button @@click="manageCategoriesOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <div class="flex items-center gap-3">
+                <div class="h-10 w-10 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-700">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                </div>
+                <h3 class="text-lg font-black text-slate-800">Manage KPI Categories</h3>
+            </div>
+
+            <!-- List Categories -->
+            <div class="space-y-3">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block pb-1 border-b border-slate-100/50">Current Categories</label>
+                <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    <template x-for="cat in demoCategories" :key="cat.id">
+                        <div class="flex items-center justify-between p-3 bg-slate-50/50 border border-slate-100 rounded-xl hover:bg-white hover:border-slate-250 transition-all">
+                            <div class="flex items-center gap-2">
+                                <span :style="'background-color: ' + cat.color" class="h-3 w-3 rounded-full border border-slate-200/55"></span>
+                                <span class="text-xs font-black text-slate-700" x-text="cat.name"></span>
+                            </div>
+                            <button type="button" 
+                                    @@click="
+                                        if (demoCategories.length <= 1) {
+                                            alert('You must keep at least one category!');
+                                            return;
+                                        }
+                                        demoCategories = demoCategories.filter(c => c.id !== cat.id);
+                                        kpiTargets = kpiTargets.filter(t => t.categoryId !== cat.id);
+                                        kpiRequests = kpiRequests.filter(r => r.categoryId !== cat.id);
+                                        saveKpiState();
+                                    "
+                                    class="text-rose-500 hover:text-rose-655 p-1 rounded-lg hover:bg-rose-50/50 transition-all">
+                                <i data-lucide="trash" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Add New Category Form -->
+            <div class="space-y-3 pt-2 border-t border-slate-100" x-data="{ newCatName: '', newCatColor: '#3B82F6', colors: ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#14B8A6'] }">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Add New Category</label>
+                <div class="space-y-3">
+                    <div class="space-y-1">
+                        <input type="text" x-model="newCatName" placeholder="e.g., Code Review, Documentation" 
+                               class="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-slate-400">Select Color Theme</label>
+                        <div class="flex gap-2.5 pt-1">
+                            <template x-for="color in colors" :key="color">
+                                <button type="button" @@click="newCatColor = color"
+                                        :style="'background-color: ' + color"
+                                        :class="newCatColor === color ? 'ring-2 ring-offset-2 ring-indigo-500 scale-110' : 'opacity-80 hover:opacity-100 hover:scale-105'"
+                                        class="h-6 w-6 rounded-full border border-white/20 transition-all shadow-sm cursor-pointer"></button>
+                            </template>
+                        </div>
+                    </div>
+                    <button type="button" 
+                            @@click="
+                                const cleanName = newCatName.trim();
+                                if (!cleanName) return;
+                                if (demoCategories.some(c => c.name.toLowerCase() === cleanName.toLowerCase())) {
+                                    alert('A category with this name already exists!');
+                                    return;
+                                }
+                                demoCategories.push({
+                                    id: 'cat-' + Date.now(),
+                                    name: cleanName,
+                                    color: newCatColor
+                                });
+                                saveKpiState();
+                                newCatName = '';
+                            "
+                            :disabled="!newCatName.trim()"
+                            class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Category
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-2 border-t border-slate-100">
+                <button type="button" @@click="manageCategoriesOpen = false" 
+                        class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition-all cursor-pointer">
                     Done
                 </button>
             </div>
@@ -3076,10 +3455,197 @@
 
                 // Bootstrap data sets serialized from C# models
                 chatMessages: JSON.parse(atob('@Model.SerializeChatMessagesBase64()')),
-                workspaceMembers: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Members.Select(m => new { id = m.UserId.ToString(), fullName = m.User.FullName }).ToList())),
+                workspaceMembers: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Members.Select(m => new { id = m.UserId.ToString(), fullName = m.User.FullName, role = m.Role }).ToList())),
                 workspaceTasks: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceTasks.Select(t => new { id = t.Id.ToString(), title = t.Title, status = t.Status }).ToList())),
                 workspaceFiles: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Files.Select(f => new { id = f.Id.ToString(), fileName = f.FileName, fileUrl = f.FileUrl, fileSize = f.FileSize, fileType = f.FileType }).ToList())),
-                workspaceCategories: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceCategories.Select(c => new { id = c.Id.ToString(), name = c.Name, colorHex = c.ColorHex }).ToList())),
+
+                // KPI States & Handlers
+                kpiTargets: [],
+                kpiRequests: [],
+                assignKpiOpen: false,
+                manageCategoriesOpen: false,
+                kpiFormCategory: 'cat-1',
+                kpiFormTarget: 10,
+                kpiFormPeriod: 'Weekly',
+                kpiFormMembers: [],
+                selectedKpiPeriodFilter: 'Weekly',
+                selectedKpiTimeframe: 'current',
+                demoCategories: [
+                    { id: 'cat-1', name: 'Development', color: '#3B82F6' },
+                    { id: 'cat-2', name: 'Design', color: '#EC4899' },
+                    { id: 'cat-3', name: 'DevOps', color: '#10B981' },
+                    { id: 'cat-4', name: 'Content/Doc', color: '#F59E0B' },
+                ],
+                saveKpiState() {
+                    const wsCode = '@Model.Workspace.JoinCode';
+                    localStorage.setItem('unigrid_kpi_targets_' + wsCode, JSON.stringify(this.kpiTargets));
+                    localStorage.setItem('unigrid_kpi_requests_' + wsCode, JSON.stringify(this.kpiRequests));
+                    localStorage.setItem('unigrid_kpi_categories_' + wsCode, JSON.stringify(this.demoCategories));
+                },
+                getMemberKpiMetrics(memberId, periodFilter, timeframe) {
+                    const targets = this.kpiTargets.filter(t => t.userId === memberId);
+                    let targetSum = 0;
+                    let achievedSum = 0;
+
+                    targets.forEach(t => {
+                        const val = (timeframe === 'previous') ? (t.prevAchievedValue !== undefined ? t.prevAchievedValue : Math.round(t.targetValue * 0.7)) : t.achievedValue;
+                        if (periodFilter === 'Weekly') {
+                            if (t.periodType === 'Weekly' || t.periodType === 'Daily') {
+                                targetSum += t.targetValue;
+                                achievedSum += val;
+                            }
+                        } else if (periodFilter === 'Monthly') {
+                            if (t.periodType === 'Monthly' || t.periodType === 'Weekly' || t.periodType === 'Daily') {
+                                targetSum += t.targetValue;
+                                achievedSum += val;
+                            }
+                        }
+                    });
+
+                    const rate = targetSum > 0 ? Math.round((achievedSum * 100) / targetSum) : 0;
+                    return { targetSum, achievedSum, rate };
+                },
+                initKpiData() {
+                    const wsCode = '@Model.Workspace.JoinCode';
+                    const savedTargets = localStorage.getItem('unigrid_kpi_targets_' + wsCode);
+                    const savedRequests = localStorage.getItem('unigrid_kpi_requests_' + wsCode);
+                    const savedCategories = localStorage.getItem('unigrid_kpi_categories_' + wsCode);
+
+                    if (savedCategories) {
+                        try {
+                            this.demoCategories = JSON.parse(savedCategories);
+                        } catch(e) {}
+                    }
+                    
+                    let needReseed = true;
+                    if (savedTargets) {
+                        try {
+                            const parsed = JSON.parse(savedTargets);
+                            if (parsed.length > 0 && parsed.some(t => t.periodType === 'Daily')) {
+                                this.kpiTargets = parsed;
+                                needReseed = false;
+                            }
+                        } catch(e) {}
+                    }
+
+                    if (needReseed) {
+                        const assignable = this.workspaceMembers.filter(m => m.id.toLowerCase() !== this.workspaceOwnerId.toLowerCase() && m.role !== 'Owner');
+                        if (assignable.length >= 2) {
+                            const m1 = assignable[0];
+                            const m2 = assignable[1];
+                            this.kpiTargets = [
+                                { id: 'kt-1', userId: m1.id, userName: m1.fullName, categoryId: 'cat-1', targetValue: 10, achievedValue: 6, periodType: 'Weekly' },
+                                { id: 'kt-2', userId: m1.id, userName: m1.fullName, categoryId: 'cat-3', targetValue: 5, achievedValue: 3, periodType: 'Weekly' },
+                                { id: 'kt-daily-1', userId: m1.id, userName: m1.fullName, categoryId: 'cat-2', targetValue: 1, achievedValue: 1, periodType: 'Daily' },
+                                { id: 'kt-monthly-1', userId: m1.id, userName: m1.fullName, categoryId: 'cat-4', targetValue: 2, achievedValue: 1, periodType: 'Monthly' },
+                                { id: 'kt-3', userId: m2.id, userName: m2.fullName, categoryId: 'cat-1', targetValue: 5, achievedValue: 4, periodType: 'Weekly' },
+                                { id: 'kt-4', userId: m2.id, userName: m2.fullName, categoryId: 'cat-2', targetValue: 8, achievedValue: 5, periodType: 'Weekly' },
+                                { id: 'kt-daily-2', userId: m2.id, userName: m2.fullName, categoryId: 'cat-2', targetValue: 1, achievedValue: 1, periodType: 'Daily' }
+                            ];
+                            if (assignable.length >= 3) {
+                                const m3 = assignable[2];
+                                this.kpiTargets.push(
+                                    { id: 'kt-5', userId: m3.id, userName: m3.fullName, categoryId: 'cat-4', targetValue: 12, achievedValue: 8, periodType: 'Weekly' },
+                                    { id: 'kt-daily-3', userId: m3.id, userName: m3.fullName, categoryId: 'cat-1', targetValue: 2, achievedValue: 2, periodType: 'Daily' }
+                                );
+                            }
+                        } else {
+                            this.kpiTargets = [];
+                        }
+                    }
+
+                    if (savedRequests) {
+                        try {
+                            this.kpiRequests = JSON.parse(savedRequests);
+                        } catch(e) {}
+                    } else {
+                        const assignable = this.workspaceMembers.filter(m => m.id.toLowerCase() !== this.workspaceOwnerId.toLowerCase() && m.role !== 'Owner');
+                        if (assignable.length >= 1) {
+                            const m1 = assignable[0];
+                            this.kpiRequests = [
+                                { id: 'kr-1', userId: m1.id, userName: m1.fullName, categoryId: 'cat-1', periodType: 'Weekly', requestType: 'increment', incrementValue: 2, timestamp: '10 mins ago', status: 'pending' }
+                            ];
+                        } else {
+                            this.kpiRequests = [];
+                        }
+                    }
+
+                    this.saveKpiState();
+
+                    if (this.demoCategories.length > 0) {
+                        this.kpiFormCategory = this.demoCategories[0].id;
+                    }
+                },
+                handleAssignKpi() {
+                    if (this.kpiFormMembers.length === 0) return;
+                    this.kpiFormMembers.forEach(memberId => {
+                        const member = this.workspaceMembers.find(m => m.id === memberId);
+                        if (!member) return;
+                        const existingIdx = this.kpiTargets.findIndex(t => t.userId === memberId && t.categoryId === this.kpiFormCategory && t.periodType === this.kpiFormPeriod);
+                        if (existingIdx !== -1) {
+                            this.kpiTargets[existingIdx].targetValue = this.kpiFormTarget;
+                        } else {
+                            this.kpiTargets.push({
+                                id: 'kt-' + Date.now() + '-' + Math.random(),
+                                userId: memberId,
+                                userName: member.fullName,
+                                categoryId: this.kpiFormCategory,
+                                targetValue: this.kpiFormTarget,
+                                achievedValue: 0,
+                                periodType: this.kpiFormPeriod
+                            });
+                        }
+                    });
+                    this.assignKpiOpen = false;
+                    this.kpiFormMembers = [];
+                    this.saveKpiState();
+                },
+                toggleSelectAllKpiFormMembers() {
+                    const assignable = this.workspaceMembers.filter(m => m.id.toLowerCase() !== this.workspaceOwnerId.toLowerCase() && m.role !== 'Owner').map(m => m.id);
+                    if (this.kpiFormMembers.length === assignable.length) {
+                        this.kpiFormMembers = [];
+                    } else {
+                        this.kpiFormMembers = [...assignable];
+                    }
+                },
+                handleRequestKpiUpdate(userId, categoryId, periodType, type, incrementValue) {
+                    const member = this.workspaceMembers.find(m => m.id === userId);
+                    if (!member) return;
+                    const existing = this.kpiRequests.find(r => r.userId === userId && r.categoryId === categoryId && r.periodType === periodType && r.status === 'pending');
+                    if (existing) return;
+                    const val = incrementValue || 1;
+                    this.kpiRequests.push({
+                        id: 'kr-' + Date.now(),
+                        userId: userId,
+                        userName: member.fullName,
+                        categoryId: categoryId,
+                        periodType: periodType,
+                        requestType: type,
+                        incrementValue: val,
+                        timestamp: 'Just now',
+                        status: 'pending'
+                    });
+                    this.saveKpiState();
+                },
+                handleApproveKpi(reqId) {
+                    const req = this.kpiRequests.find(r => r.id === reqId);
+                    if (!req) return;
+                    const targetIdx = this.kpiTargets.findIndex(t => t.userId === req.userId && t.categoryId === req.categoryId && t.periodType === req.periodType);
+                    if (targetIdx !== -1) {
+                        const target = this.kpiTargets[targetIdx];
+                        if (req.requestType === 'increment') {
+                            target.achievedValue = Math.min(target.targetValue, target.achievedValue + (req.incrementValue || 1));
+                        } else if (req.requestType === 'complete') {
+                            target.achievedValue = target.targetValue;
+                        }
+                    }
+                    this.kpiRequests = this.kpiRequests.filter(r => r.id !== reqId);
+                    this.saveKpiState();
+                },
+                handleRejectKpi(reqId) {
+                    this.kpiRequests = this.kpiRequests.filter(r => r.id !== reqId);
+                    this.saveKpiState();
+                },
 
                 get canCurrentUserCreateChannel() {
                     const isOwnerOrManager = this.currentUserRole === 'Owner' || this.currentUserRole === 'Manager';
@@ -3873,6 +4439,7 @@
                     this.timeSlots = this.generateTimeSlots();
                     this.scrollChatToBottom();
                     this.parseSystemRules();
+                    this.initKpiData();
                     this.$watch('globalSearchQuery', value => this.searchQuery = value);
                     this.$watch('activeTab', value => {
                         localStorage.setItem('unigrid_workspace_tab_' + '@Model.Workspace.JoinCode', value);
