@@ -92,7 +92,7 @@ public class WorkspacesModel : PageModel
                         .Include(w => w.WorkspaceMembers)
                             .ThenInclude(m => m.User)
                         .Include(w => w.Tasks)
-                        .Where(w => w.OwnerId == profile.Id || w.WorkspaceMembers.Any(m => m.UserId == profile.Id))
+                        .Where(w => !w.IsDisabled && (w.OwnerId == profile.Id || w.WorkspaceMembers.Any(m => m.UserId == profile.Id)))
                         .OrderByDescending(w => w.CreatedAt)
                         .ToListAsync();
                 });
@@ -103,12 +103,12 @@ public class WorkspacesModel : PageModel
                         .ThenInclude(m => m.User)
                     .Include(f => f.WorkspaceFederationMembers)
                         .ThenInclude(m => m.PersonalWorkspace)
-                    .Where(f => f.OwnerId == profile.Id || f.WorkspaceFederationMembers.Any(m => m.UserId == profile.Id))
+                    .Where(f => !f.IsDisabled && (f.OwnerId == profile.Id || f.WorkspaceFederationMembers.Any(m => m.UserId == profile.Id)))
                     .OrderByDescending(f => f.CreatedAt)
                     .ToListAsync();
 
                 PersonalWorkspaces = await _context.Workspaces
-                    .Where(w => w.OwnerId == profile.Id)
+                    .Where(w => !w.IsDisabled && w.OwnerId == profile.Id)
                     .OrderByDescending(w => w.CreatedAt)
                     .ToListAsync();
 

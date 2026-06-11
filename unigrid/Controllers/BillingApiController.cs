@@ -43,37 +43,31 @@ namespace unigrid.Controllers
                 return Unauthorized(new { message = "User profile not found." });
             }
 
-            // Calculate billing pricing amount in VND
+            // Calculate billing pricing amount in VND dynamically from admin settings
+            var settings = AdminSettings.Load(_context);
             var billingPeriod = (request.BillingPeriod ?? "monthly").ToLower();
             decimal amount = 0;
-            if (request.Tier == "Personal")
+            var plan = settings.Plans.FirstOrDefault(p => p.Id.Equals(request.Tier, StringComparison.OrdinalIgnoreCase) || p.Name.Equals(request.Tier, StringComparison.OrdinalIgnoreCase));
+            if (plan != null)
             {
-                amount = billingPeriod == "yearly" ? 399000 : 40000;
+                amount = billingPeriod == "yearly" ? plan.YearlyPrice : plan.MonthlyPrice;
             }
-            else if (request.Tier == "Pro")
+            else
             {
-                amount = billingPeriod == "yearly" ? 2900000 : 299000;
-            }
-            else if (request.Tier == "ProPlus")
-            {
-                amount = billingPeriod == "yearly" ? 4400000 : 449000;
-            }
-            else if (request.Tier == "Business")
-            {
-                amount = billingPeriod == "yearly" ? 8900000 : 899000;
+                return BadRequest(new { message = $"Plan tier '{request.Tier}' is not recognized." });
             }
 
-            // Validate workspace membership constraints for Personal tier
+            // Validate workspace membership constraints for plan limits
             Workspace? workspace = null;
             if (!string.IsNullOrEmpty(request.JoinCode))
             {
                 workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == request.JoinCode);
-                if (workspace != null && request.Tier == "Personal")
+                if (workspace != null && plan.MemberLimit > 0)
                 {
                     int memberCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == workspace.Id);
-                    if (memberCount > 1)
+                    if (memberCount > plan.MemberLimit)
                     {
-                        return BadRequest(new { message = "Cannot switch this Workspace to the Personal plan because it currently has more than 1 member. The Personal plan is for individual use only." });
+                        return BadRequest(new { message = $"Cannot switch this Workspace to the {plan.Name} plan because it currently has more than {plan.MemberLimit} members. The {plan.Name} plan allows a maximum of {plan.MemberLimit} members." });
                     }
                 }
             }
@@ -128,13 +122,19 @@ namespace unigrid.Controllers
                 return Unauthorized(new { message = "User profile not found." });
             }
 
-            // Re-evaluate cost
+            // Re-evaluate cost dynamically from admin settings
+            var settings = AdminSettings.Load(_context);
             var billingPeriod = (request.BillingPeriod ?? "monthly").ToLower();
             decimal amount = 0;
-            if (request.Tier == "Personal") amount = billingPeriod == "yearly" ? 399000 : 40000;
-            else if (request.Tier == "Pro") amount = billingPeriod == "yearly" ? 2900000 : 299000;
-            else if (request.Tier == "ProPlus") amount = billingPeriod == "yearly" ? 4400000 : 449000;
-            else if (request.Tier == "Business") amount = billingPeriod == "yearly" ? 8900000 : 899000;
+            var plan = settings.Plans.FirstOrDefault(p => p.Id.Equals(request.Tier, StringComparison.OrdinalIgnoreCase) || p.Name.Equals(request.Tier, StringComparison.OrdinalIgnoreCase));
+            if (plan != null)
+            {
+                amount = billingPeriod == "yearly" ? plan.YearlyPrice : plan.MonthlyPrice;
+            }
+            else
+            {
+                return BadRequest(new { message = $"Plan tier '{request.Tier}' is not recognized." });
+            }
 
             Workspace? workspace = null;
 
@@ -144,12 +144,12 @@ namespace unigrid.Controllers
                 workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == request.JoinCode);
                 if (workspace != null)
                 {
-                    if (request.Tier == "Personal")
+                    if (plan.MemberLimit > 0)
                     {
                         int memberCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == workspace.Id);
-                        if (memberCount > 1)
+                        if (memberCount > plan.MemberLimit)
                         {
-                            return BadRequest(new { message = "Cannot switch this Workspace to the Personal plan because it currently has more than 1 member." });
+                            return BadRequest(new { message = $"Cannot switch this Workspace to the {plan.Name} plan because it currently has more than {plan.MemberLimit} members." });
                         }
                     }
                     workspace.PackageTier = request.Tier;

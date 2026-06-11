@@ -37,3 +37,36 @@
 .grid-cell-active-hover {
     background-color: rgba(99, 102, 241, 0.08) !important;
 }
+
+/* Custom premium date and time inputs styling */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 0.9;
+    transform: scale(1.05);
+}
+
+/* Thin scrollbar style for custom time picker columns */
+.scrollbar-thin::-webkit-scrollbar {
+    width: 5px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #cbd5e1; /* Slate-300 */
+    border-radius: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8; /* Slate-400 */
+}
+.scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}

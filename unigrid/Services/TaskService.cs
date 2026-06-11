@@ -313,17 +313,19 @@ public class TaskService : ITaskService
         var task = await _taskRepo.GetByIdAsync(taskId);
         if (task == null || task.WorkspaceId != workspaceId) return "Task not found.";
 
-        // 1. Delete associated personal schedules to prevent foreign key errors
+        // 1. Task can only be deleted if it is not attached to a schedule and its status is To Do (0)
         var schedules = await _taskRepo.GetAssociatedSchedulesAsync(taskId);
         if (schedules.Any())
         {
-            _taskRepo.RemoveSchedules(schedules);
+            return "Tasks can only be deleted if they are not attached to a schedule and their status is To Do.";
         }
 
-        // 2. Delete associated task comments (will cascade automatically or cleanly here)
-        // EF Core will clean comments based on DbContext configure if cascade delete is enabled. Let's do it explicitly if needed, but since our repo uses cascade or EF handles it, it's safe.
+        if (task.Status.HasValue && task.Status.Value != 0)
+        {
+            return "Tasks can only be deleted if they are not attached to a schedule and their status is To Do.";
+        }
 
-        // 3. Clear file bindings (TaskId = null)
+        // 2. Clear file bindings (TaskId = null)
         foreach (var file in task.WorkspaceFiles)
         {
             file.TaskId = null;

@@ -101,12 +101,12 @@
                      @@mouseleave="handleMouseLeave()" 
                      class="relative select-none" 
                      :class="mode === 'moving' ? 'cursor-grabbing' : ''"
-                     style="display: grid; grid-template-columns: 80px repeat(7, 1fr); height: 1224px;"
+                     style="display: grid; grid-template-columns: 80px repeat(7, 1fr); height: 1728px;"
                      id="grid-container">
                     
                     <!-- Vertical Time Grid Rails -->
                     <div class="border-r border-slate-200">
-                        @for (int i = 0; i < 34; i++)
+                        @for (int i = 0; i < 48; i++)
                         {
                             var slotLabelIdx = i;
                             <div class="flex items-start justify-end pr-2 text-[11px] text-slate-400 font-medium" 
@@ -123,7 +123,7 @@
                         <div class="border-r border-slate-200 last:border-r-0 relative h-full bg-white">
                              
                              <!-- Half-hour grid lines and triggers -->
-                             @for (int slotIdx = 0; slotIdx < 34; slotIdx++)
+                             @for (int slotIdx = 0; slotIdx < 48; slotIdx++)
                              {
                                  var sIdx = slotIdx;
                                  <div @@mousedown="handleCellMouseDown(@dIdx, @sIdx)" 
@@ -197,7 +197,7 @@
                                               </div>
                                               <!-- Row 2: Time range -->
                                               <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none mt-0.5 shrink-0"
-                                                   x-text="formatTimeRange(ev.startSlot, ev.duration)"></div>
+                                                   x-text="formatExactTimeRange(ev.startDate, ev.endDate)"></div>
                                           </div>
                                       </template>
 
@@ -232,7 +232,7 @@
                                                    x-text="ev.title"></div>
                                               <!-- Row 3: Time details -->
                                               <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none"
-                                                   x-text="formatTimeRange(ev.startSlot, ev.duration)"></div>
+                                                   x-text="formatExactTimeRange(ev.startDate, ev.endDate)"></div>
                                           </div>
                                       </template>
 
@@ -256,7 +256,7 @@
                                           <div class="space-y-1">
                                               <h4 class="font-bold text-slate-800 text-xs leading-snug" x-text="ev.title"></h4>
                                               <p class="text-slate-550 font-semibold text-[10px] tracking-tight mt-0.5" 
-                                                 x-text="formatTimeRange(ev.startSlot, ev.duration) + ' · ' + ev.priority + ' priority'"></p>
+                                                 x-text="formatExactTimeRange(ev.startDate, ev.endDate) + ' · ' + ev.priority + ' priority'"></p>
                                           </div>
                                       </div>
                                  </div>
@@ -312,7 +312,7 @@
                                               </div>
                                               <!-- Row 2: Time range -->
                                               <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none mt-0.5 shrink-0 pl-[17px]"
-                                                   x-text="formatTimeRange(task.startSlot, task.duration)"></div>
+                                                   x-text="formatExactTimeRange(task.startDate, task.endDate)"></div>
                                           </div>
                                       </template>
 
@@ -347,7 +347,7 @@
                                                    x-text="task.title"></div>
                                               <!-- Row 3: Time details -->
                                               <div class="text-[9px] font-bold text-slate-450 uppercase tracking-tight select-none leading-none"
-                                                   x-text="formatTimeRange(task.startSlot, task.duration)"></div>
+                                                   x-text="formatExactTimeRange(task.startDate, task.endDate)"></div>
                                           </div>
                                       </template>
 
@@ -363,7 +363,7 @@
                                           <div class="space-y-1">
                                               <h4 class="font-bold text-slate-800 text-xs leading-snug" x-text="task.title"></h4>
                                               <p class="text-slate-550 font-semibold text-[10px] tracking-tight mt-0.5" 
-                                                 x-text="formatTimeRange(task.startSlot, task.duration) + ' · ' + task.priority + ' priority'"></p>
+                                                 x-text="formatExactTimeRange(task.startDate, task.endDate) + ' · ' + task.priority + ' priority'"></p>
                                           </div>
                                       </div>
                                  </div>
@@ -430,21 +430,13 @@
                             <div draggable="true" 
                                  @@dragstart="handleDeadlineDragStart($event, dl)"
                                  @@click="openEdit(dl)"
-                                 class="rounded-lg border border-l-[4px] p-3 space-y-1.5 transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
-                                 :class="{
-                                     'border-l-rose-500 bg-rose-50/20 border-y-rose-100/50 border-r-rose-100/50 shadow-rose-100/10': dl.priority === 'high',
-                                     'border-l-amber-500 bg-amber-50/20 border-y-amber-100/50 border-r-amber-100/50 shadow-amber-100/10': dl.priority === 'medium',
-                                     'border-l-indigo-400 bg-indigo-50/20 border-y-indigo-100/50 border-r-indigo-100/50 shadow-indigo-100/10': dl.priority === 'low'
-                                 }">
+                                 class="rounded-lg border border-l-[4px] p-3 space-y-1.5 transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-md cursor-pointer border-l-slate-350 bg-slate-50/40 border-y-slate-200/50 border-r-slate-200/50 shadow-slate-100/5 hover:bg-slate-100/70 hover:border-slate-300">
                                 <div class="flex items-start gap-2">
-                                    <template x-if="dl.priority === 'high'">
-                                        <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-600 mt-0.5 shrink-0"></i>
-                                    </template>
-                                    <p class="text-xs font-bold text-slate-800 leading-tight" x-text="dl.title"></p>
+                                    <p class="text-xs font-bold text-slate-650 leading-tight" x-text="dl.title"></p>
                                 </div>
                                 <div class="flex items-center justify-between pt-1">
-                                    <span class="text-[10px] text-slate-500 font-bold tracking-tight uppercase" x-text="dl.workspaceName"></span>
-                                    <div class="inline-flex items-center px-2 py-0.5 border rounded-full text-[9px] font-bold border-slate-200 text-slate-500 bg-white/80">No Date</div>
+                                    <span class="text-[10px] text-slate-400 font-bold tracking-tight uppercase" x-text="dl.workspaceName"></span>
+                                    <div class="inline-flex items-center px-2 py-0.5 border rounded-full text-[9px] font-bold border-slate-200 text-slate-500 bg-white/80" x-text="dl.formattedDate"></div>
                                 </div>
                             </div>
                         </template>
@@ -608,85 +600,130 @@
                         Personal Schedule Details
                     </h4>
                     
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="space-y-1.5">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Scheduled Day</label>
-                            <select x-model.number="formDayIdx"
-                                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none bg-white font-medium text-xs text-slate-700">
-                                <option value="0">Monday</option>
-                                <option value="1">Tuesday</option>
-                                <option value="2">Wednesday</option>
-                                <option value="3">Thursday</option>
-                                <option value="4">Friday</option>
-                                <option value="5">Saturday</option>
-                                <option value="6">Sunday</option>
-                            </select>
+                    <div class="grid grid-cols-2 gap-3.5">
+                        <div class="space-y-1.5 col-span-2">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Scheduled Date</label>
+                            <div class="relative rounded-xl shadow-sm">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i data-lucide="calendar" class="h-4 w-4 text-slate-400"></i>
+                                </div>
+                                <input type="date" x-model="formDate"
+                                       class="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-slate-50 focus:bg-white text-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all">
+                            </div>
                         </div>
                         
-                        <div class="space-y-1.5">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Duration</label>
-                            <select x-model.number="formDuration"
-                                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none bg-white font-medium text-xs text-slate-700">
-                                <option value="1">30 Minutes</option>
-                                <option value="2">1 Hour</option>
-                                <option value="3">1.5 Hours</option>
-                                <option value="4">2 Hours</option>
-                                <option value="6">3 Hours</option>
-                                <option value="8">4 Hours</option>
-                            </select>
-                        </div>
-
-                        <!-- Custom Premium Dropdown Time Dial Picker -->
-                        <div class="space-y-1.5 col-span-2 relative" x-data="{ showDropdown: false }">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Scheduled Start Time</label>
-                            <button type="button" @@click="showDropdown = !showDropdown"
-                                    class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 text-left focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between">
-                                <span x-text="slotToTime(formStartSlot)"></span>
-                                <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
-                            </button>
+                        <div class="space-y-1.5 relative" @@click.away="startTimeDropdownOpen = false">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Time</label>
+                            <div class="relative rounded-xl shadow-sm">
+                                <button type="button" @@click="startTimeDropdownOpen = !startTimeDropdownOpen; parseTimesToCustom()"
+                                        class="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-slate-50 focus:bg-white text-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-left flex items-center h-[42px]">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <i data-lucide="clock" class="h-4 w-4 text-slate-400"></i>
+                                    </div>
+                                    <span x-text="startHour + ':' + startMinute + ' ' + startAmpm"></span>
+                                </button>
+                            </div>
                             
-                            <!-- Dropdown list -->
-                            <div x-show="showDropdown" @@click.away="showDropdown = false" x-transition
-                                 class="absolute left-0 right-0 mt-1 p-4 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 space-y-3">
-                                <div class="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1.5">
-                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Set Custom Time</span>
-                                    <div class="flex gap-2">
-                                        <button type="button" @@click="showDropdown = false" class="text-[9px] font-black text-indigo-600 hover:text-indigo-700 uppercase">Done</button>
+                            <!-- Custom Time Picker Dropdown -->
+                            <div x-show="startTimeDropdownOpen" x-transition x-cloak
+                                 class="absolute left-0 top-full mt-1.5 z-50 w-52 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 flex gap-2 justify-between">
+                                <!-- Hour Column -->
+                                <div class="flex-1 flex flex-col items-center">
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">HH</span>
+                                    <div class="w-full h-36 overflow-y-auto scrollbar-thin flex flex-col gap-0.5">
+                                        <template x-for="h in ['01','02','03','04','05','06','07','08','09','10','11','12']">
+                                            <button type="button" @@click="startHour = h; updateStartTimeFromCustom()"
+                                                    class="w-full py-1 text-xs font-semibold rounded-lg text-center transition-all"
+                                                    :class="startHour === h ? 'bg-indigo-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-50'"
+                                                    x-text="h"></button>
+                                        </template>
                                     </div>
                                 </div>
-                                
-                                <div class="flex items-center justify-center gap-3">
-                                    <!-- Hours dial -->
-                                    <div class="flex flex-col items-center">
-                                        <button type="button" @@click="incrementHour()" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
-                                        <span class="text-sm font-black text-slate-800 my-1" x-text="getDisplayHour(formStartSlot)"></span>
-                                        <button type="button" @@click="decrementHour()" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
-                                    </div>
-                                    <span class="text-slate-400 font-bold text-sm">:</span>
-                                    <!-- Minutes dial -->
-                                    <div class="flex flex-col items-center">
-                                        <button type="button" @@click="incrementMinute()" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
-                                        <span class="text-sm font-black text-slate-800 my-1" x-text="getDisplayMinute(formStartSlot)"></span>
-                                        <button type="button" @@click="decrementMinute()" class="p-1 hover:bg-slate-50 text-slate-500 rounded"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
-                                    </div>
-                                    
-                                    <!-- AM / PM Toggles -->
-                                    <div class="flex flex-col justify-center ml-2 border border-slate-100 rounded-lg overflow-hidden bg-slate-50 shrink-0">
-                                        <button type="button" @@click="setAM()" 
-                                                :class="isAM(formStartSlot) ? 'bg-indigo-600 text-white font-bold shadow' : 'text-slate-400 hover:text-slate-600'"
-                                                class="px-2.5 py-1 text-[9px] font-black tracking-wide uppercase transition-all">AM</button>
-                                        <button type="button" @@click="setPM()" 
-                                                :class="!isAM(formStartSlot) ? 'bg-indigo-600 text-white font-bold shadow' : 'text-slate-400 hover:text-slate-600'"
-                                                class="px-2.5 py-1 text-[9px] font-black tracking-wide uppercase transition-all">PM</button>
+                                <!-- Divider -->
+                                <div class="w-px bg-slate-100 self-stretch my-2"></div>
+                                <!-- Minute Column -->
+                                <div class="flex-1 flex flex-col items-center">
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">MM</span>
+                                    <div class="w-full h-36 overflow-y-auto scrollbar-thin flex flex-col gap-0.5">
+                                        <template x-for="m in ['00','05','10','15','20','25','30','35','40','45','50','55']">
+                                            <button type="button" @@click="startMinute = m; updateStartTimeFromCustom()"
+                                                    class="w-full py-1 text-xs font-semibold rounded-lg text-center transition-all"
+                                                    :class="startMinute === m ? 'bg-indigo-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-50'"
+                                                    x-text="m"></button>
+                                        </template>
                                     </div>
                                 </div>
-
-                                <!-- Shortcuts -->
-                                <div class="grid grid-cols-2 gap-1 border-t border-slate-100 pt-2 text-[8px] font-bold text-slate-400">
-                                    <button type="button" @@click="formStartSlot = 4" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">09:00 AM</button>
-                                    <button type="button" @@click="formStartSlot = 10" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">12:00 PM</button>
-                                    <button type="button" @@click="formStartSlot = 14" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">02:00 PM</button>
-                                    <button type="button" @@click="formStartSlot = 20" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">05:00 PM</button>
+                                <!-- Divider -->
+                                <div class="w-px bg-slate-100 self-stretch my-2"></div>
+                                <!-- AM/PM Column -->
+                                <div class="w-12 flex flex-col items-center">
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">AM/PM</span>
+                                    <div class="w-full flex flex-col gap-1 mt-2">
+                                        <button type="button" @@click="startAmpm = 'AM'; updateStartTimeFromCustom()"
+                                                class="w-full py-1.5 text-xs font-bold rounded-lg text-center transition-all"
+                                                :class="startAmpm === 'AM' ? 'bg-indigo-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-50'">AM</button>
+                                        <button type="button" @@click="startAmpm = 'PM'; updateStartTimeFromCustom()"
+                                                class="w-full py-1.5 text-xs font-bold rounded-lg text-center transition-all"
+                                                :class="startAmpm === 'PM' ? 'bg-indigo-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-50'">PM</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-1.5 relative" @@click.away="endTimeDropdownOpen = false">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Time</label>
+                            <div class="relative rounded-xl shadow-sm">
+                                <button type="button" @@click="endTimeDropdownOpen = !endTimeDropdownOpen; parseTimesToCustom()"
+                                        class="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-slate-50 focus:bg-white text-slate-700 text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-left flex items-center h-[42px]">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <i data-lucide="clock" class="h-4 w-4 text-slate-400"></i>
+                                    </div>
+                                    <span x-text="endHour + ':' + endMinute + ' ' + endAmpm"></span>
+                                </button>
+                            </div>
+                            
+                            <!-- Custom Time Picker Dropdown -->
+                            <div x-show="endTimeDropdownOpen" x-transition x-cloak
+                                 class="absolute left-0 top-full mt-1.5 z-50 w-52 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 flex gap-2 justify-between">
+                                <!-- Hour Column -->
+                                <div class="flex-1 flex flex-col items-center">
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">HH</span>
+                                    <div class="w-full h-36 overflow-y-auto scrollbar-thin flex flex-col gap-0.5">
+                                        <template x-for="h in ['01','02','03','04','05','06','07','08','09','10','11','12']">
+                                            <button type="button" @@click="endHour = h; updateEndTimeFromCustom()"
+                                                    class="w-full py-1 text-xs font-semibold rounded-lg text-center transition-all"
+                                                    :class="endHour === h ? 'bg-indigo-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-50'"
+                                                    x-text="h"></button>
+                                        </template>
+                                    </div>
+                                </div>
+                                <!-- Divider -->
+                                <div class="w-px bg-slate-100 self-stretch my-2"></div>
+                                <!-- Minute Column -->
+                                <div class="flex-1 flex flex-col items-center">
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">MM</span>
+                                    <div class="w-full h-36 overflow-y-auto scrollbar-thin flex flex-col gap-0.5">
+                                        <template x-for="m in ['00','05','10','15','20','25','30','35','40','45','50','55']">
+                                            <button type="button" @@click="endMinute = m; updateEndTimeFromCustom()"
+                                                    class="w-full py-1 text-xs font-semibold rounded-lg text-center transition-all"
+                                                    :class="endMinute === m ? 'bg-indigo-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-50'"
+                                                    x-text="m"></button>
+                                        </template>
+                                    </div>
+                                </div>
+                                <!-- Divider -->
+                                <div class="w-px bg-slate-100 self-stretch my-2"></div>
+                                <!-- AM/PM Column -->
+                                <div class="w-12 flex flex-col items-center">
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">AM/PM</span>
+                                    <div class="w-full flex flex-col gap-1 mt-2">
+                                        <button type="button" @@click="endAmpm = 'AM'; updateEndTimeFromCustom()"
+                                                class="w-full py-1.5 text-xs font-bold rounded-lg text-center transition-all"
+                                                :class="endAmpm === 'AM' ? 'bg-indigo-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-50'">AM</button>
+                                        <button type="button" @@click="endAmpm = 'PM'; updateEndTimeFromCustom()"
+                                                class="w-full py-1.5 text-xs font-bold rounded-lg text-center transition-all"
+                                                :class="endAmpm === 'PM' ? 'bg-indigo-650 text-white shadow-sm font-bold' : 'text-slate-600 hover:bg-slate-50'">PM</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -694,7 +731,7 @@
                         <div class="space-y-1.5 col-span-2">
                             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Time Zone</label>
                             <select x-model="formTimeZone"
-                                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none bg-white font-medium text-xs text-slate-700">
+                                    class="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none bg-white font-medium text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all">
                                 <option value="UTC">UTC</option>
                                 <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (UTC+7)</option>
                                 <option value="Asia/Tokyo">Asia/Tokyo (UTC+9)</option>

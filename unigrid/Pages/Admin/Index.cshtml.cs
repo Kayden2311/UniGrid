@@ -50,15 +50,22 @@ namespace unigrid.Pages.Admin
         // Activity Feed
         public List<AuditLog> RecentAuditLogs { get; set; } = new();
 
-        // Operational Cost Settings
+        // Operational and Pricing settings in JSON formats
         [BindProperty]
-        public decimal ServerFee { get; set; }
+        public string OperationCostsJson { get; set; } = "[]";
 
         [BindProperty]
-        public decimal CloudFee { get; set; }
+        public string PlansJson { get; set; } = "[]";
 
-        [BindProperty]
-        public decimal AiApiFee { get; set; }
+        public class PlanBreakdownItem
+        {
+            public string PlanId { get; set; } = string.Empty;
+            public string PlanName { get; set; } = string.Empty;
+            public decimal MonthlyPrice { get; set; }
+            public string ColorClass { get; set; } = "slate";
+            public int Count { get; set; }
+        }
+        public List<PlanBreakdownItem> PlanBreakdown { get; set; } = new();
 
         public decimal TotalCosts { get; set; }
         public decimal ProjectedNetProfit { get; set; }
@@ -69,13 +76,42 @@ namespace unigrid.Pages.Admin
         public string CostChartDataJson { get; set; } = "[]";
         public string ProfitChartDataJson { get; set; } = "[]";
 
+        [BindProperty(SupportsGet = true)]
+        public string? SelectedMonth { get; set; }
+
+        public List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem> AvailableMonths { get; set; } = new();
+
         [TempData]
         public string? StatusMessage { get; set; }
 
         public async System.Threading.Tasks.Task<IActionResult> OnGetAsync()
         {
-            // Load fee configurations
-            LoadSettings();
+            // Load settings and json configurations
+            var settings = unigrid.Models.AdminSettings.Load(_context);
+            OperationCostsJson = JsonSerializer.Serialize(settings.OperationCosts);
+            PlansJson = JsonSerializer.Serialize(settings.Plans);
+            TotalCosts = settings.OperationCosts.Where(c => !c.IsDisabled).Sum(c => c.Amount);
+
+            // Populate AvailableMonths dropdown (last 6 months)
+            var now = DateTime.UtcNow;
+            AvailableMonths.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+            {
+                Value = "current",
+                Text = "Current Projection (Live)",
+                Selected = (string.IsNullOrEmpty(SelectedMonth) || SelectedMonth == "current")
+            });
+            for (int i = 0; i < 6; i++)
+            {
+                var monthDate = now.AddMonths(-i);
+                var value = monthDate.ToString("yyyy-MM");
+                var text = monthDate.ToString("MMMM yyyy");
+                AvailableMonths.Add(new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem
+                {
+                    Value = value,
+                    Text = text,
+                    Selected = (SelectedMonth == value)
+                });
+            }
 
             // Fetch accounts and users
             TotalAccounts = await _context.Accounts.CountAsync();
@@ -98,95 +134,204 @@ namespace unigrid.Pages.Admin
                 .Include(b => b.Workspace)
                 .ToListAsync();
 
-            var activeBillings = allBillings.Where(b => b.Status == "Active").ToList();
-            ActiveSubscriptionsCount = activeBillings.Count;
-
-            long revenue = 0;
-            int business = 0, proplus = 0, pro = 0, personal = 0, free = 0;
-
-            // Project monthly revenue from active billing records
-            foreach (var billing in activeBillings)
-            {
-                var packageId = billing.PackageId.ToLower();
-                
-                // Use actual billing amount if stored, otherwise fall back to package tier estimation
-                decimal itemAmount = billing.Amount ?? 0;
-                if (itemAmount == 0)
-                {
-                    if (packageId.Contains("business")) itemAmount = packageId.Contains("yearly") ? 8900000 / 12 : 899000;
-                    else if (packageId.Contains("proplus")) itemAmount = packageId.Contains("yearly") ? 4400000 / 12 : 449000;
-                    else if (packageId.Contains("pro")) itemAmount = packageId.Contains("yearly") ? 2900000 / 12 : 299000;
-                    else if (packageId.Contains("personal")) itemAmount = packageId.Contains("yearly") ? 399000 / 12 : 40000;
-                }
-                else
-                {
-                    // If it is a yearly billing, convert it to monthly projection for MRR
-                    if (packageId.Contains("yearly"))
-                    {
-                        itemAmount = itemAmount / 12;
-                    }
-                }
-
-                revenue += (long)itemAmount;
-
-                if (packageId.Contains("business")) business++;
-                else if (packageId.Contains("proplus")) proplus++;
-                else if (packageId.Contains("pro")) pro++;
-                else if (packageId.Contains("personal")) personal++;
-                else free++;
-            }
-
-            // Also account for workspaces that have a PackageTier set directly but might not have a Billing record
+            // Fetch all workspaces with package tier set directly (not free) once to reuse in both scopes and charting loop
             var workspacesWithTierDirect = await _context.Workspaces
                 .Where(w => !string.IsNullOrEmpty(w.PackageTier) && w.PackageTier != "Free")
                 .ToListAsync();
 
-            foreach (var ws in workspacesWithTierDirect)
+            // Count subscribers dynamically for each plan
+            PlanBreakdown = settings.Plans.Select(p => new PlanBreakdownItem
             {
-                // If this workspace doesn't have an active billing record, count its revenue based on PackageTier
-                if (!activeBillings.Any(b => b.WorkspaceId == ws.Id))
+                PlanId = p.Id,
+                PlanName = p.Name,
+                MonthlyPrice = p.MonthlyPrice,
+                ColorClass = p.ColorClass,
+                Count = 0
+            }).ToList();
+
+            var freeTierItem = new PlanBreakdownItem
+            {
+                PlanId = "Free",
+                PlanName = "Free",
+                MonthlyPrice = 0,
+                ColorClass = "slate",
+                Count = 0
+            };
+            PlanBreakdown.Add(freeTierItem);
+
+            long revenue = 0;
+            int activeSubsCount = 0;
+
+            bool isSpecificMonth = !string.IsNullOrEmpty(SelectedMonth) && SelectedMonth != "current";
+            if (isSpecificMonth)
+            {
+                // Parse specific month
+                var parts = SelectedMonth!.Split('-');
+                int targetYear = int.Parse(parts[0]);
+                int targetMonth = int.Parse(parts[1]);
+
+                var firstDayOfMonth = new DateTime(targetYear, targetMonth, 1, 0, 0, 0, DateTimeKind.Utc);
+                var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddSeconds(-1);
+
+                // Filter billings active during that specific month
+                var monthlyBillings = allBillings.Where(b => {
+                    var billingCreated = b.CreatedAt ?? b.EndDate.AddYears(-1);
+                    return billingCreated <= lastDayOfMonth && b.EndDate >= firstDayOfMonth;
+                }).ToList();
+
+                activeSubsCount = monthlyBillings.Count;
+
+                foreach (var billing in monthlyBillings)
                 {
-                    var tier = ws.PackageTier.ToLower();
-                    if (tier == "business")
+                    var packageId = billing.PackageId.ToLower();
+                    decimal itemAmount = billing.Amount ?? 0;
+                    if (itemAmount == 0)
                     {
-                        revenue += 899000;
-                        business++;
-                        ActiveSubscriptionsCount++;
+                        var pParts = packageId.Split('_');
+                        if (pParts.Length > 0)
+                        {
+                            var planId = pParts[0];
+                            var isYearly = packageId.Contains("yearly");
+                            var plan = settings.Plans.FirstOrDefault(p => string.Equals(p.Id, planId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, planId, StringComparison.OrdinalIgnoreCase));
+                            if (plan != null)
+                            {
+                                itemAmount = isYearly ? plan.YearlyPrice / 12 : plan.MonthlyPrice;
+                            }
+                        }
                     }
-                    else if (tier == "proplus")
+                    else
                     {
-                        revenue += 449000;
-                        proplus++;
-                        ActiveSubscriptionsCount++;
+                        if (packageId.Contains("yearly"))
+                        {
+                            itemAmount = itemAmount / 12;
+                        }
                     }
-                    else if (tier == "pro")
+
+                    revenue += (long)itemAmount;
+
+                    var parts2 = packageId.Split('_');
+                    if (parts2.Length > 0)
                     {
-                        revenue += 299000;
-                        pro++;
-                        ActiveSubscriptionsCount++;
-                    }
-                    else if (tier == "personal")
-                    {
-                        revenue += 40000;
-                        personal++;
-                        ActiveSubscriptionsCount++;
+                        var planId = parts2[0];
+                        var match = PlanBreakdown.FirstOrDefault(b => 
+                            string.Equals(b.PlanId, planId, StringComparison.OrdinalIgnoreCase) || 
+                            string.Equals(b.PlanName, planId, StringComparison.OrdinalIgnoreCase));
+                        if (match != null) match.Count++;
+                        else freeTierItem.Count++;
                     }
                 }
+
+                // Workspaces set directly (created on or before last day of month)
+                var monthlyWorkspaces = workspacesWithTierDirect
+                    .Where(w => w.CreatedAt <= lastDayOfMonth)
+                    .ToList();
+
+                foreach (var ws in monthlyWorkspaces)
+                {
+                    if (!monthlyBillings.Any(b => b.WorkspaceId == ws.Id))
+                    {
+                        var tier = ws.PackageTier.ToLower();
+                        var plan = settings.Plans.FirstOrDefault(p => string.Equals(p.Id, tier, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, tier, StringComparison.OrdinalIgnoreCase));
+                        if (plan != null)
+                        {
+                            revenue += (long)plan.MonthlyPrice;
+                            var match = PlanBreakdown.FirstOrDefault(b => 
+                                string.Equals(b.PlanId, plan.Id, StringComparison.OrdinalIgnoreCase) || 
+                                string.Equals(b.PlanName, plan.Name, StringComparison.OrdinalIgnoreCase));
+                            if (match != null) match.Count++;
+                        }
+                        else
+                        {
+                            freeTierItem.Count++;
+                        }
+                        activeSubsCount++;
+                    }
+                }
+
+                freeTierItem.Count = await _context.Workspaces.CountAsync(w => (string.IsNullOrEmpty(w.PackageTier) || w.PackageTier == "Free") && w.CreatedAt <= lastDayOfMonth);
+                TotalWorkspaces = await _context.Workspaces.CountAsync(w => w.CreatedAt <= lastDayOfMonth);
+            }
+            else
+            {
+                // Current live snapshot projection
+                var activeBillings = allBillings.Where(b => b.Status == "Active").ToList();
+                activeSubsCount = activeBillings.Count;
+
+                foreach (var billing in activeBillings)
+                {
+                    var packageId = billing.PackageId.ToLower();
+                    decimal itemAmount = billing.Amount ?? 0;
+                    if (itemAmount == 0)
+                    {
+                        var pParts = packageId.Split('_');
+                        if (pParts.Length > 0)
+                        {
+                            var planId = pParts[0];
+                            var isYearly = packageId.Contains("yearly");
+                            var plan = settings.Plans.FirstOrDefault(p => string.Equals(p.Id, planId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, planId, StringComparison.OrdinalIgnoreCase));
+                            if (plan != null)
+                            {
+                                itemAmount = isYearly ? plan.YearlyPrice / 12 : plan.MonthlyPrice;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (packageId.Contains("yearly"))
+                        {
+                            itemAmount = itemAmount / 12;
+                        }
+                    }
+
+                    revenue += (long)itemAmount;
+
+                    var parts2 = packageId.Split('_');
+                    if (parts2.Length > 0)
+                    {
+                        var planId = parts2[0];
+                        var match = PlanBreakdown.FirstOrDefault(b => 
+                            string.Equals(b.PlanId, planId, StringComparison.OrdinalIgnoreCase) || 
+                            string.Equals(b.PlanName, planId, StringComparison.OrdinalIgnoreCase));
+                        if (match != null) match.Count++;
+                        else freeTierItem.Count++;
+                    }
+                }
+
+                foreach (var ws in workspacesWithTierDirect)
+                {
+                    if (!activeBillings.Any(b => b.WorkspaceId == ws.Id))
+                    {
+                        var tier = ws.PackageTier.ToLower();
+                        var plan = settings.Plans.FirstOrDefault(p => string.Equals(p.Id, tier, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, tier, StringComparison.OrdinalIgnoreCase));
+                        if (plan != null)
+                        {
+                            revenue += (long)plan.MonthlyPrice;
+                            var match = PlanBreakdown.FirstOrDefault(b => 
+                                string.Equals(b.PlanId, plan.Id, StringComparison.OrdinalIgnoreCase) || 
+                                string.Equals(b.PlanName, plan.Name, StringComparison.OrdinalIgnoreCase));
+                            if (match != null) match.Count++;
+                        }
+                        else
+                        {
+                            freeTierItem.Count++;
+                        }
+                        activeSubsCount++;
+                    }
+                }
+
+                freeTierItem.Count = await _context.Workspaces.CountAsync(w => string.IsNullOrEmpty(w.PackageTier) || w.PackageTier == "Free");
             }
 
-            // Count actual free workspaces
-            FreeTierWorkspaces = await _context.Workspaces.CountAsync(w => string.IsNullOrEmpty(w.PackageTier) || w.PackageTier == "Free");
-
             ProjectedMonthlyRevenue = revenue;
-            BusinessSubscribers = business;
-            ProPlusSubscribers = proplus;
-            ProSubscribers = pro;
-            PersonalSubscribers = personal;
+            ActiveSubscriptionsCount = activeSubsCount;
+
+            BusinessSubscribers = PlanBreakdown.FirstOrDefault(b => string.Equals(b.PlanName, "Business", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
+            ProPlusSubscribers = PlanBreakdown.FirstOrDefault(b => string.Equals(b.PlanName, "Pro+", StringComparison.OrdinalIgnoreCase) || string.Equals(b.PlanName, "ProPlus", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
+            ProSubscribers = PlanBreakdown.FirstOrDefault(b => string.Equals(b.PlanName, "Pro", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
+            PersonalSubscribers = PlanBreakdown.FirstOrDefault(b => string.Equals(b.PlanName, "Personal", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
+            FreeTierWorkspaces = freeTierItem.Count;
 
             AverageRevenuePerSubscription = ActiveSubscriptionsCount > 0 ? (double)ProjectedMonthlyRevenue / ActiveSubscriptionsCount : 0.0;
-
-            // Calculations for Costs & Net Profit
-            TotalCosts = ServerFee + CloudFee + AiApiFee;
             ProjectedNetProfit = ProjectedMonthlyRevenue - TotalCosts;
 
             // Generate Past 6 Months dynamic chart data
@@ -195,7 +340,6 @@ namespace unigrid.Pages.Admin
             var costData = new List<decimal>();
             var profitData = new List<decimal>();
 
-            var now = DateTime.UtcNow;
             for (int i = 5; i >= 0; i--)
             {
                 var monthDate = now.AddMonths(-i);
@@ -216,10 +360,17 @@ namespace unigrid.Pages.Admin
                         decimal amount = billing.Amount ?? 0;
                         if (amount == 0)
                         {
-                            if (packageId.Contains("business")) amount = packageId.Contains("yearly") ? 8900000 / 12 : 899000;
-                            else if (packageId.Contains("proplus")) amount = packageId.Contains("yearly") ? 4400000 / 12 : 449000;
-                            else if (packageId.Contains("pro")) amount = packageId.Contains("yearly") ? 2900000 / 12 : 299000;
-                            else if (packageId.Contains("personal")) amount = packageId.Contains("yearly") ? 399000 / 12 : 40000;
+                            var parts = packageId.Split('_');
+                            if (parts.Length > 0)
+                            {
+                                var planId = parts[0];
+                                var isYearly = packageId.Contains("yearly");
+                                var plan = settings.Plans.FirstOrDefault(p => string.Equals(p.Id, planId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, planId, StringComparison.OrdinalIgnoreCase));
+                                if (plan != null)
+                                {
+                                    amount = isYearly ? plan.YearlyPrice / 12 : plan.MonthlyPrice;
+                                }
+                            }
                         }
                         else
                         {
@@ -238,12 +389,8 @@ namespace unigrid.Pages.Admin
                     if (ws.CreatedAt <= lastDayOfMonth)
                     {
                         var tier = ws.PackageTier.ToLower();
-                        decimal wsAmount = 0;
-                        if (tier == "business") wsAmount = 899000;
-                        else if (tier == "proplus") wsAmount = 449000;
-                        else if (tier == "pro") wsAmount = 299000;
-                        else if (tier == "personal") wsAmount = 40000;
-
+                        var plan = settings.Plans.FirstOrDefault(p => string.Equals(p.Id, tier, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, tier, StringComparison.OrdinalIgnoreCase));
+                        decimal wsAmount = plan != null ? plan.MonthlyPrice : 0;
                         monthlyRev += wsAmount;
                     }
                 }
@@ -283,57 +430,44 @@ namespace unigrid.Pages.Admin
             return RedirectToPage();
         }
 
-        private string GetSettingsFilePath()
-        {
-            return Path.Combine(Directory.GetCurrentDirectory(), "admin-settings.json");
-        }
-
         private void LoadSettings()
         {
-            var path = GetSettingsFilePath();
-            if (System.IO.File.Exists(path))
-            {
-                try
-                {
-                    var json = System.IO.File.ReadAllText(path);
-                    var settings = JsonSerializer.Deserialize<AdminSettings>(json);
-                    if (settings != null)
-                    {
-                        ServerFee = settings.ServerFee;
-                        CloudFee = settings.CloudFee;
-                        AiApiFee = settings.AiApiFee;
-                        return;
-                    }
-                }
-                catch
-                {
-                    // Fall back to defaults on parse exception
-                }
-            }
-
-            ServerFee = 1500000;
-            CloudFee = 2500000;
-            AiApiFee = 1800000;
+            var settings = unigrid.Models.AdminSettings.Load(_context);
+            OperationCostsJson = JsonSerializer.Serialize(settings.OperationCosts);
+            PlansJson = JsonSerializer.Serialize(settings.Plans);
+            TotalCosts = settings.OperationCosts.Where(c => !c.IsDisabled).Sum(c => c.Amount);
         }
 
         private void SaveSettings()
         {
-            var path = GetSettingsFilePath();
-            var settings = new AdminSettings
-            {
-                ServerFee = ServerFee,
-                CloudFee = CloudFee,
-                AiApiFee = AiApiFee
-            };
-            var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
-            System.IO.File.WriteAllText(path, json);
-        }
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var settings = new unigrid.Models.AdminSettings();
 
-        public class AdminSettings
-        {
-            public decimal ServerFee { get; set; }
-            public decimal CloudFee { get; set; }
-            public decimal AiApiFee { get; set; }
+            if (!string.IsNullOrWhiteSpace(OperationCostsJson))
+            {
+                try
+                {
+                    settings.OperationCosts = JsonSerializer.Deserialize<List<OperationCostSetting>>(OperationCostsJson, options) ?? new();
+                }
+                catch (JsonException)
+                {
+                    settings.OperationCosts = unigrid.Models.AdminSettings.Load(_context).OperationCosts;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(PlansJson))
+            {
+                try
+                {
+                    settings.Plans = JsonSerializer.Deserialize<List<PlanSetting>>(PlansJson, options) ?? new();
+                }
+                catch (JsonException)
+                {
+                    settings.Plans = unigrid.Models.AdminSettings.Load(_context).Plans;
+                }
+            }
+
+            settings.Save(_context);
         }
     }
 }

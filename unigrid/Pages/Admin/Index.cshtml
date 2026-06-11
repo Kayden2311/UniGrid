@@ -11,7 +11,12 @@
             <h1 class="text-3xl font-black text-slate-800 tracking-tight font-display">System Overview</h1>
             <p class="text-slate-500 text-sm mt-1">Real-time metrics, operations fees settings, and income performance chart.</p>
         </div>
-        <div class="flex gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+            <form method="get" class="flex items-center gap-2">
+                <span class="text-[10px] font-black text-slate-450 uppercase tracking-widest hidden sm:inline">Metrics Month:</span>
+                <select asp-for="SelectedMonth" asp-items="Model.AvailableMonths" onchange="this.form.submit()" class="px-3 py-2 bg-white/70 backdrop-blur-sm border border-slate-200 rounded-xl text-xs font-bold text-slate-700 transition-all shadow-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none cursor-pointer hover:border-slate-300">
+                </select>
+            </form>
             <a href="/Admin/Users" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2">
                 <i data-lucide="users" class="w-4 h-4 text-teal-500"></i>
                 Manage Users
@@ -70,7 +75,7 @@
                     </div>
                 </div>
                 <h3 class="text-xl font-black text-slate-800 font-display">@Model.TotalCosts.ToString("N0") <span class="text-[10px] font-semibold text-slate-400">VND</span></h3>
-                <p class="text-slate-500 text-[10px] mt-1">Server, Cloud, AI APIs</p>
+                <p class="text-slate-500 text-[10px] mt-1">Operational cost parameters</p>
             </div>
         </div>
 
@@ -163,46 +168,278 @@
             </div>
         </div>
 
-        <!-- Operations Cost Settings Card -->
-        <div class="lg:col-span-1 glass p-8 rounded-[2.5rem] shadow-sm flex flex-col justify-between">
-            <div>
-                <h3 class="text-lg font-black text-slate-800 mb-2 font-display">Operations Cost Settings</h3>
-                <p class="text-xs text-slate-400 font-medium">Configure monthly operational fees in VND to evaluate actual cash flow profit.</p>
+        <!-- Operations Cost & Pricing Settings Card -->
+        <script>
+            window.operationCostsData = @Html.Raw(Model.OperationCostsJson);
+            window.plansData = @Html.Raw(Model.PlansJson);
+        </script>
+        <div class="lg:col-span-1 glass p-8 rounded-[2.5rem] shadow-sm flex flex-col justify-between" 
+             x-data="{ 
+                settingsTab: 'costs',
+                costs: [],
+                plans: [],
                 
-                <form method="post" asp-page-handler="SaveFees" class="space-y-4 mt-6">
+                // Modal state
+                showPlanModal: false,
+                isNewPlan: false,
+                editingPlanIndex: -1,
+                editingPlan: {
+                    Id: '',
+                    Name: '',
+                    MonthlyPrice: 0,
+                    YearlyPrice: 0,
+                    Description: '',
+                    ColorClass: 'indigo',
+                    Features: [],
+                    MemberLimit: 5,
+                    StorageLimit: '5 GB Storage',
+                    ChatLimit: 0,
+                    TaskBranchLimit: 1,
+                    HasAdvancedAnalytics: false,
+                    HasRolePermissions: false,
+                    IsDisabled: false
+                },
+
+                init() {
+                    this.costs = window.operationCostsData || [];
+                    let rawPlans = window.plansData || [];
+                    this.plans = rawPlans.map(p => {
+                        if (p.IsDisabled === undefined) p.IsDisabled = false;
+                        p.Features = (p.Features || []).map((f, i) => ({ id: 'feat_' + Date.now() + '_' + i + '_' + Math.random(), text: f }));
+                        return p;
+                    });
+                },
+                
+                addCost() {
+                    this.costs.push({ Name: 'New Operational Cost', Amount: 100000, IsDisabled: false });
+                },
+                
+                openEditPlanModal(plan, index) {
+                    this.isNewPlan = false;
+                    this.editingPlanIndex = index;
+                    let featuresCopy = (plan.Features || []).map(f => ({ id: f.id, text: f.text }));
+                    this.editingPlan = {
+                        Id: plan.Id,
+                        Name: plan.Name,
+                        MonthlyPrice: plan.MonthlyPrice,
+                        YearlyPrice: plan.YearlyPrice,
+                        Description: plan.Description || '',
+                        ColorClass: plan.ColorClass || 'indigo',
+                        Features: featuresCopy,
+                        MemberLimit: plan.MemberLimit ?? 5,
+                        StorageLimit: plan.StorageLimit || '5 GB Storage',
+                        ChatLimit: plan.ChatLimit ?? 0,
+                        TaskBranchLimit: plan.TaskBranchLimit ?? 1,
+                        HasAdvancedAnalytics: !!plan.HasAdvancedAnalytics,
+                        HasRolePermissions: !!plan.HasRolePermissions,
+                        IsDisabled: !!plan.IsDisabled
+                    };
+                    this.showPlanModal = true;
+                },
+                
+                createNewPlan() {
+                    this.isNewPlan = true;
+                    this.editingPlanIndex = -1;
+                    this.editingPlan = {
+                        Id: 'custom_' + Date.now(),
+                        Name: 'New Tier Plan',
+                        MonthlyPrice: 100000,
+                        YearlyPrice: 1000000,
+                        Description: 'New plan tier description',
+                        ColorClass: 'indigo',
+                        Features: [{ id: 'feat_' + Date.now(), text: 'Feature 1' }],
+                        MemberLimit: 5,
+                        StorageLimit: '5 GB Storage',
+                        ChatLimit: 0,
+                        TaskBranchLimit: 1,
+                        HasAdvancedAnalytics: false,
+                        HasRolePermissions: false,
+                        IsDisabled: false
+                    };
+                    this.showPlanModal = true;
+                },
+                
+                closePlanModal() {
+                    this.showPlanModal = false;
+                },
+                
+                addEditingPlanFeature() {
+                    this.editingPlan.Features.push({ id: 'feat_' + Date.now() + '_' + Math.random(), text: 'New feature' });
+                },
+                
+                removeEditingPlanFeature(fIndex) {
+                    this.editingPlan.Features.splice(fIndex, 1);
+                },
+                
+                savePlanChanges() {
+                    if (!this.editingPlan.Name || this.editingPlan.Name.trim() === '') {
+                        alert('Please enter a name for the plan.');
+                        return;
+                    }
+                    if (!this.editingPlan.Id || this.editingPlan.Id.trim() === '') {
+                        alert('Please enter a plan ID.');
+                        return;
+                    }
+                    
+                    if (this.isNewPlan) {
+                        if (this.plans.some(p => p.Id.toLowerCase() === this.editingPlan.Id.toLowerCase())) {
+                            alert('A plan with this ID already exists.');
+                            return;
+                        }
+                        this.plans.push({ ...this.editingPlan });
+                    } else {
+                        if (this.plans.some((p, idx) => idx !== this.editingPlanIndex && p.Id.toLowerCase() === this.editingPlan.Id.toLowerCase())) {
+                            alert('A plan with this ID already exists.');
+                            return;
+                        }
+                        this.plans[this.editingPlanIndex] = { ...this.editingPlan };
+                    }
+                    this.showPlanModal = false;
+                },
+
+                getCostsJson() {
+                    return JSON.stringify(this.costs);
+                },
+                getPlansJson() {
+                    return JSON.stringify(this.plans.map(p => {
+                        const copy = { ...p };
+                        copy.Features = (p.Features || []).map(f => f.text);
+                        return copy;
+                    }));
+                },
+                
+                validateAndSubmit(e) {
+                    for (let c of this.costs) {
+                        if (!c.Name || c.Name.trim() === '') {
+                            alert('Please enter a name for all operational costs.');
+                            this.settingsTab = 'costs';
+                            e.preventDefault();
+                            return false;
+                        }
+                        if (c.Amount === null || c.Amount === undefined || c.Amount < 0) {
+                            alert('Please enter a valid amount for all operational costs.');
+                            this.settingsTab = 'costs';
+                            e.preventDefault();
+                            return false;
+                        }
+                    }
+                    for (let p of this.plans) {
+                        if (!p.Name || p.Name.trim() === '') {
+                            alert('Please enter a name for all plans.');
+                            this.settingsTab = 'pricing';
+                            e.preventDefault();
+                            return false;
+                        }
+                        if (!p.Id || p.Id.trim() === '') {
+                            alert('Please enter a plan ID for all plans.');
+                            this.settingsTab = 'pricing';
+                            e.preventDefault();
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+             }">
+            <div>
+                <h3 class="text-lg font-black text-slate-800 mb-2 font-display">System Settings</h3>
+                <p class="text-xs text-slate-400 font-medium mb-4">Configure operational fees and subscription plan pricing.</p>
+                
+                <!-- Tab Controls -->
+                <div class="flex p-1 bg-slate-100/80 rounded-2xl border border-slate-200/50 mb-6 max-w-[280px] mx-auto">
+                    <button type="button" @@click="settingsTab = 'costs'" :class="settingsTab == 'costs' ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/30' : 'text-slate-400 hover:text-slate-600'" class="flex-1 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200 outline-none flex items-center justify-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M12 16v1M10 21h4a2 2 0 002-2V7a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        Costs
+                    </button>
+                    <button type="button" @@click="settingsTab = 'pricing'" :class="settingsTab == 'pricing' ? 'bg-white text-indigo-600 shadow-sm border border-slate-200/30' : 'text-slate-400 hover:text-slate-600'" class="flex-1 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200 outline-none flex items-center justify-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>
+                        Plan Pricing
+                    </button>
+                </div>
+
+                <form method="post" asp-page-handler="SaveFees" @@submit="validateAndSubmit($event)" class="space-y-4">
                     @Html.AntiForgeryToken()
-                    <!-- Server Fee -->
-                    <div class="space-y-1.5">
-                        <label asp-for="ServerFee" class="block text-xs font-bold text-slate-700">Server & Infrastructure Fee (VND)</label>
-                        <div class="relative flex items-center">
-                            <i data-lucide="server" class="absolute left-3 w-4 h-4 text-slate-400"></i>
-                            <input type="number" asp-for="ServerFee" class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="1,500,000" required />
+                    
+                    <input type="hidden" asp-for="OperationCostsJson" :value="getCostsJson()" />
+                    <input type="hidden" asp-for="PlansJson" :value="getPlansJson()" />
+
+                    <!-- Operational Costs Tab -->
+                    <div x-show="settingsTab == 'costs'" class="space-y-4 max-h-[380px] overflow-y-auto pr-1">
+                        <template x-for="(cost, index) in costs" :key="index">
+                            <div class="p-4 bg-white/40 backdrop-blur-sm rounded-2xl border border-slate-200/50 space-y-3 relative group hover:border-indigo-200 hover:bg-white/60 transition-all duration-300"
+                                 :class="cost.IsDisabled ? 'opacity-65' : ''">
+                                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                                    <div class="col-span-12 sm:col-span-6 space-y-1">
+                                        <label class="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                            <svg class="w-3 h-3 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                            Cost Parameter Name
+                                        </label>
+                                        <input type="text" x-model="cost.Name" placeholder="e.g. Infrastructure" class="w-full bg-white/40 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white/95 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200" />
+                                    </div>
+                                    <div class="col-span-12 sm:col-span-4 space-y-1">
+                                        <label class="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                            <svg class="w-3 h-3 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M12 16v1M10 21h4a2 2 0 002-2V7a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                            Amount (VND)
+                                        </label>
+                                        <input type="number" x-model.number="cost.Amount" class="w-full bg-white/40 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white/95 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200" />
+                                    </div>
+                                    <div class="col-span-12 sm:col-span-2 flex sm:flex-col justify-between sm:justify-end items-center pb-1 sm:pb-2">
+                                        <label class="text-[8px] font-black uppercase tracking-wider text-slate-400 sm:mb-1 select-none">Disable</label>
+                                        <label class="relative inline-flex items-center cursor-pointer select-none">
+                                            <input type="checkbox" x-model="cost.IsDisabled" class="sr-only peer" />
+                                            <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <button type="button" @@click="addCost()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg> Add Cost Parameter
+                        </button>
+                    </div>
+
+                    <!-- Plan Pricing Tab -->
+                    <div x-show="settingsTab == 'pricing'" class="space-y-4" x-cloak>
+                        <!-- Plan Summaries List -->
+                        <div class="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+                            <template x-for="(plan, pIndex) in plans" :key="plan.Id">
+                                <div @@click="openEditPlanModal(plan, pIndex)" class="p-4 bg-white/50 backdrop-blur-sm rounded-2xl border border-slate-200/60 flex items-center justify-between hover:border-indigo-300 hover:bg-white/80 transition-all duration-200 cursor-pointer group shadow-sm">
+                                    <div class="flex items-center gap-3">
+                                        <span class="h-8 w-8 rounded-xl flex items-center justify-center font-bold text-xs"
+                                              :class="plan.ColorClass == 'teal' ? 'bg-teal-50 text-teal-650' :
+                                                      plan.ColorClass == 'indigo' ? 'bg-indigo-50 text-indigo-650' :
+                                                      plan.ColorClass == 'violet' ? 'bg-violet-50 text-violet-650' :
+                                                      plan.ColorClass == 'emerald' ? 'bg-emerald-50 text-emerald-650' :
+                                                      plan.ColorClass == 'slate' ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-650'"
+                                              x-text="plan.Name.substring(0,2).toUpperCase()"></span>
+                                        <div>
+                                            <h4 class="text-xs font-bold text-slate-800" x-text="plan.Name"></h4>
+                                            <p class="text-[10px] text-slate-400 font-medium" x-text="plan.Description"></p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-4">
+                                        <div class="text-right">
+                                            <span class="text-xs font-black text-slate-800" x-text="new Intl.NumberFormat('vi-VN').format(plan.MonthlyPrice) + ' đ'"></span>
+                                            <span class="block text-[8px] text-slate-400 font-bold uppercase tracking-wider">Monthly</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span x-show="!plan.IsDisabled" class="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-wider">Active</span>
+                                            <span x-show="plan.IsDisabled" class="px-2 py-0.5 rounded-lg bg-rose-50 text-rose-600 text-[9px] font-black uppercase tracking-wider">Disabled</span>
+                                            <svg class="w-4 h-4 text-slate-400 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            <button type="button" @@click="createNewPlan()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg> Add Plan Tier
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Cloud Storage Fee -->
-                    <div class="space-y-1.5">
-                        <label asp-for="CloudFee" class="block text-xs font-bold text-slate-700">Cloud Storage & Database Fee (VND)</label>
-                        <div class="relative flex items-center">
-                            <i data-lucide="cloud" class="absolute left-3 w-4 h-4 text-slate-400"></i>
-                            <input type="number" asp-for="CloudFee" class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="2,500,000" required />
-                        </div>
-                    </div>
-
-                    <!-- AI API Key usage fee -->
-                    <div class="space-y-1.5">
-                        <label asp-for="AiApiFee" class="block text-xs font-bold text-slate-700">AI APIs Usage Fee (VND)</label>
-                        <div class="relative flex items-center">
-                            <i data-lucide="cpu" class="absolute left-3 w-4 h-4 text-slate-400"></i>
-                            <input type="number" asp-for="AiApiFee" class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="1,800,000" required />
-                        </div>
-                    </div>
-
-                    <!-- Submit Trigger -->
+                    <!-- Save Trigger -->
                     <div class="pt-2">
-                        <button type="submit" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 cursor-pointer">
-                            <i data-lucide="save" class="w-4 h-4"></i>
-                            Save Fee Settings
+                        <button type="submit" class="w-full py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 cursor-pointer hover:shadow-lg">
+                            <svg class="w-4 h-4 animate-float" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                            Save System Settings
                         </button>
                     </div>
                 </form>
@@ -218,7 +455,164 @@
                     <span class="text-emerald-600">@Model.ProjectedNetProfit.ToString("N0") VND</span>
                 </div>
             </div>
+        <!-- Edit Plan Modal -->
+        <div x-show="showPlanModal" 
+             class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-all duration-300"
+             x-transition:enter="ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             x-cloak>
+            <div class="bg-white rounded-[2rem] border border-slate-100 w-full max-w-lg shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]"
+                 @@click.away="closePlanModal()"
+                 x-transition:enter="ease-out duration-300"
+                 x-transition:enter-start="opacity-0 scale-95 translate-y-4"
+                 x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                 x-transition:leave="ease-in duration-200"
+                 x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                 x-transition:leave-end="opacity-0 scale-95 translate-y-4">
+                 
+                <!-- Modal Header -->
+                <div class="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <div>
+                        <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider" x-text="isNewPlan ? 'Add New Plan Tier' : 'Edit Plan Settings'"></h3>
+                        <p class="text-[10px] text-slate-400 font-medium">Configure tier limits, features and pricing details.</p>
+                    </div>
+                    <button type="button" @@click="closePlanModal()" class="text-slate-400 hover:text-slate-650 transition-colors p-1.5 rounded-xl hover:bg-slate-100">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                
+                <!-- Modal Body -->
+                <div class="p-8 overflow-y-auto space-y-4 flex-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black uppercase tracking-wider text-slate-400">Plan Name</label>
+                            <input type="text" x-model="editingPlan.Name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200" />
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black uppercase tracking-wider text-slate-400">Plan ID</label>
+                            <input type="text" x-model="editingPlan.Id" :disabled="!isNewPlan" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200 disabled:opacity-50" />
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black uppercase tracking-wider text-slate-400">Monthly Price (VND)</label>
+                            <input type="number" x-model.number="editingPlan.MonthlyPrice" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200" />
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black uppercase tracking-wider text-slate-400">Yearly Price (VND)</label>
+                            <input type="number" x-model.number="editingPlan.YearlyPrice" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200" />
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black uppercase tracking-wider text-slate-400">Color Theme</label>
+                            <div class="flex items-center gap-2">
+                                <select x-model="editingPlan.ColorClass" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200 cursor-pointer">
+                                    <option value="teal">Teal (Solo)</option>
+                                    <option value="indigo">Indigo (Pro)</option>
+                                    <option value="violet">Violet (Pro+)</option>
+                                    <option value="emerald">Emerald</option>
+                                    <option value="slate">Slate (Business)</option>
+                                </select>
+                                <span class="h-5 w-5 rounded-full shrink-0 border border-slate-250/20 shadow-sm"
+                                      :class="editingPlan.ColorClass == 'teal' ? 'bg-teal-500' :
+                                              editingPlan.ColorClass == 'indigo' ? 'bg-indigo-500' :
+                                              editingPlan.ColorClass == 'violet' ? 'bg-violet-500' :
+                                              editingPlan.ColorClass == 'emerald' ? 'bg-emerald-500' :
+                                              editingPlan.ColorClass == 'slate' ? 'bg-slate-900' : 'bg-slate-400'"></span>
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black uppercase tracking-wider text-slate-400">Member Limit</label>
+                            <input type="number" x-model.number="editingPlan.MemberLimit" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200" />
+                        </div>
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-[9px] font-black uppercase tracking-wider text-slate-400">Description</label>
+                        <input type="text" x-model="editingPlan.Description" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200" />
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black uppercase tracking-wider text-slate-400">Storage Limit (Text)</label>
+                            <input type="text" x-model="editingPlan.StorageLimit" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200" />
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black uppercase tracking-wider text-slate-400">Chat Limit (-1 for Unlim)</label>
+                            <input type="number" x-model.number="editingPlan.ChatLimit" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200" />
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <label class="text-[9px] font-black uppercase tracking-wider text-slate-400">Task Branch Limit</label>
+                            <input type="number" x-model.number="editingPlan.TaskBranchLimit" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200" />
+                        </div>
+                        <div class="space-y-1 pt-4 flex flex-col justify-center">
+                            <label class="flex items-center gap-2 cursor-pointer select-none">
+                                <input type="checkbox" x-model="editingPlan.HasAdvancedAnalytics" class="rounded border-slate-200 text-indigo-600 focus:ring-indigo-500/20" />
+                                <span class="text-xs font-bold text-slate-700">Advanced Analytics</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer select-none mt-2">
+                                <input type="checkbox" x-model="editingPlan.HasRolePermissions" class="rounded border-slate-200 text-indigo-600 focus:ring-indigo-500/20" />
+                                <span class="text-xs font-bold text-slate-700">Role Permissions</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Features Editor -->
+                    <div class="space-y-1.5 pt-2 border-t border-slate-100">
+                        <label class="text-[9px] font-black uppercase tracking-wider text-slate-400 flex justify-between items-center">
+                            <span>Features List</span>
+                            <span class="text-[8px] text-slate-400 font-bold" x-text="editingPlan.Features.length + ' features'"></span>
+                        </label>
+                        <div class="space-y-1.5 max-h-[140px] overflow-y-auto pr-0.5">
+                            <template x-for="(feature, fIndex) in editingPlan.Features" :key="feature.id">
+                                <div class="flex items-center gap-2 p-1.5 bg-slate-50/50 rounded-xl border border-slate-100">
+                                    <input type="text" x-model="feature.text" class="flex-1 bg-transparent border-none p-0 text-xs text-slate-700 outline-none focus:ring-0" />
+                                    <button type="button" @@click="removeEditingPlanFeature(fIndex)" class="text-slate-400 hover:text-rose-600 transition-colors p-1 hover:bg-rose-50 rounded-lg">
+                                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                        <button type="button" @@click="addEditingPlanFeature()" class="py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 rounded-xl text-[10px] font-bold flex items-center gap-1 cursor-pointer">
+                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg> Add Feature
+                        </button>
+                    </div>
+
+                    <!-- Plan Status Toggle (Disabled instead of delete) -->
+                    <div class="p-4 bg-slate-50/80 rounded-2xl border border-slate-100 flex items-center justify-between mt-2">
+                        <div>
+                            <span class="text-xs font-black text-slate-800 block">Disable Plan Tier</span>
+                            <span class="text-[9px] text-slate-400 font-medium">Disabled plans will be hidden from consumers.</span>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer select-none">
+                            <input type="checkbox" x-model="editingPlan.IsDisabled" class="sr-only peer" />
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-500"></div>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Modal Footer -->
+                <div class="px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+                    <button type="button" @@click="closePlanModal()" class="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition-all">
+                        Cancel
+                    </button>
+                    <button type="button" @@click="savePlanChanges()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-150">
+                        Apply Changes
+                    </button>
+                </div>
+            </div>
         </div>
+    </div>
     </div>
 
     <!-- Data Sections -->
@@ -230,66 +624,34 @@
                 <p class="text-xs text-slate-400 font-medium">Distribution of workspaces across package tiers.</p>
                 
                 <div class="space-y-4 mt-6">
-                    <!-- Business -->
-                    <div class="space-y-1.5">
-                        <div class="flex justify-between text-xs font-bold text-slate-700">
-                            <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-slate-900"></span> Business (899K)</span>
-                            <span>@Model.BusinessSubscribers</span>
+                    @foreach (var item in Model.PlanBreakdown)
+                    {
+                        var percentage = Model.TotalWorkspaces > 0 ? (double)item.Count / Model.TotalWorkspaces * 100 : 0;
+                        var colorHexClass = item.ColorClass == "teal" ? "bg-teal-500" :
+                                            item.ColorClass == "indigo" ? "bg-indigo-500" :
+                                            item.ColorClass == "violet" ? "bg-violet-500" :
+                                            item.ColorClass == "emerald" ? "bg-emerald-500" :
+                                            item.ColorClass == "slate" ? "bg-slate-900" : "bg-slate-400";
+                        
+                        <div class="space-y-1.5">
+                            <div class="flex justify-between text-xs font-bold text-slate-700">
+                                <span class="flex items-center gap-1.5">
+                                    <span class="h-2.5 w-2.5 rounded-full @colorHexClass"></span> 
+                                    @item.PlanName @(item.MonthlyPrice > 0 ? $"({(item.MonthlyPrice / 1000).ToString("F0")}K)" : "")
+                                </span>
+                                <span>@item.Count</span>
+                            </div>
+                            <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                <div class="h-full @colorHexClass rounded-full" style="width: @percentage%"></div>
+                            </div>
                         </div>
-                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-slate-900 rounded-full" style="width: @(Model.TotalWorkspaces > 0 ? (double)Model.BusinessSubscribers / Model.TotalWorkspaces * 100 : 0)%"></div>
-                        </div>
-                    </div>
-
-                    <!-- Pro+ -->
-                    <div class="space-y-1.5">
-                        <div class="flex justify-between text-xs font-bold text-slate-700">
-                            <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-violet-500"></span> Pro+ (449K)</span>
-                            <span>@Model.ProPlusSubscribers</span>
-                        </div>
-                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-violet-500 rounded-full" style="width: @(Model.TotalWorkspaces > 0 ? (double)Model.ProPlusSubscribers / Model.TotalWorkspaces * 100 : 0)%"></div>
-                        </div>
-                    </div>
-
-                    <!-- Pro -->
-                    <div class="space-y-1.5">
-                        <div class="flex justify-between text-xs font-bold text-slate-700">
-                            <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-indigo-500"></span> Pro (299K)</span>
-                            <span>@Model.ProSubscribers</span>
-                        </div>
-                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-indigo-500 rounded-full" style="width: @(Model.TotalWorkspaces > 0 ? (double)Model.ProSubscribers / Model.TotalWorkspaces * 100 : 0)%"></div>
-                        </div>
-                    </div>
-
-                    <!-- Personal -->
-                    <div class="space-y-1.5">
-                        <div class="flex justify-between text-xs font-bold text-slate-700">
-                            <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-teal-500"></span> Personal (40K)</span>
-                            <span>@Model.PersonalSubscribers</span>
-                        </div>
-                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-teal-500 rounded-full" style="width: @(Model.TotalWorkspaces > 0 ? (double)Model.PersonalSubscribers / Model.TotalWorkspaces * 100 : 0)%"></div>
-                        </div>
-                    </div>
-
-                    <!-- Free -->
-                    <div class="space-y-1.5">
-                        <div class="flex justify-between text-xs font-bold text-slate-700">
-                            <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-slate-400"></span> Free Tier</span>
-                            <span>@Model.FreeTierWorkspaces</span>
-                        </div>
-                        <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-slate-400 rounded-full" style="width: @(Model.TotalWorkspaces > 0 ? (double)Model.FreeTierWorkspaces / Model.TotalWorkspaces * 100 : 0)%"></div>
-                        </div>
-                    </div>
+                    }
                 </div>
             </div>
             
             <div class="pt-6 border-t border-slate-100 mt-6 flex justify-between text-xs text-slate-400 font-bold">
                 <span>Total Workspaces: @Model.TotalWorkspaces</span>
-                <span>Subscribed: @(Model.BusinessSubscribers + Model.ProPlusSubscribers + Model.ProSubscribers + Model.PersonalSubscribers)</span>
+                <span>Subscribed: @Model.PlanBreakdown.Where(p => p.MonthlyPrice > 0).Sum(p => p.Count)</span>
             </div>
         </div>
 
