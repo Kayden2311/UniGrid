@@ -19,7 +19,7 @@ public class MemberRepository : IMemberRepository
     {
         return await _context.WorkspaceMembers
             .Include(wm => wm.User)
-            .Where(wm => wm.WorkspaceId == workspaceId)
+            .Where(wm => !wm.IsDisabled && wm.WorkspaceId == workspaceId)
             .ToListAsync();
     }
 
@@ -27,7 +27,7 @@ public class MemberRepository : IMemberRepository
     {
         return await _context.WorkspaceMembers
             .Include(wm => wm.User)
-            .FirstOrDefaultAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == userId);
+            .FirstOrDefaultAsync(wm => !wm.IsDisabled && wm.WorkspaceId == workspaceId && wm.UserId == userId);
     }
 
     public async System.Threading.Tasks.Task AddMemberAsync(WorkspaceMember member)
@@ -42,40 +42,41 @@ public class MemberRepository : IMemberRepository
 
     public void RemoveMember(WorkspaceMember member)
     {
-        _context.WorkspaceMembers.Remove(member);
+        member.IsDisabled = true;
+        _context.WorkspaceMembers.Update(member);
     }
 
     public async System.Threading.Tasks.Task<User?> GetUserByIdAsync(Guid userId)
     {
         return await _context.Users
             .Include(u => u.Account)
-            .FirstOrDefaultAsync(u => u.Id == userId);
+            .FirstOrDefaultAsync(u => !u.IsDisabled && u.Id == userId);
     }
 
     public async System.Threading.Tasks.Task<User?> GetUserByAccountIdAsync(Guid accountId)
     {
         return await _context.Users
             .Include(u => u.Account)
-            .FirstOrDefaultAsync(u => u.AccountId == accountId);
+            .FirstOrDefaultAsync(u => !u.IsDisabled && u.AccountId == accountId);
     }
 
     public async System.Threading.Tasks.Task<User?> GetUserByEmailAsync(string email)
     {
         return await _context.Users
             .Include(u => u.Account)
-            .FirstOrDefaultAsync(u => u.Account.Email.ToLower() == email.ToLower());
+            .FirstOrDefaultAsync(u => !u.IsDisabled && u.Account.Email.ToLower() == email.ToLower());
     }
 
     public async System.Threading.Tasks.Task<WorkspaceInvitation?> GetPendingInvitationAsync(Guid workspaceId, string email)
     {
         return await _context.WorkspaceInvitations
-            .FirstOrDefaultAsync(i => i.WorkspaceId == workspaceId && i.InviteeEmail.ToLower() == email.ToLower() && i.Status == "Pending");
+            .FirstOrDefaultAsync(i => !i.IsDisabled && i.WorkspaceId == workspaceId && i.InviteeEmail.ToLower() == email.ToLower() && i.Status == "Pending");
     }
 
     public async System.Threading.Tasks.Task<int> GetPendingInvitationsCountAsync(Guid workspaceId)
     {
         return await _context.WorkspaceInvitations
-            .CountAsync(i => i.WorkspaceId == workspaceId && i.Status == "Pending");
+            .CountAsync(i => !i.IsDisabled && i.WorkspaceId == workspaceId && i.Status == "Pending");
     }
 
     public async System.Threading.Tasks.Task AddInvitationAsync(WorkspaceInvitation invitation)

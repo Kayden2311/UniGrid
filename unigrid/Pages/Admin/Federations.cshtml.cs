@@ -30,6 +30,7 @@ namespace unigrid.Pages.Admin
             public string OwnerName { get; set; } = null!;
             public string OwnerEmail { get; set; } = null!;
             public List<WorkspaceInfo> LinkedWorkspaces { get; set; } = new();
+            public bool IsDisabled { get; set; }
         }
 
         public class WorkspaceInfo
@@ -67,7 +68,8 @@ namespace unigrid.Pages.Admin
                     Name = w.Name,
                     Type = w.WorkspaceType,
                     OwnerName = w.Owner.FullName
-                }).ToList()
+                }).ToList(),
+                IsDisabled = f.IsDisabled
             }).ToList();
         }
 
@@ -131,16 +133,16 @@ namespace unigrid.Pages.Admin
             return RedirectToPage();
         }
 
-        // Action: Delete Federation
-        public async System.Threading.Tasks.Task<IActionResult> OnPostDeleteFederationAsync(Guid federationId)
+        // Action: Toggle Disable Federation
+        public async System.Threading.Tasks.Task<IActionResult> OnPostToggleDisableAsync(Guid federationId)
         {
             var federation = await _context.WorkspaceFederations.FirstOrDefaultAsync(f => f.Id == federationId);
             if (federation == null) return NotFound();
 
-            _context.WorkspaceFederations.Remove(federation);
+            federation.IsDisabled = !federation.IsDisabled;
             await _context.SaveChangesAsync();
 
-            TempData["FedSuccess"] = $"Federation '{federation.Name}' has been successfully deleted.";
+            TempData["FedSuccess"] = $"Federation '{federation.Name}' status updated successfully.";
             return RedirectToPage();
         }
 

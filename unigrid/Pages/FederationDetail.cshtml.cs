@@ -115,12 +115,12 @@ namespace unigrid.Pages
                 .Include(f => f.WorkspaceFederationMembers)
                     .ThenInclude(m => m.User)
                         .ThenInclude(u => u.Account)
-                .FirstOrDefaultAsync(f => f.JoinCode == joinCode.Trim().ToUpper());
+                .FirstOrDefaultAsync(f => !f.IsDisabled && f.JoinCode == joinCode.Trim().ToUpper());
 
             if (Federation == null) return false;
 
             // Access check: Federation Owner or active Federation Member
-            var memberRecord = Federation.WorkspaceFederationMembers.FirstOrDefault(m => m.UserId == CurrentUser.Id);
+            var memberRecord = Federation.WorkspaceFederationMembers.FirstOrDefault(m => !m.IsDisabled && m.UserId == CurrentUser.Id);
             bool isOwner = Federation.OwnerId == CurrentUser.Id;
             bool isActiveMember = memberRecord != null && memberRecord.Status == "Active";
 
@@ -135,9 +135,9 @@ namespace unigrid.Pages
             // Symmetrically query child workspaces: 
             // 1. Direct children (Group/Business) where FederationId == federation.Id
             // 2. Personal workspaces linked via WorkspaceFederationMembers with status 'Active'
-            var directChildren = Federation.Workspaces.ToList();
+            var directChildren = Federation.Workspaces.Where(w => !w.IsDisabled).ToList();
             var linkedPersonal = Federation.WorkspaceFederationMembers
-                .Where(m => m.PersonalWorkspace != null && m.Status == "Active")
+                .Where(m => !m.IsDisabled && m.PersonalWorkspace != null && !m.PersonalWorkspace.IsDisabled && m.Status == "Active")
                 .Select(m => m.PersonalWorkspace)
                 .ToList();
 
@@ -147,11 +147,11 @@ namespace unigrid.Pages
                 .ToList();
 
             PendingFederationLinks = Federation.WorkspaceFederationMembers
-                .Where(m => m.Status == "PendingOwnerApproval")
+                .Where(m => !m.IsDisabled && m.Status == "PendingOwnerApproval")
                 .ToList();
 
             ActiveFederationMembers = Federation.WorkspaceFederationMembers
-                .Where(m => m.Status == "Active")
+                .Where(m => !m.IsDisabled && m.Status == "Active")
                 .ToList();
 
             var childWorkspaceIds = ChildWorkspaces.Select(w => w.Id).ToList();
@@ -159,66 +159,66 @@ namespace unigrid.Pages
             // Calculate Aggregate Stats
             // 1. Active members (distinct user IDs joined across all child workspaces)
             TotalActiveMembers = await _context.WorkspaceMembers
-                .Where(m => childWorkspaceIds.Contains(m.WorkspaceId))
+                .Where(m => !m.IsDisabled && childWorkspaceIds.Contains(m.WorkspaceId))
                 .Select(m => m.UserId)
                 .Distinct()
                 .CountAsync();
 
             // 2. Tasks completed (status == 3) across all child workspaces
             TotalTasksDone = await _context.Tasks
-                .Where(t => t.WorkspaceId.HasValue && childWorkspaceIds.Contains(t.WorkspaceId.Value) && t.Status == 3)
+                .Where(t => !t.IsDisabled && t.WorkspaceId.HasValue && childWorkspaceIds.Contains(t.WorkspaceId.Value) && t.Status == 3)
                 .CountAsync();
 
             // 3. Files uploaded across all child workspaces
             TotalFilesCount = await _context.WorkspaceFiles
-                .Where(f => f.FederationId == Federation.Id || (f.WorkspaceId.HasValue && childWorkspaceIds.Contains(f.WorkspaceId.Value)))
+                .Where(f => !f.IsDisabled && (f.FederationId == Federation.Id || (f.WorkspaceId.HasValue && childWorkspaceIds.Contains(f.WorkspaceId.Value))))
                 .CountAsync();
 
             // 4. Load shared files
             SharedFiles = await _context.WorkspaceFiles
                 .Include(f => f.User)
                 .Include(f => f.Workspace)
-                .Where(f => f.FederationId == Federation.Id || (f.WorkspaceId.HasValue && childWorkspaceIds.Contains(f.WorkspaceId.Value)))
+                .Where(f => !f.IsDisabled && (f.FederationId == Federation.Id || (f.WorkspaceId.HasValue && childWorkspaceIds.Contains(f.WorkspaceId.Value))))
                 .OrderByDescending(f => f.CreatedAt)
                 .Take(15)
                 .ToListAsync();
 
             // Eligible workspaces to link: Group workspaces owned by CurrentUser that are NOT already in any federation
             EligibleWorkspacesToLink = await _context.Workspaces
-                .Where(w => w.OwnerId == CurrentUser.Id && w.WorkspaceType == "Group" && w.FederationId == null)
+                .Where(w => !w.IsDisabled && w.OwnerId == CurrentUser.Id && w.WorkspaceType == "Group" && w.FederationId == null)
                 .OrderBy(w => w.Name)
                 .ToListAsync();
 
             FederationTasks = await _context.Tasks
                 .Include(t => t.Assignee)
-                .Where(t => t.FederationId == Federation.Id && t.WorkspaceId == null)
+                .Where(t => !t.IsDisabled && t.FederationId == Federation.Id && t.WorkspaceId == null)
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
 
             ChildKpiTargets = await _context.KpiTargets
                 .Include(t => t.User)
                 .Include(t => t.Category)
-                .Where(t => childWorkspaceIds.Contains(t.WorkspaceId))
+                .Where(t => !t.IsDisabled && childWorkspaceIds.Contains(t.WorkspaceId))
                 .ToListAsync();
 
             ChildTasks = await _context.Tasks
                 .Include(t => t.Assignee)
                 .Include(t => t.Category)
-                .Where(t => t.WorkspaceId.HasValue && childWorkspaceIds.Contains(t.WorkspaceId.Value))
+                .Where(t => !t.IsDisabled && t.WorkspaceId.HasValue && childWorkspaceIds.Contains(t.WorkspaceId.Value))
                 .ToListAsync();
 
             ChildCategories = await _context.TaskCategories
-                .Where(c => childWorkspaceIds.Contains(c.WorkspaceId))
+                .Where(c => !c.IsDisabled && childWorkspaceIds.Contains(c.WorkspaceId))
                 .ToListAsync();
 
             ChildWorkspaceMembers = await _context.WorkspaceMembers
                 .Include(m => m.User)
                 .Include(m => m.Workspace)
-                .Where(m => childWorkspaceIds.Contains(m.WorkspaceId))
+                .Where(m => !m.IsDisabled && childWorkspaceIds.Contains(m.WorkspaceId))
                 .ToListAsync();
 
             FederationUsers = Federation.WorkspaceFederationMembers
-                .Where(m => m.Status == "Active")
+                .Where(m => !m.IsDisabled && m.Status == "Active")
                 .Select(m => m.User)
                 .ToList();
 
@@ -232,18 +232,18 @@ namespace unigrid.Pages
             {
                 FederationChatMessages = await _context.ChatMessages
                     .Include(cm => cm.Sender)
-                    .Where(cm => cm.RoomId == FederationChatRoom.Id)
+                    .Where(cm => !cm.IsDisabled && cm.RoomId == FederationChatRoom.Id)
                     .OrderBy(cm => cm.SentAt)
                     .ToListAsync();
             }
 
             // Find workspaces where CurrentUser is Owner or Member
             var userWorkspaceIds = await _context.Workspaces
-                .Where(w => w.OwnerId == CurrentUser.Id)
+                .Where(w => !w.IsDisabled && w.OwnerId == CurrentUser.Id)
                 .Select(w => w.Id)
                 .Union(
                     _context.WorkspaceMembers
-                        .Where(m => m.UserId == CurrentUser.Id)
+                        .Where(m => !m.IsDisabled && m.UserId == CurrentUser.Id)
                         .Select(m => m.WorkspaceId)
                 )
                 .ToListAsync();
@@ -252,7 +252,7 @@ namespace unigrid.Pages
             PushableFiles = await _context.WorkspaceFiles
                 .Include(f => f.Workspace)
                 .Include(f => f.User)
-                .Where(f => f.WorkspaceId.HasValue && userWorkspaceIds.Contains(f.WorkspaceId.Value) && f.FederationId != Federation.Id)
+                .Where(f => !f.IsDisabled && f.WorkspaceId.HasValue && userWorkspaceIds.Contains(f.WorkspaceId.Value) && f.FederationId != Federation.Id)
                 .OrderByDescending(f => f.CreatedAt)
                 .ToListAsync();
 
@@ -726,8 +726,9 @@ namespace unigrid.Pages
                 return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
             }
 
-            // Reject: delete the pending member record
-            _context.WorkspaceFederationMembers.Remove(pendingMember);
+            // Reject: soft-disable the pending member record
+            pendingMember.IsDisabled = true;
+            _context.WorkspaceFederationMembers.Update(pendingMember);
             await _context.SaveChangesAsync();
 
             TempData["SuccessMessage"] = "Decline and removed link request successfully.";
@@ -877,10 +878,11 @@ namespace unigrid.Pages
                 return RedirectToPage("/FederationDetail", new { joinCode });
             }
 
-            var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == taskId && t.FederationId == Federation.Id);
+            var task = await _context.Tasks.FirstOrDefaultAsync(t => !t.IsDisabled && t.Id == taskId && t.FederationId == Federation.Id);
             if (task != null)
             {
-                _context.Tasks.Remove(task);
+                task.IsDisabled = true;
+                _context.Tasks.Update(task);
                 await _context.SaveChangesAsync();
 
                 var hubContext = (IHubContext<ChatHub>)HttpContext.RequestServices.GetService(typeof(IHubContext<ChatHub>));
@@ -946,10 +948,11 @@ namespace unigrid.Pages
                 return RedirectToPage("/FederationDetail", new { joinCode });
             }
 
-            var target = await _context.KpiTargets.FindAsync(targetId);
+            var target = await _context.KpiTargets.FirstOrDefaultAsync(t => !t.IsDisabled && t.Id == targetId);
             if (target != null)
             {
-                _context.KpiTargets.Remove(target);
+                target.IsDisabled = true;
+                _context.KpiTargets.Update(target);
                 await _context.SaveChangesAsync();
             }
 
@@ -1310,7 +1313,7 @@ namespace unigrid.Pages
             }
 
             var member = await _context.WorkspaceFederationMembers
-                .FirstOrDefaultAsync(m => m.FederationId == Federation.Id && m.UserId == userId);
+                .FirstOrDefaultAsync(m => !m.IsDisabled && m.FederationId == Federation.Id && m.UserId == userId);
 
             if (member == null)
             {
@@ -1325,7 +1328,8 @@ namespace unigrid.Pages
                 return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
             }
 
-            _context.WorkspaceFederationMembers.Remove(member);
+            member.IsDisabled = true;
+            _context.WorkspaceFederationMembers.Update(member);
 
             // Sever connection: set FederationId to null for any workspaces owned by this user linked to this federation
             var userWorkspaces = await _context.Workspaces

@@ -56,6 +56,8 @@ public partial class UniGridDbContext : DbContext
 
     public virtual DbSet<KpiTarget> KpiTargets { get; set; }
 
+    public virtual DbSet<SystemSetting> SystemSettings { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseSqlServer("Server=localhost;Database=UniGridDb;User ID=sa;Password=123;TrustServerCertificate=True;");
@@ -403,6 +405,7 @@ public partial class UniGridDbContext : DbContext
         modelBuilder.Entity<PersonalSchedule>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.ToTable(tb => tb.HasTrigger("TR_PersonalSchedules_NoOverlap"));
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
             entity.Property(e => e.Title).HasMaxLength(256);
@@ -505,6 +508,23 @@ public partial class UniGridDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("FK_KpiTargets_Categories");
         });
+
+        modelBuilder.Entity<SystemSetting>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.SettingKey, "UQ_SystemSettings_Key").IsUnique();
+            entity.Property(e => e.SettingKey).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.SettingValue).IsRequired();
+        });
+
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            var property = entityType.FindProperty("IsDisabled");
+            if (property != null)
+            {
+                property.SetDefaultValue(false);
+            }
+        }
 
         OnModelCreatingPartial(modelBuilder);
     }
