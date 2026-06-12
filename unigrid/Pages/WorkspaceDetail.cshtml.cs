@@ -242,6 +242,13 @@ public class WorkspaceDetailModel : PageModel
         WeeklyKpiReport = await _taskService.GetKpiReportAsync(workspaceId, "Weekly", DateTime.UtcNow);
         MonthlyKpiReport = await _taskService.GetKpiReportAsync(workspaceId, "Monthly", DateTime.UtcNow);
 
+        // Load ChatRoom and ChatMessages using chat service
+        ChatRoom = await _chatService.GetRoomByWorkspaceIdAsync(workspaceId);
+        if (ChatRoom != null)
+        {
+            ChatMessages = await _chatService.GetRoomMessagesAsync(ChatRoom.Id);
+        }
+
         return true;
     }
 
