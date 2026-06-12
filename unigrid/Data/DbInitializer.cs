@@ -665,7 +665,8 @@ namespace unigrid.Data
                     OwnerId = userAlice.Id,
                     JoinCode = "AI-LAB",
                     PackageTier = "ProPlus",
-                    WorkspaceType = "Group"
+                    WorkspaceType = "Group",
+                    SettingsJson = "{\"lockedChannels\":{\"infrastructure\":[\"aaaaaa11-1111-1111-1111-111111111111\",\"bbbbbb22-2222-2222-2222-222222222222\",\"ffffff22-2222-2222-2222-222222222222\"]},\"channelOwners\":{\"ai-models\":\"aaaaaa11-1111-1111-1111-111111111111\",\"infrastructure\":\"bbbbbb22-2222-2222-2222-222222222222\",\"dataset-ops\":\"eeeeee11-1111-1111-1111-111111111111\"},\"channelModerators\":{\"ai-models\":[],\"infrastructure\":[],\"dataset-ops\":[]},\"allChannels\":[\"general\",\"ai-models\",\"infrastructure\",\"dataset-ops\"],\"disabledCreateChannelUsers\":[],\"disabledCreateTaskUsers\":[],\"disabledEditTaskUsers\":[],\"disabledDeleteFileUsers\":[],\"disabledDeleteTaskUsers\":[]}"
                 };
                 var workspaceData = new Workspace
                 {
@@ -920,7 +921,31 @@ namespace unigrid.Data
                     new ChatMessage { RoomId = crAI.Id, SenderId = userBob.Id, Content = "InfiniBand is holding up well, no dropped packets reported.", SentAt = DateTime.UtcNow.AddHours(-6) },
                     new ChatMessage { RoomId = crAI.Id, SenderId = userLiam.Id, Content = "Instruction dataset is pristine. Trimmed 50k duplicates yesterday.", SentAt = DateTime.UtcNow.AddHours(-4) },
                     new ChatMessage { RoomId = crAI.Id, SenderId = userOlivia.Id, Content = "Checked checkpoints folder, autosave is working seamlessly.", SentAt = DateTime.UtcNow.AddHours(-2) },
-                    new ChatMessage { RoomId = crAI.Id, SenderId = userAlice.Id, Content = "Amazing. Let's monitor convergence metrics through the weekend.", SentAt = DateTime.UtcNow.AddHours(-1) }
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userAlice.Id, Content = "Amazing. Let's monitor convergence metrics through the weekend.", SentAt = DateTime.UtcNow.AddHours(-1) },
+
+                    // AI Lab - ai-models Channel
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userAlice.Id, Content = "[channel:ai-models]Let's discuss our model architecture. I'm thinking of starting with a hybrid decoder-only transformer.", SentAt = DateTime.UtcNow.AddHours(-24) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userLiam.Id, Content = "[channel:ai-models]Should we use RoPE for positional embeddings? It seems to perform better at longer context windows.", SentAt = DateTime.UtcNow.AddHours(-23) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userAlice.Id, Content = "[channel:ai-models]Yes, RoPE is a must. Let's target an 8k context length initially.", SentAt = DateTime.UtcNow.AddHours(-22) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userBob.Id, Content = "[channel:ai-models]We'll need to optimize the attention kernel. FlashAttention-2 is integrated into our training stack, so we're good to go.", SentAt = DateTime.UtcNow.AddHours(-21) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userOlivia.Id, Content = "[channel:ai-models]I've updated the model config file in the repository. Let me know if you want to tweak any hyperparameters.", SentAt = DateTime.UtcNow.AddHours(-20) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userAlice.Id, Content = "[channel:ai-models]Great. I'll launch a small 1B param test run tonight to check loss convergence.", SentAt = DateTime.UtcNow.AddHours(-19) },
+
+                    // AI Lab - infrastructure Channel
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userBob.Id, Content = "[channel:infrastructure]H100 node cluster scaling is complete. We now have 8 nodes online (64 GPUs total).", SentAt = DateTime.UtcNow.AddHours(-15) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userOlivia.Id, Content = "[channel:infrastructure]I'm seeing some thermal throttling on node-04 during full load. Can we check the cooling allocation?", SentAt = DateTime.UtcNow.AddHours(-14) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userBob.Id, Content = "[channel:infrastructure]On it. I'll talk to the datacenter team. In the meantime, I set a temporary power limit of 350W on node-04 GPUs.", SentAt = DateTime.UtcNow.AddHours(-13) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userAlice.Id, Content = "[channel:infrastructure]Thanks Bob. Keep me posted. We need the full cluster at 100% capacity for the 70B parameter run next week.", SentAt = DateTime.UtcNow.AddHours(-12) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userBob.Id, Content = "[channel:infrastructure]Good news, the datacenter team verified the airflow blockage. Node-04 is running at normal temperatures now. Power limits restored.", SentAt = DateTime.UtcNow.AddHours(-10) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userOlivia.Id, Content = "[channel:infrastructure]Confirmed. Benchmarks show full throughput without throttling. Cluster is green.", SentAt = DateTime.UtcNow.AddHours(-9) },
+
+                    // AI Lab - dataset-ops Channel
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userLiam.Id, Content = "[channel:dataset-ops]The WebText-filtered dataset is clean. We pruned around 12% of duplicate/low-quality documents.", SentAt = DateTime.UtcNow.AddHours(-18) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userOlivia.Id, Content = "[channel:dataset-ops]Nice work Liam. Did you filter out toxic content and PII?", SentAt = DateTime.UtcNow.AddHours(-17) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userLiam.Id, Content = "[channel:dataset-ops]Yes, ran our default regex filters for PII and used a lightweight classifier for hate speech/NSFW content.", SentAt = DateTime.UtcNow.AddHours(-16) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userAlice.Id, Content = "[channel:dataset-ops]Perfect. What's the final token count for this subset?", SentAt = DateTime.UtcNow.AddHours(-15) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userLiam.Id, Content = "[channel:dataset-ops]About 450 billion tokens. Combined with the code and math datasets, we're looking at a total of 1.2 trillion tokens.", SentAt = DateTime.UtcNow.AddHours(-14) },
+                    new ChatMessage { RoomId = crAI.Id, SenderId = userBob.Id, Content = "[channel:dataset-ops]Awesome. I'll start pre-staging the data onto the local NVMe cache drives on each GPU node to minimize training latency.", SentAt = DateTime.UtcNow.AddHours(-12) }
                 );
                 await context.SaveChangesAsync();
 
@@ -1369,6 +1394,87 @@ namespace unigrid.Data
 
                         await context.SaveChangesAsync();
                         logger.LogInformation("DbInitializer: Federated Workspace records seeded successfully.");
+                    }
+                }
+            }
+
+            // Self-healing: Seed AI R&D Lab channels and messages dynamically if not present
+            var wsAI = await context.Workspaces.FirstOrDefaultAsync(w => w.Id == Guid.Parse("aaaaaaaa-1111-2222-3333-444444444444"));
+            if (wsAI != null)
+            {
+                bool needsUpdate = false;
+
+                // Ensure SettingsJson has the correct channels
+                if (string.IsNullOrEmpty(wsAI.SettingsJson) || !wsAI.SettingsJson.Contains("ai-models"))
+                {
+                    logger.LogInformation("DbInitializer: Updating AI R&D Lab settings with channels...");
+                    wsAI.SettingsJson = "{\"lockedChannels\":{\"infrastructure\":[\"aaaaaa11-1111-1111-1111-111111111111\",\"bbbbbb22-2222-2222-2222-222222222222\",\"ffffff22-2222-2222-2222-222222222222\"]},\"channelOwners\":{\"ai-models\":\"aaaaaa11-1111-1111-1111-111111111111\",\"infrastructure\":\"bbbbbb22-2222-2222-2222-222222222222\",\"dataset-ops\":\"eeeeee11-1111-1111-1111-111111111111\"},\"channelModerators\":{\"ai-models\":[],\"infrastructure\":[],\"dataset-ops\":[]},\"allChannels\":[\"general\",\"ai-models\",\"infrastructure\",\"dataset-ops\"],\"disabledCreateChannelUsers\":[],\"disabledCreateTaskUsers\":[],\"disabledEditTaskUsers\":[],\"disabledDeleteFileUsers\":[],\"disabledDeleteTaskUsers\":[]}";
+                    context.Workspaces.Update(wsAI);
+                    needsUpdate = true;
+                }
+
+                // Ensure ChatRoom exists for workspaceAI
+                var roomId = Guid.Parse("45678901-4567-4567-4567-456789012345");
+                var chatRoomAI = await context.ChatRooms.FirstOrDefaultAsync(cr => cr.Id == roomId || cr.WorkspaceId == wsAI.Id);
+                if (chatRoomAI == null)
+                {
+                    logger.LogInformation("DbInitializer: Seeding missing ChatRoom for AI R&D Lab...");
+                    chatRoomAI = new ChatRoom { Id = roomId, WorkspaceId = wsAI.Id };
+                    await context.ChatRooms.AddAsync(chatRoomAI);
+                    needsUpdate = true;
+                }
+                else
+                {
+                    roomId = chatRoomAI.Id;
+                }
+
+                if (needsUpdate)
+                {
+                    await context.SaveChangesAsync();
+                    needsUpdate = false;
+                }
+
+                // Ensure channel messages are seeded
+                bool hasChannelMessages = await context.ChatMessages.AnyAsync(m => m.RoomId == roomId && m.Content.Contains("[channel:ai-models]"));
+                if (!hasChannelMessages)
+                {
+                    logger.LogInformation("DbInitializer: Seeding missing channel messages for AI R&D Lab...");
+                    
+                    var userAlice = await context.Users.Include(u => u.Account).FirstOrDefaultAsync(u => u.Account.Email == "alice@student.edu");
+                    var userBob = await context.Users.Include(u => u.Account).FirstOrDefaultAsync(u => u.Account.Email == "bob@student.edu");
+                    var userLiam = await context.Users.Include(u => u.Account).FirstOrDefaultAsync(u => u.Account.Email == "liam@student.edu");
+                    var userOlivia = await context.Users.Include(u => u.Account).FirstOrDefaultAsync(u => u.Account.Email == "olivia@student.edu");
+
+                    if (userAlice != null && userBob != null && userLiam != null && userOlivia != null)
+                    {
+                        var newMessages = new List<ChatMessage>
+                        {
+                            // AI Lab - ai-models Channel
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userAlice.Id, Content = "[channel:ai-models]Let's discuss our model architecture. I'm thinking of starting with a hybrid decoder-only transformer.", SentAt = DateTime.UtcNow.AddHours(-24) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userLiam.Id, Content = "[channel:ai-models]Should we use RoPE for positional embeddings? It seems to perform better at longer context windows.", SentAt = DateTime.UtcNow.AddHours(-23) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userAlice.Id, Content = "[channel:ai-models]Yes, RoPE is a must. Let's target an 8k context length initially.", SentAt = DateTime.UtcNow.AddHours(-22) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userBob.Id, Content = "[channel:ai-models]We'll need to optimize the attention kernel. FlashAttention-2 is integrated into our training stack, so we're good to go.", SentAt = DateTime.UtcNow.AddHours(-21) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userOlivia.Id, Content = "[channel:ai-models]I've updated the model config file in the repository. Let me know if you want to tweak any hyperparameters.", SentAt = DateTime.UtcNow.AddHours(-20) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userAlice.Id, Content = "[channel:ai-models]Great. I'll launch a small 1B param test run tonight to check loss convergence.", SentAt = DateTime.UtcNow.AddHours(-19) },
+
+                            // AI Lab - infrastructure Channel
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userBob.Id, Content = "[channel:infrastructure]H100 node cluster scaling is complete. We now have 8 nodes online (64 GPUs total).", SentAt = DateTime.UtcNow.AddHours(-15) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userOlivia.Id, Content = "[channel:infrastructure]I'm seeing some thermal throttling on node-04 during full load. Can we check the cooling allocation?", SentAt = DateTime.UtcNow.AddHours(-14) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userBob.Id, Content = "[channel:infrastructure]On it. I'll talk to the datacenter team. In the meantime, I set a temporary power limit of 350W on node-04 GPUs.", SentAt = DateTime.UtcNow.AddHours(-13) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userAlice.Id, Content = "[channel:infrastructure]Thanks Bob. Keep me posted. We need the full cluster at 100% capacity for the 70B parameter run next week.", SentAt = DateTime.UtcNow.AddHours(-12) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userBob.Id, Content = "[channel:infrastructure]Good news, the datacenter team verified the airflow blockage. Node-04 is running at normal temperatures now. Power limits restored.", SentAt = DateTime.UtcNow.AddHours(-10) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userOlivia.Id, Content = "[channel:infrastructure]Confirmed. Benchmarks show full throughput without throttling. Cluster is green.", SentAt = DateTime.UtcNow.AddHours(-9) },
+
+                            // AI Lab - dataset-ops Channel
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userLiam.Id, Content = "[channel:dataset-ops]The WebText-filtered dataset is clean. We pruned around 12% of duplicate/low-quality documents.", SentAt = DateTime.UtcNow.AddHours(-18) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userOlivia.Id, Content = "[channel:dataset-ops]Nice work Liam. Did you filter out toxic content and PII?", SentAt = DateTime.UtcNow.AddHours(-17) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userLiam.Id, Content = "[channel:dataset-ops]Yes, ran our default regex filters for PII and used a lightweight classifier for hate speech/NSFW content.", SentAt = DateTime.UtcNow.AddHours(-16) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userAlice.Id, Content = "[channel:dataset-ops]Perfect. What's the final token count for this subset?", SentAt = DateTime.UtcNow.AddHours(-15) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userLiam.Id, Content = "[channel:dataset-ops]About 450 billion tokens. Combined with the code and math datasets, we're looking at a total of 1.2 trillion tokens.", SentAt = DateTime.UtcNow.AddHours(-14) },
+                            new ChatMessage { Id = Guid.NewGuid(), RoomId = roomId, SenderId = userBob.Id, Content = "[channel:dataset-ops]Awesome. I'll start pre-staging the data onto the local NVMe cache drives on each GPU node to minimize training latency.", SentAt = DateTime.UtcNow.AddHours(-12) }
+                        };
+                        await context.ChatMessages.AddRangeAsync(newMessages);
+                        await context.SaveChangesAsync();
                     }
                 }
             }
