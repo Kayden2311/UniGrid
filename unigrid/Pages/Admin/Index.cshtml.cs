@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace unigrid.Pages.Admin
 {
-    [Authorize(Roles = "1")]
+    [Authorize(Roles = "1,3")]
     public class IndexModel : PageModel
     {
         private readonly UniGridDbContext _context;
