@@ -110,8 +110,17 @@ namespace unigrid.Pages
             Federation = await _context.WorkspaceFederations
                 .Include(f => f.Owner)
                 .Include(f => f.Workspaces)
+                    .ThenInclude(w => w.Tasks)
+                .Include(f => f.Workspaces)
+                    .ThenInclude(w => w.WorkspaceMembers)
+                        .ThenInclude(m => m.User)
                 .Include(f => f.WorkspaceFederationMembers)
                     .ThenInclude(m => m.PersonalWorkspace)
+                        .ThenInclude(w => w.Tasks)
+                .Include(f => f.WorkspaceFederationMembers)
+                    .ThenInclude(m => m.PersonalWorkspace)
+                        .ThenInclude(w => w.WorkspaceMembers)
+                            .ThenInclude(m => m.User)
                 .Include(f => f.WorkspaceFederationMembers)
                     .ThenInclude(m => m.User)
                         .ThenInclude(u => u.Account)
@@ -154,6 +163,16 @@ namespace unigrid.Pages
                 .Where(m => !m.IsDisabled && m.Status == "Active")
                 .ToList();
 
+            FederationUsers = Federation.WorkspaceFederationMembers
+                .Where(m => !m.IsDisabled && m.Status == "Active")
+                .Select(m => m.User)
+                .ToList();
+
+            if (!FederationUsers.Any(u => u.Id == Federation.OwnerId))
+            {
+                FederationUsers.Insert(0, Federation.Owner);
+            }
+
             var childWorkspaceIds = ChildWorkspaces.Select(w => w.Id).ToList();
 
             // Calculate Aggregate Stats
@@ -195,10 +214,11 @@ namespace unigrid.Pages
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
 
+            var federationUserIds = FederationUsers.Select(u => u.Id).ToList();
             ChildKpiTargets = await _context.KpiTargets
                 .Include(t => t.User)
                 .Include(t => t.Category)
-                .Where(t => !t.IsDisabled && childWorkspaceIds.Contains(t.WorkspaceId))
+                .Where(t => !t.IsDisabled && childWorkspaceIds.Contains(t.WorkspaceId) && federationUserIds.Contains(t.UserId))
                 .ToListAsync();
 
             ChildTasks = await _context.Tasks
@@ -217,15 +237,7 @@ namespace unigrid.Pages
                 .Where(m => !m.IsDisabled && childWorkspaceIds.Contains(m.WorkspaceId))
                 .ToListAsync();
 
-            FederationUsers = Federation.WorkspaceFederationMembers
-                .Where(m => !m.IsDisabled && m.Status == "Active")
-                .Select(m => m.User)
-                .ToList();
-
-            if (!FederationUsers.Any(u => u.Id == Federation.OwnerId))
-            {
-                FederationUsers.Insert(0, Federation.Owner);
-            }
+            // FederationUsers already loaded above
 
             FederationChatRoom = await _context.ChatRooms.FirstOrDefaultAsync(cr => cr.FederationId == Federation.Id);
             if (FederationChatRoom != null)

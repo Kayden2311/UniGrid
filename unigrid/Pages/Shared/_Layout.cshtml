@@ -121,12 +121,6 @@
                 .Where(f => f.OwnerId == currentUser.Id || f.WorkspaceFederationMembers.Any(m => m.UserId == currentUser.Id))
                 .Distinct()
                 .ToList();
-
-            if (isFedPage)
-            {
-                sidebarPersonalWorkspaces.Clear();
-                sidebarGroupWorkspaces.Clear();
-            }
         }
     }
 }
@@ -168,7 +162,7 @@
                 </div>
             }
 
-            @if (User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value == "1")
+            @if (User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value == "1" || User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value == "3")
             {
                 <!-- Admin Portal Nav -->
                 <div x-show="sidebarOpen" class="space-y-1 mb-6 border-t border-slate-100 pt-4">
@@ -198,68 +192,65 @@
                 </div>
             }
 
-            @if (User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value != "1")
+            @if (User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value == "2")
             {
-                @if (!isFedPage)
-                {
-                    <!-- Solo Portals Collapsible -->
-                    <div x-show="sidebarOpen" class="space-y-1 mb-4">
-                        <button @@click="personalWsOpen = !personalWsOpen" class="flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors">
-                            <div class="flex items-center gap-2">
-                                <i data-lucide="user" class="h-3.5 w-3.5 text-teal-500"></i>
-                                <span>Solo Portals</span>
-                            </div>
-                            <i data-lucide="chevron-down" class="h-3.5 w-3.5 transition-transform" :class="personalWsOpen ? 'rotate-180' : ''"></i>
-                        </button>
-                        <div x-show="personalWsOpen" x-transition class="space-y-0.5">
-                            @if (sidebarPersonalWorkspaces.Any())
-                            {
-                                @foreach (var ws in sidebarPersonalWorkspaces)
-                                {
-                                    <a href="/WorkspaceDetail/@ws.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm">
-                                        <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-teal-50 text-[10px] font-black text-teal-600">
-                                            @ws.Name.Substring(0, 1)
-                                        </div>
-                                        <span class="truncate">@ws.Name</span>
-                                    </a>
-                                }
-                            }
-                            else
-                            {
-                                <div class="px-3 py-2 text-xs text-slate-400 italic">No Solo Portals</div>
-                            }
+                <!-- Solo Portals Collapsible -->
+                <div x-show="sidebarOpen" class="space-y-1 mb-4">
+                    <button @@click="personalWsOpen = !personalWsOpen" class="flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="user" class="h-3.5 w-3.5 text-teal-500"></i>
+                            <span>Solo Portals</span>
                         </div>
+                        <i data-lucide="chevron-down" class="h-3.5 w-3.5 transition-transform" :class="personalWsOpen ? 'rotate-180' : ''"></i>
+                    </button>
+                    <div x-show="personalWsOpen" x-transition class="space-y-0.5">
+                        @if (sidebarPersonalWorkspaces.Any())
+                        {
+                            @foreach (var ws in sidebarPersonalWorkspaces)
+                            {
+                                <a href="/WorkspaceDetail/@ws.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm">
+                                    <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-teal-50 text-[10px] font-black text-teal-600">
+                                        @ws.Name.Substring(0, 1)
+                                    </div>
+                                    <span class="truncate">@ws.Name</span>
+                                </a>
+                            }
+                        }
+                        else
+                        {
+                            <div class="px-3 py-2 text-xs text-slate-400 italic">No Solo Portals</div>
+                        }
                     </div>
+                </div>
 
-                    <!-- Group Boards Collapsible -->
-                    <div x-show="sidebarOpen" class="space-y-1 mb-4">
-                        <button @@click="groupWsOpen = !groupWsOpen" class="flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors">
-                            <div class="flex items-center gap-2">
-                                <i data-lucide="users" class="h-3.5 w-3.5 text-indigo-500"></i>
-                                <span>Group Boards</span>
-                            </div>
-                            <i data-lucide="chevron-down" class="h-3.5 w-3.5 transition-transform" :class="groupWsOpen ? 'rotate-180' : ''"></i>
-                        </button>
-                        <div x-show="groupWsOpen" x-transition class="space-y-0.5">
-                            @if (sidebarGroupWorkspaces.Any())
-                            {
-                                @foreach (var ws in sidebarGroupWorkspaces)
-                                {
-                                    <a href="/WorkspaceDetail/@ws.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm">
-                                        <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-indigo-50 text-[10px] font-black text-indigo-600">
-                                            @ws.Name.Substring(0, 1)
-                                        </div>
-                                        <span class="truncate">@ws.Name</span>
-                                    </a>
-                                }
-                            }
-                            else
-                            {
-                                <div class="px-3 py-2 text-xs text-slate-400 italic">No Group Boards</div>
-                            }
+                <!-- Group Boards Collapsible -->
+                <div x-show="sidebarOpen" class="space-y-1 mb-4">
+                    <button @@click="groupWsOpen = !groupWsOpen" class="flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="users" class="h-3.5 w-3.5 text-indigo-500"></i>
+                            <span>Group Boards</span>
                         </div>
+                        <i data-lucide="chevron-down" class="h-3.5 w-3.5 transition-transform" :class="groupWsOpen ? 'rotate-180' : ''"></i>
+                    </button>
+                    <div x-show="groupWsOpen" x-transition class="space-y-0.5">
+                        @if (sidebarGroupWorkspaces.Any())
+                        {
+                            @foreach (var ws in sidebarGroupWorkspaces)
+                            {
+                                <a href="/WorkspaceDetail/@ws.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm">
+                                    <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-indigo-50 text-[10px] font-black text-indigo-600">
+                                        @ws.Name.Substring(0, 1)
+                                    </div>
+                                    <span class="truncate">@ws.Name</span>
+                                </a>
+                            }
+                        }
+                        else
+                        {
+                            <div class="px-3 py-2 text-xs text-slate-400 italic">No Group Boards</div>
+                        }
                     </div>
-                }
+                </div>
 
                 <!-- Enterprise Federations Collapsible -->
                 <div x-show="sidebarOpen" class="space-y-1 mb-4">
@@ -275,12 +266,34 @@
                         {
                             @foreach (var fed in sidebarFederations)
                             {
-                                <a href="/FederationDetail?joinCode=@fed.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm">
-                                    <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-violet-50 text-[10px] font-black text-violet-600">
-                                        @fed.Name.Substring(0, 1)
+                                <div class="space-y-1 mb-2">
+                                    <a href="/FederationDetail?joinCode=@fed.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm font-semibold">
+                                        <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-violet-50 text-[10px] font-black text-violet-600">
+                                            @fed.Name.Substring(0, 1).ToUpper()
+                                        </div>
+                                        <span class="truncate">@fed.Name</span>
+                                    </a>
+                                    
+                                    <!-- Nested Federation Workspaces -->
+                                    <div class="pl-5 ml-5 border-l border-slate-100 space-y-0.5 mt-1">
+                                        @if (fed.Workspaces != null && fed.Workspaces.Any())
+                                        {
+                                            @foreach (var ws in fed.Workspaces)
+                                            {
+                                                <a href="/WorkspaceDetail/@ws.JoinCode" class="flex items-center gap-3 px-3 py-1.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-xs">
+                                                    <div class="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded bg-slate-50 text-[9px] font-black text-slate-500">
+                                                        @ws.Name.Substring(0, 1).ToUpper()
+                                                    </div>
+                                                    <span class="truncate">@ws.Name</span>
+                                                </a>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <div class="px-3 py-1 text-[10px] text-slate-400 italic">No workspaces linked</div>
+                                        }
                                     </div>
-                                    <span class="truncate">@fed.Name</span>
-                                </a>
+                                </div>
                             }
                         }
                         else
@@ -300,7 +313,7 @@
         </nav>
 
         <!-- Sidebar Footer -->
-        @if (User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value != "1")
+        @if (User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value == "2")
         {
             <div class="p-3 border-t border-slate-100" x-show="sidebarOpen">
                 <a href="/Workspaces" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2">

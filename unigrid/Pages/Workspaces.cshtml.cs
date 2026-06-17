@@ -23,6 +23,8 @@ public class WorkspacesModel : PageModel
     public List<WorkspaceFederation> UserFederations { get; set; } = new();
     public List<Workspace> PersonalWorkspaces { get; set; } = new();
 
+
+
     [BindProperty]
     public string NewWorkspaceName { get; set; } = string.Empty;
 
@@ -111,6 +113,7 @@ public class WorkspacesModel : PageModel
                     .Where(w => !w.IsDisabled && w.OwnerId == profile.Id)
                     .OrderByDescending(w => w.CreatedAt)
                     .ToListAsync();
+
 
                 return Page();
             }

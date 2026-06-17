@@ -316,58 +316,14 @@ public class ChatService : IChatService
         var message = await _chatRepo.GetMessageByIdAsync(messageId);
         if (message == null || message.RoomId != chatRoom.Id) return "Message not found.";
 
-        bool isSender = message.SenderId == userId;
-        bool isManagerOrOwner = userRole == "Manager" || workspace.OwnerId == userId;
-        bool isAuthorized = isSender || isManagerOrOwner;
-
-        if (!isAuthorized)
-        {
-            string channelName = "general";
-            if (message.Content.StartsWith("[channel:"))
-            {
-                var endIndex = message.Content.IndexOf("]");
-                if (endIndex > 9)
-                {
-                    channelName = message.Content.Substring(9, endIndex - 9);
-                }
-            }
-
-            if (channelName != "general")
-            {
-                var messages = await GetRoomMessagesAsync(chatRoom.Id);
-                var latestRulesMsg = messages.LastOrDefault(m => m.Content != null && m.Content.StartsWith("[system:channel_rules]"));
-
-                var channelOwners = new Dictionary<string, string>();
-                var channelModerators = new Dictionary<string, List<string>>();
-
-                if (latestRulesMsg != null)
-                {
-                    try
-                    {
-                        string jsonStr = latestRulesMsg.Content.Substring("[system:channel_rules]".Length);
-                        var existingPayload = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.Nodes.JsonObject>(jsonStr);
-                        if (existingPayload != null)
-                        {
-                            if (existingPayload["channelOwners"] != null)
-                                channelOwners = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(existingPayload["channelOwners"].ToJsonString()) ?? channelOwners;
-                            if (existingPayload["channelModerators"] != null)
-                                channelModerators = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(existingPayload["channelModerators"].ToJsonString()) ?? channelModerators;
-                        }
-                    }
-                    catch {}
-                }
-
-                bool isChannelOwner = channelOwners.TryGetValue(channelName, out var oId) && oId.ToLower() == userId.ToString().ToLower();
-                bool isChannelMod = channelModerators.TryGetValue(channelName, out var mods) && mods.Any(m => m.ToLower() == userId.ToString().ToLower());
-                
-                isAuthorized = isChannelOwner || isChannelMod;
-            }
-        }
+        bool isAuthorized = message.SenderId == userId;
 
         if (!isAuthorized)
         {
             return "You do not have permission to revoke this message.";
         }
+
+
 
         message.IsDeleted = true;
         message.Content = "[deleted_message]" + message.Content;

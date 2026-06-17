@@ -62,6 +62,9 @@ public class WorkspaceDetailModel : PageModel
     public ChatRoom? ChatRoom { get; set; }
     public List<ChatMessage> ChatMessages { get; set; } = new();
 
+    [BindProperty(SupportsGet = true)]
+    public string? DateFilter { get; set; }
+
     public User CurrentUser { get; set; } = null!;
     public string UserInitials { get; set; } = string.Empty;
     public string CurrentUserRole { get; set; } = "Member";
@@ -229,6 +232,12 @@ public class WorkspaceDetailModel : PageModel
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
             return await _taskRepo.GetWorkspaceTasksAsync(workspaceId);
         });
+
+        if (WorkspaceTasks != null && !string.IsNullOrEmpty(DateFilter) && DateTime.TryParse(DateFilter, out var filterDateVal))
+        {
+            var localDate = filterDateVal.Date;
+            WorkspaceTasks = WorkspaceTasks.Where(t => t.DueDate.HasValue && t.DueDate.Value.ToLocalTime().Date == localDate).ToList();
+        }
 
         // Cache Workspace Files
         Files = await _cache.GetOrCreateAsync($"WorkspaceFiles_{workspaceId}", async entry =>
