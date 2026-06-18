@@ -595,5 +595,110 @@
         });
     </script>
     @await RenderSectionAsync("Scripts", required: false)
+
+    @{
+        // Only show the assistant widget when:
+        // - the user is authenticated (isAuthenticated)
+        // - the request matches exactly: https://localhost:7158/Schedule
+        var showAssistant = isAuthenticated
+            && string.Equals(Context.Request.Scheme, "https", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Context.Request.Path.Value, "/Schedule", StringComparison.OrdinalIgnoreCase);
+    }
+
+    @if (showAssistant)
+    {
+        <partial name="_AssistantWidget" />
+
+        <link rel="stylesheet"
+              href="~/css/assistant.css" />
+
+        <script src="~/js/assistant.js"></script>
+
+        <!-- Chatbot widget -->
+        <div x-data="chatBox()" x-cloak class="fixed bottom-6 right-6 z-50">
+          <div x-show="!open" class="flex">
+            <button @@click="open=true" title="Open assistant"
+                    class="h-12 w-12 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8s-9-3.582-9-8 4.03-8 9-8 9 3.582 9 8z"/>
+              </svg>
+            </button>
+          </div>
+
+          <div x-show="open" class="w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div class="flex items-center justify-between px-3 py-2 border-b">
+              <div class="font-semibold text-sm">Assistant</div>
+              <div class="flex items-center gap-2">
+                <button @@click="open=false" class="text-slate-500 hover:text-slate-700">
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div class="p-3 h-64 overflow-auto bg-slate-50" x-ref="messages">
+              <template x-for="m in messages" :key="m.timestamp">
+                <div class="mb-3">
+                  <div x-text="m.role === 'user' ? 'You' : 'Assistant'" class="text-xs text-slate-400 mb-1"></div>
+                  <div x-text="m.content" :class="m.role === 'user' ? 'text-right' : ''" class="bg-white px-3 py-2 rounded-lg shadow-sm"></div>
+                </div>
+              </template>
+              <div x-show="messages.length === 0" class="text-xs text-slate-400 italic">Ask the assistant anything...</div>
+            </div>
+
+            <div class="p-3 border-t">
+              <div class="flex gap-2">
+                <input x-model="input" @@keydown.enter.prevent="send" type="text" placeholder="Type a question..." class="flex-1 px-3 py-2 border rounded-lg focus:outline-none" />
+                <button @@click="send" :disabled="sending" class="px-3 py-2 rounded-lg bg-indigo-600 text-white">
+                  <span x-show="!sending">Send</span>
+                  <span x-show="sending">...</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          function chatBox(){
+            return {
+              open: false,
+              input: '',
+              sending: false,
+              messages: [],
+              async send(){
+                if(!this.input) return;
+                const text = this.input;
+                this.messages.push({ role: 'user', content: text, timestamp: Date.now() });
+                this.input = '';
+                this.sending = true;
+                try {
+                  const resp = await fetch('/api/assistant/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      message: text,
+                      history: this.messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }))
+                    })
+                  });
+                  if (!resp.ok) {
+                    this.messages.push({ role: 'assistant', content: '(assistant error)', timestamp: Date.now() });
+                    return;
+                  }
+                  const data = await resp.json();
+                  this.messages.push({ role: 'assistant', content: data.reply ?? '(no reply)', timestamp: Date.now() });
+                  this.$nextTick(() => {
+                    const el = this.$refs.messages;
+                    el.scrollTop = el.scrollHeight;
+                  });
+                } catch (e) {
+                  this.messages.push({ role: 'assistant', content: '(network error)', timestamp: Date.now() });
+                } finally {
+                  this.sending = false;
+                }
+              }
+            };
+          }
+        </script>
+    }
+
 </body>
 </html>
