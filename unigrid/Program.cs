@@ -1,8 +1,10 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
-using System.IO;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Polly;
+using System.IO;
+using unigrid.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +23,24 @@ builder.Services.AddControllers()
     });
 builder.Services.AddSignalR();
 builder.Services.AddMemoryCache();
+
+// Register IHttpContextAccessor
+builder.Services.AddHttpContextAccessor();
+
+// Register typed HttpClient for the Python chatbot service with resilience
+builder.Services.AddHttpClient<unigrid.Services.IAIAssistantService, unigrid.Services.AIAssistantService>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["ChatbotService:BaseUrl"] ?? "http://localhost:8000/");
+    client.Timeout = TimeSpan.FromSeconds(60); // increase global timeout
+})
+// Add Polly: simple retry + circuit-breaker for transient failures
+.AddTransientHttpErrorPolicy(policy => policy.WaitAndRetryAsync(new[]
+{
+    TimeSpan.FromSeconds(1),
+    TimeSpan.FromSeconds(3),
+    TimeSpan.FromSeconds(7)
+}))
+.AddTransientHttpErrorPolicy(policy => policy.CircuitBreakerAsync(2, TimeSpan.FromSeconds(30)));
 
 // Register Unit of Work and Repositories
 builder.Services.AddScoped<unigrid.Data.Repositories.IUnitOfWork, unigrid.Data.Repositories.UnitOfWork>();
