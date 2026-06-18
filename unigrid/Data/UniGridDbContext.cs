@@ -107,12 +107,12 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.Workspace).WithMany(p => p.AuditLogs)
                 .HasForeignKey(d => d.WorkspaceId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_Audit_Workspaces");
 
             entity.HasOne(d => d.Federation).WithMany(p => p.AuditLogs)
                 .HasForeignKey(d => d.FederationId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_Audit_WorkspaceFederations");
         });
 
@@ -166,12 +166,12 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.Workspace).WithOne(p => p.ChatRoom)
                 .HasForeignKey<ChatRoom>(d => d.WorkspaceId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_Chat_Workspaces");
 
             entity.HasOne(d => d.Federation).WithOne(p => p.ChatRoom)
                 .HasForeignKey<ChatRoom>(d => d.FederationId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_Chat_WorkspaceFederations");
         });
 
@@ -215,12 +215,12 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.Workspace).WithMany(p => p.Tasks)
                 .HasForeignKey(d => d.WorkspaceId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_Tasks_Workspaces");
 
             entity.HasOne(d => d.Federation).WithMany(p => p.Tasks)
                 .HasForeignKey(d => d.FederationId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_Tasks_WorkspaceFederations");
 
             entity.HasOne(d => d.Category).WithMany(p => p.Tasks)
@@ -240,7 +240,7 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.Task).WithMany(p => p.TaskComments)
                 .HasForeignKey(d => d.TaskId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_Comments_Tasks");
 
             entity.HasOne(d => d.User).WithMany(p => p.TaskComments)
@@ -325,7 +325,7 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.Workspace).WithMany(p => p.WorkspaceFiles)
                 .HasForeignKey(d => d.WorkspaceId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_Files_Workspaces");
 
             entity.HasIndex(e => e.FederationId, "IX_WorkspaceFiles_FederationId");
@@ -388,7 +388,7 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.Federation).WithMany(p => p.WorkspaceFederationMembers)
                 .HasForeignKey(d => d.FederationId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_FedMembers_Federations");
 
             entity.HasOne(d => d.User).WithMany()
@@ -413,7 +413,7 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.User).WithMany()
                 .HasForeignKey(d => d.UserId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_PersonalSchedules_Users");
 
             entity.HasOne(d => d.Task).WithMany()
@@ -435,7 +435,7 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.User).WithMany()
                 .HasForeignKey(d => d.UserId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_Notifications_Users");
         });
 
@@ -454,7 +454,7 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.Workspace).WithMany()
                 .HasForeignKey(d => d.WorkspaceId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_Invitations_Workspaces");
 
             entity.HasOne(d => d.Inviter).WithMany()
@@ -464,7 +464,7 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasOne(d => d.Federation).WithMany(p => p.WorkspaceInvitations)
                 .HasForeignKey(d => d.FederationId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_Invitations_WorkspaceFederations");
         });
 
@@ -479,7 +479,7 @@ public partial class UniGridDbContext : DbContext
             entity.HasOne(d => d.Workspace)
                 .WithMany(p => p.TaskCategories)
                 .HasForeignKey(d => d.WorkspaceId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_TaskCategories_Workspaces");
         });
 
@@ -505,7 +505,7 @@ public partial class UniGridDbContext : DbContext
             entity.HasOne(d => d.Category)
                 .WithMany()
                 .HasForeignKey(d => d.CategoryId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.NoAction)
                 .HasConstraintName("FK_KpiTargets_Categories");
         });
 

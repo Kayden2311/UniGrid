@@ -67,7 +67,6 @@ public class SignupModel : PageModel
             return Page();
         }
 
-        using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
             // 1. Create the Account (Role 2 is User)
@@ -95,7 +94,6 @@ public class SignupModel : PageModel
 
             await _context.Users.AddAsync(newUser);
             await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
 
             _logger.LogInformation("Account and user profile created successfully for {Email}.", Email);
 
@@ -126,7 +124,6 @@ public class SignupModel : PageModel
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync();
             _logger.LogError(ex, "Error creating account during signup flow.");
             ErrorMessage = "An error occurred while creating your account. Please try again.";
             return Page();
