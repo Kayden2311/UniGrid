@@ -516,6 +516,15 @@ namespace unigrid.Pages
                     }
                 }
                 
+                if (cleanContent.StartsWith("[file:"))
+                {
+                    var fileEndIndex = cleanContent.IndexOf("]");
+                    if (fileEndIndex > 6)
+                    {
+                        cleanContent = cleanContent.Substring(fileEndIndex + 1);
+                    }
+                }
+                
                 return new
                 {
                     id = cm.Id,
@@ -972,7 +981,7 @@ namespace unigrid.Pages
             return RedirectToPage("/FederationDetail", new { joinCode });
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> OnPostSendFederationChatMessageAsync(string joinCode, string content, string activeChannel)
+        public async System.Threading.Tasks.Task<IActionResult> OnPostSendFederationChatMessageAsync(string joinCode, string content, string activeChannel, Guid? selectedFileId = null)
         {
             var success = await LoadFederationDataAsync(joinCode);
             if (!success) return RedirectToPage("/Workspaces");
@@ -983,7 +992,7 @@ namespace unigrid.Pages
                 return new BadRequestObjectResult(new { message = "Chat has been disabled for members in this federation." });
             }
 
-            if (string.IsNullOrWhiteSpace(content))
+            if (string.IsNullOrWhiteSpace(content) && !selectedFileId.HasValue)
             {
                 return new BadRequestObjectResult(new { message = "Message content cannot be empty." });
             }
@@ -1026,10 +1035,14 @@ namespace unigrid.Pages
                 }
             }
 
-            string contentWithChannel = content;
-            if (!string.IsNullOrEmpty(activeChannel) && activeChannel != "general" && !content.StartsWith("[system:channel_rules]"))
+            string contentWithChannel = content ?? "";
+            if (selectedFileId.HasValue)
             {
-                contentWithChannel = $"[channel:{activeChannel}]{content}";
+                contentWithChannel = $"[file:{selectedFileId}]{contentWithChannel}";
+            }
+            if (!string.IsNullOrEmpty(activeChannel) && activeChannel != "general" && !contentWithChannel.StartsWith("[system:channel_rules]"))
+            {
+                contentWithChannel = $"[channel:{activeChannel}]{contentWithChannel}";
             }
 
             var message = new ChatMessage
