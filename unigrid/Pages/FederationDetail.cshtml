@@ -546,15 +546,11 @@
                         <thead>
                             <tr class="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
                                 <th class="px-6 py-4">Member Name</th>
-                                <th class="px-6 py-4">Role</th>
+                                <th class="px-6 py-4">Role Badge</th>
                                 <th class="px-6 py-4">Linked Portal</th>
                                 <th class="px-6 py-4 text-center">Fed Tasks</th>
                                 <th class="px-6 py-4 text-center">Child Tasks</th>
                                 <th class="px-6 py-4">Completion Rate</th>
-                                @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident")
-                                {
-                                    <th class="px-6 py-4 text-right">Actions</th>
-                                }
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-xs font-bold text-slate-600">
@@ -584,7 +580,7 @@
                                 <tr x-show="searchQuery === '' || '@memberUserFullName.ToLower().Replace("'", "\\'")'.includes(searchQuery.toLowerCase()) || '@(member.User?.Account?.Email?.ToLower() ?? "")'.includes(searchQuery.toLowerCase())" class="hover:bg-slate-50/50 transition-colors">
                                     <td class="px-6 py-4">
                                         <div class="flex items-center gap-3">
-                                            <div class="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs shrink-0 shadow-inner">
+                                            <div class="h-9 w-9 rounded-full bg-slate-100 border flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
                                                 @initials
                                             </div>
                                             <div>
@@ -594,9 +590,139 @@
                                         </div>
                                     </td>
                                     <td class="px-6 py-4">
-                                        <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider @roleColor">
-                                            @(isOwner ? "Owner" : member.Role)
-                                        </span>
+                                        @if ((Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident") && !isOwner && !(Model.CurrentUserRole == "HeadPresident" && member.Role == "HeadPresident"))
+                                        {
+                                            <div class="relative inline-block text-left" x-data="{ open: false, selectedRole: '@member.Role', canCreateTask: @(Model.IsMemberAllowed(member.UserId, "disabledCreateTaskUsers", member.Role) ? "true" : "false"), canPushFile: @(Model.IsMemberAllowed(member.UserId, "disabledPushFileUsers", member.Role) ? "true" : "false"), canChat: @(Model.IsMemberAllowed(member.UserId, "disabledChatUsers", member.Role) ? "true" : "false"), canCreateChannel: @(Model.IsMemberAllowed(member.UserId, "disabledCreateChannelUsers", member.Role) ? "true" : "false") }">
+                                                <button type="button" @@click="open = !open" 
+                                                        class="px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-between gap-2 cursor-pointer outline-none w-40 shadow-sm border"
+                                                        :class="selectedRole === 'HeadPresident' ? 'bg-purple-50 text-purple-650 border-purple-250 hover:bg-purple-100/50' 
+                                                               : selectedRole === 'DepartmentManager' ? 'bg-emerald-50 text-emerald-650 border-emerald-255 hover:bg-emerald-100/50' 
+                                                               : 'bg-blue-50 text-blue-655 border-blue-250 hover:bg-blue-100/50'">
+                                                    <span class="truncate" x-text="selectedRole === 'DepartmentManager' ? 'Dept Manager' : (selectedRole === 'HeadPresident' ? 'Head President' : selectedRole)"></span>
+                                                    <i data-lucide="chevron-down" class="w-4 h-4 transition-transform text-slate-400" :class="[open ? 'rotate-180' : '']"></i>
+                                                </button>
+                                                
+                                                <!-- Dropdown Panel -->
+                                                <div x-show="open" @@click.away="open = false" x-transition x-cloak
+                                                     class="absolute left-0 mt-2 w-64 bg-white border border-slate-150 rounded-2xl shadow-xl z-50 p-4 flex flex-col gap-4 text-left font-display">
+                                                    
+                                                    <!-- Section 1: Change Role -->
+                                                    <div class="space-y-1.5">
+                                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block pb-1 border-b border-slate-100/50">Change Role</span>
+                                                        <div class="space-y-1 pt-1">
+                                                            <!-- Member -->
+                                                            <form method="post" asp-page-handler="UpdateFederationMemberRole" asp-route-joinCode="@Model.Federation.JoinCode">
+                                                                @Html.AntiForgeryToken()
+                                                                <input type="hidden" name="userId" value="@member.UserId" />
+                                                                <input type="hidden" name="role" value="Member" />
+                                                                <input type="hidden" name="canCreateTask" :value="canCreateTask" />
+                                                                <input type="hidden" name="canPushFile" :value="canPushFile" />
+                                                                <input type="hidden" name="canChat" :value="canChat" />
+                                                                <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
+                                                                <button type="submit" :class="selectedRole === 'Member' ? 'bg-indigo-50 text-indigo-650 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all border-0 bg-transparent cursor-pointer">
+                                                                    <span>Member</span>
+                                                                    @if (member.Role == "Member") {
+                                                                        <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                                    }
+                                                                </button>
+                                                            </form>
+
+                                                            <!-- Department Manager -->
+                                                            <form method="post" asp-page-handler="UpdateFederationMemberRole" asp-route-joinCode="@Model.Federation.JoinCode">
+                                                                @Html.AntiForgeryToken()
+                                                                <input type="hidden" name="userId" value="@member.UserId" />
+                                                                <input type="hidden" name="role" value="DepartmentManager" />
+                                                                <input type="hidden" name="canCreateTask" :value="canCreateTask" />
+                                                                <input type="hidden" name="canPushFile" :value="canPushFile" />
+                                                                <input type="hidden" name="canChat" :value="canChat" />
+                                                                <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
+                                                                <button type="submit" :class="selectedRole === 'DepartmentManager' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all border-0 bg-transparent cursor-pointer">
+                                                                    <span>Dept Manager</span>
+                                                                    @if (member.Role == "DepartmentManager") {
+                                                                        <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                                    }
+                                                                </button>
+                                                            </form>
+
+                                                            <!-- Head President (Only Owner can promote to Head President) -->
+                                                            @if (Model.CurrentUserRole == "Owner")
+                                                            {
+                                                                <form method="post" asp-page-handler="UpdateFederationMemberRole" asp-route-joinCode="@Model.Federation.JoinCode">
+                                                                    @Html.AntiForgeryToken()
+                                                                    <input type="hidden" name="userId" value="@member.UserId" />
+                                                                    <input type="hidden" name="role" value="HeadPresident" />
+                                                                    <input type="hidden" name="canCreateTask" :value="canCreateTask" />
+                                                                    <input type="hidden" name="canPushFile" :value="canPushFile" />
+                                                                    <input type="hidden" name="canChat" :value="canChat" />
+                                                                    <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
+                                                                    <button type="submit" :class="selectedRole === 'HeadPresident' ? 'bg-indigo-50 text-indigo-650 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all border-0 bg-transparent cursor-pointer">
+                                                                        <span>Head President</span>
+                                                                        @if (member.Role == "HeadPresident") {
+                                                                            <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                                        }
+                                                                    </button>
+                                                                </form>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Section 2: Permissions Overrides -->
+                                                    <div class="space-y-3 pt-2 border-t border-slate-100">
+                                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block pb-1 border-b border-slate-100/50">Permissions</span>
+                                                        <div class="space-y-2.5 pt-1">
+                                                            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                                                                <input type="checkbox" x-model="canCreateTask" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer" />
+                                                                <span class="text-xs font-bold text-slate-600">Create Tasks</span>
+                                                            </label>
+                                                            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                                                                <input type="checkbox" x-model="canPushFile" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer" />
+                                                                <span class="text-xs font-bold text-slate-600">Push Files</span>
+                                                            </label>
+                                                            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                                                                <input type="checkbox" x-model="canChat" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer" />
+                                                                <span class="text-xs font-bold text-slate-600">Real-time Chat</span>
+                                                            </label>
+                                                            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                                                                <input type="checkbox" x-model="canCreateChannel" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer" />
+                                                                <span class="text-xs font-bold text-slate-600">Create Channels</span>
+                                                            </label>
+                                                        </div>
+
+                                                        <!-- Save Permissions Form Button -->
+                                                        <div class="pt-2 border-t border-slate-100/50">
+                                                            <form method="post" asp-page-handler="UpdateFederationMemberRole" asp-route-joinCode="@Model.Federation.JoinCode">
+                                                                @Html.AntiForgeryToken()
+                                                                <input type="hidden" name="userId" value="@member.UserId" />
+                                                                <input type="hidden" name="role" value="@member.Role" />
+                                                                <input type="hidden" name="canCreateTask" :value="canCreateTask" />
+                                                                <input type="hidden" name="canPushFile" :value="canPushFile" />
+                                                                <input type="hidden" name="canChat" :value="canChat" />
+                                                                <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
+                                                                <button type="submit" class="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-black shadow shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-1 cursor-pointer border-0">
+                                                                    <i data-lucide="save" class="w-3.5 h-3.5"></i> Save Permissions
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Section 3: Remove Member -->
+                                                    <div class="pt-2 border-t border-rose-100/50">
+                                                        <form method="post" asp-page-handler="RemoveFederationMember" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-userId="@member.UserId" onsubmit="return confirm('Are you sure you want to remove this member from the federation? All of their linked child workspaces will be disconnected.')" class="w-full">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer border-0">
+                                                                <i data-lucide="user-minus" class="w-3.5 h-3.5"></i> Remove Member
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider border @(isOwner ? "bg-amber-50 text-amber-600 border-amber-200" : roleColor)">
+                                                @(isOwner ? "Owner" : member.Role)
+                                            </span>
+                                        }
                                     </td>
                                     <td class="px-6 py-4 text-slate-400">
                                         @if (member.PersonalWorkspace != null)
@@ -624,151 +750,6 @@
                                             <span class="text-[10px] font-black text-indigo-650">@rate%</span>
                                         </div>
                                     </td>
-                                    @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident")
-                                    {
-                                        <td class="px-6 py-4 text-right">
-                                            @if (!isOwner)
-                                            {
-                                                <div class="flex items-center justify-end gap-2.5">
-                                                    @if (Model.CurrentUserRole == "HeadPresident" && (member.Role == "HeadPresident" || member.Role == "Owner"))
-                                                    {
-                                                        <span class="text-[10px] text-slate-400 font-medium italic">Restricted</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <!-- Custom Role and Permissions Dropdown Button -->
-                                                        <div class="relative inline-block text-left" x-data="{ open: false, selectedRole: '@member.Role', canCreateTask: @(Model.IsMemberAllowed(member.UserId, "disabledCreateTaskUsers", member.Role) ? "true" : "false"), canPushFile: @(Model.IsMemberAllowed(member.UserId, "disabledPushFileUsers", member.Role) ? "true" : "false"), canChat: @(Model.IsMemberAllowed(member.UserId, "disabledChatUsers", member.Role) ? "true" : "false"), canCreateChannel: @(Model.IsMemberAllowed(member.UserId, "disabledCreateChannelUsers", member.Role) ? "true" : "false") }">
-                                                            <button type="button" @@click="open = !open" 
-                                                                    class="px-3 py-1.5 rounded-xl text-[10px] font-black transition-all flex items-center justify-between gap-1.5 cursor-pointer outline-none w-36 shadow-sm border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
-                                                                    :class="selectedRole === 'HeadPresident' ? 'bg-purple-50 text-purple-650 border-purple-250' 
-                                                                           : selectedRole === 'DepartmentManager' ? 'bg-emerald-50 text-emerald-650 border-emerald-255' 
-                                                                           : 'bg-blue-50 text-blue-655 border-blue-250'">
-                                                                <span class="truncate" x-text="selectedRole === 'DepartmentManager' ? 'Dept Manager' : (selectedRole === 'HeadPresident' ? 'Head President' : selectedRole)"></span>
-                                                                <i data-lucide="chevron-down" class="w-3 h-3 transition-transform" :class="[open ? 'rotate-180' : '']"></i>
-                                                            </button>
-                                                            
-                                                            <!-- Dropdown Panel -->
-                                                            <div x-show="open" @@click.away="open = false" x-transition x-cloak
-                                                                 class="absolute right-0 mt-2 w-64 bg-white border border-slate-150 rounded-2xl shadow-xl z-50 p-4 flex flex-col gap-4 text-left">
-                                                                
-                                                                <!-- Section 1: Role Selection -->
-                                                                <div class="space-y-1.5">
-                                                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block pb-1 border-b border-slate-100/50">Change Role</span>
-                                                                    <div class="space-y-1 pt-1">
-                                                                        <!-- Member -->
-                                                                        <form method="post" asp-page-handler="UpdateFederationMemberRole" asp-route-joinCode="@Model.Federation.JoinCode" class="inline">
-                                                                            @Html.AntiForgeryToken()
-                                                                            <input type="hidden" name="userId" value="@member.UserId" />
-                                                                            <input type="hidden" name="role" value="Member" />
-                                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                                            <input type="hidden" name="canPushFile" :value="canPushFile" />
-                                                                            <input type="hidden" name="canChat" :value="canChat" />
-                                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                                            <button type="submit" :class="selectedRole === 'Member' ? 'bg-indigo-50 text-indigo-650 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all border-0 bg-transparent cursor-pointer">
-                                                                                <span>Member</span>
-                                                                                @if (member.Role == "Member") {
-                                                                                    <i data-lucide="check" class="w-3.5 h-3.5 text-indigo-600 shrink-0"></i>
-                                                                                }
-                                                                            </button>
-                                                                        </form>
-
-                                                                        <!-- Department Manager -->
-                                                                        <form method="post" asp-page-handler="UpdateFederationMemberRole" asp-route-joinCode="@Model.Federation.JoinCode" class="inline">
-                                                                            @Html.AntiForgeryToken()
-                                                                            <input type="hidden" name="userId" value="@member.UserId" />
-                                                                            <input type="hidden" name="role" value="DepartmentManager" />
-                                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                                            <input type="hidden" name="canPushFile" :value="canPushFile" />
-                                                                            <input type="hidden" name="canChat" :value="canChat" />
-                                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                                            <button type="submit" :class="selectedRole === 'DepartmentManager' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all border-0 bg-transparent cursor-pointer">
-                                                                                <span>Dept Manager</span>
-                                                                                @if (member.Role == "DepartmentManager") {
-                                                                                    <i data-lucide="check" class="w-3.5 h-3.5 text-indigo-600 shrink-0"></i>
-                                                                                }
-                                                                            </button>
-                                                                        </form>
-
-                                                                        <!-- Head President (Only Owner can promote to Head President) -->
-                                                                        @if (Model.CurrentUserRole == "Owner")
-                                                                        {
-                                                                            <form method="post" asp-page-handler="UpdateFederationMemberRole" asp-route-joinCode="@Model.Federation.JoinCode" class="inline">
-                                                                                @Html.AntiForgeryToken()
-                                                                                <input type="hidden" name="userId" value="@member.UserId" />
-                                                                                <input type="hidden" name="role" value="HeadPresident" />
-                                                                                <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                                                <input type="hidden" name="canPushFile" :value="canPushFile" />
-                                                                                <input type="hidden" name="canChat" :value="canChat" />
-                                                                                <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                                                <button type="submit" :class="selectedRole === 'HeadPresident' ? 'bg-indigo-50 text-indigo-650 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all border-0 bg-transparent cursor-pointer">
-                                                                                    <span>Head President</span>
-                                                                                    @if (member.Role == "HeadPresident") {
-                                                                                        <i data-lucide="check" class="w-3.5 h-3.5 text-indigo-600 shrink-0"></i>
-                                                                                    }
-                                                                                </button>
-                                                                            </form>
-                                                                        }
-                                                                    </div>
-                                                                </div>
-                                                                
-                                                                <!-- Section 2: Permissions Overrides -->
-                                                                <div class="space-y-3 pt-2 border-t border-slate-100">
-                                                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block pb-1 border-b border-slate-100/50">Permissions</span>
-                                                                    
-                                                                    <div class="space-y-2.5 pt-1">
-                                                                        <label class="flex items-center gap-2.5 cursor-pointer select-none">
-                                                                            <input type="checkbox" x-model="canCreateTask" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
-                                                                            <span class="text-xs font-bold text-slate-600">Create Tasks</span>
-                                                                        </label>
-                                                                        <label class="flex items-center gap-2.5 cursor-pointer select-none">
-                                                                            <input type="checkbox" x-model="canPushFile" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
-                                                                            <span class="text-xs font-bold text-slate-600">Push Files</span>
-                                                                        </label>
-                                                                        <label class="flex items-center gap-2.5 cursor-pointer select-none">
-                                                                            <input type="checkbox" x-model="canChat" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
-                                                                            <span class="text-xs font-bold text-slate-600">Real-time Chat</span>
-                                                                        </label>
-                                                                        <label class="flex items-center gap-2.5 cursor-pointer select-none">
-                                                                            <input type="checkbox" x-model="canCreateChannel" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer" />
-                                                                            <span class="text-xs font-bold text-slate-600">Create Channels</span>
-                                                                        </label>
-                                                                    </div>
-
-                                                                    <!-- Submit Changes Form for checkboxes -->
-                                                                    <div class="pt-2 border-t border-slate-100/50">
-                                                                        <form method="post" asp-page-handler="UpdateFederationMemberRole" asp-route-joinCode="@Model.Federation.JoinCode">
-                                                                            @Html.AntiForgeryToken()
-                                                                            <input type="hidden" name="userId" value="@member.UserId" />
-                                                                            <input type="hidden" name="role" value="@member.Role" />
-                                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                                            <input type="hidden" name="canPushFile" :value="canPushFile" />
-                                                                            <input type="hidden" name="canChat" :value="canChat" />
-                                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                                            <button type="submit" class="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-black shadow shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-1 cursor-pointer border-0">
-                                                                                <i data-lucide="save" class="w-3.5 h-3.5"></i> Save Permissions
-                                                                            </button>
-                                                                        </form>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- Kick Member Form -->
-                                                        <form method="post" asp-page-handler="RemoveFederationMember" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-userId="@member.UserId" onsubmit="return confirm('Are you sure you want to remove this member from the federation? All of their linked child workspaces will be disconnected.')" class="inline">
-                                                            @Html.AntiForgeryToken()
-                                                            <button type="submit" class="h-8 w-8 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center border-0 cursor-pointer transition-colors shadow-sm" title="Remove Member">
-                                                                <i data-lucide="user-minus" class="w-4 h-4"></i>
-                                                            </button>
-                                                        </form>
-                                                    }
-                                                </div>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-[10px] text-slate-400 font-medium italic">Creator</span>
-                                            }
-                                        </td>
-                                    }
                                 </tr>
                             }
                         </tbody>
@@ -840,7 +821,7 @@
                     <!-- Deploy Child Workspace -->
                     <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
                         <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
-                            <i data-lucide="plus" class="w-4.5 h-4.5 text-violet-500"></i>
+                            <i data-lucide="plus" class="w-5 h-5 text-violet-500"></i>
                             <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Deploy New Child Portal</h4>
                         </div>
                         <p class="text-[10px] text-slate-400 leading-relaxed">Deploy a clean Group workspace directly affiliated with this federation. ProPlus package limits will apply.</p>
@@ -863,7 +844,7 @@
                     <!-- Federation Permissions Configuration -->
                     <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
                         <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
-                            <i data-lucide="sliders" class="w-4.5 h-4.5 text-indigo-500"></i>
+                            <i data-lucide="sliders" class="w-5 h-5 text-indigo-500"></i>
                             <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Federation Permissions</h4>
                         </div>
                         <p class="text-[10px] text-slate-400 leading-relaxed">Configure virtual constraints and action locks across the federation portal.</p>
@@ -884,7 +865,7 @@
                                     <label class="text-xs font-bold text-slate-700 select-none cursor-pointer" for="allowMemberCreateTask">Create Tasks</label>
                                     <p class="text-[9px] text-slate-400">Allow standard members to create federation tasks.</p>
                                 </div>
-                                <input type="checkbox" name="allowMemberCreateTask" id="allowMemberCreateTask" value="true" checked="@(allowMemberCreateTask ? "checked" : null)" class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
+                                <input type="checkbox" name="allowMemberCreateTask" id="allowMemberCreateTask" value="true" checked="@(allowMemberCreateTask ? "checked" : null)" class="h-4 w-4 rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
                                 <input type="hidden" name="allowMemberCreateTask" value="false">
                             </div>
 
@@ -893,7 +874,7 @@
                                     <label class="text-xs font-bold text-slate-700 select-none cursor-pointer" for="allowManagerSetKpi">Set KPIs</label>
                                     <p class="text-[9px] text-slate-400">Allow department managers to set child KPI targets.</p>
                                 </div>
-                                <input type="checkbox" name="allowManagerSetKpi" id="allowManagerSetKpi" value="true" checked="@(allowManagerSetKpi ? "checked" : null)" class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
+                                <input type="checkbox" name="allowManagerSetKpi" id="allowManagerSetKpi" value="true" checked="@(allowManagerSetKpi ? "checked" : null)" class="h-4 w-4 rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
                                 <input type="hidden" name="allowManagerSetKpi" value="false">
                             </div>
 
@@ -902,7 +883,7 @@
                                     <label class="text-xs font-bold text-slate-700 select-none cursor-pointer" for="allowMemberPushFile">Push Files</label>
                                     <p class="text-[9px] text-slate-400">Allow child portal members to push files to federation.</p>
                                 </div>
-                                <input type="checkbox" name="allowMemberPushFile" id="allowMemberPushFile" value="true" checked="@(allowMemberPushFile ? "checked" : null)" class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
+                                <input type="checkbox" name="allowMemberPushFile" id="allowMemberPushFile" value="true" checked="@(allowMemberPushFile ? "checked" : null)" class="h-4 w-4 rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
                                 <input type="hidden" name="allowMemberPushFile" value="false">
                             </div>
 
@@ -911,7 +892,7 @@
                                     <label class="text-xs font-bold text-slate-700 select-none cursor-pointer" for="allowMemberChat">Real-time Chat</label>
                                     <p class="text-[9px] text-slate-400">Allow standard members to participate in the chat room.</p>
                                 </div>
-                                <input type="checkbox" name="allowMemberChat" id="allowMemberChat" value="true" checked="@(allowMemberChat ? "checked" : null)" class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
+                                <input type="checkbox" name="allowMemberChat" id="allowMemberChat" value="true" checked="@(allowMemberChat ? "checked" : null)" class="h-4 w-4 rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 cursor-pointer">
                                 <input type="hidden" name="allowMemberChat" value="false">
                             </div>
 
@@ -924,7 +905,7 @@
                     <!-- Link Group Workspace by Invite Code -->
                     <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
                         <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
-                            <i data-lucide="link" class="w-4.5 h-4.5 text-indigo-500"></i>
+                            <i data-lucide="link" class="w-5 h-5 text-indigo-500"></i>
                             <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Link Group Workspace</h4>
                         </div>
                         <p class="text-[10px] text-slate-400 leading-relaxed">Connect an owned Group workspace by entering its secret invite code.</p>
@@ -944,7 +925,7 @@
                     <!-- Link Personal Workspace by Invite Code -->
                     <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
                         <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
-                            <i data-lucide="key" class="w-4.5 h-4.5 text-emerald-500"></i>
+                            <i data-lucide="key" class="w-5 h-5 text-emerald-500"></i>
                             <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Link Personal Portal</h4>
                         </div>
                         <p class="text-[10px] text-slate-400 leading-relaxed">Personal plan workspaces must be connected by manually entering their private invite code. Requires approval from the Federation Owner.</p>
@@ -964,7 +945,7 @@
                     <!-- Compliance Info Card -->
                     <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm bg-gradient-to-br from-violet-50/30 to-indigo-50/20 space-y-4">
                         <div class="flex items-center gap-2">
-                            <i data-lucide="shield-check" class="w-4.5 h-4.5 text-emerald-500"></i>
+                            <i data-lucide="shield-check" class="w-5 h-5 text-emerald-500"></i>
                             <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Enterprise Compliance</h4>
                         </div>
                         <ul class="space-y-3 text-[10px] text-slate-500 font-bold">
@@ -1672,10 +1653,10 @@
                 <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4">
                     <div class="flex items-center gap-2 flex-wrap">
                         <template x-if="lockedChannels[activeChannel]">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4.5 h-4.5 text-amber-500 shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-amber-500 shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                         </template>
                         <template x-if="!lockedChannels[activeChannel]">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4.5 h-4.5 text-slate-400 shrink-0"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-slate-400 shrink-0"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>
                         </template>
                         <span class="text-sm font-black text-slate-800" x-text="activeChannel"></span>
                         
@@ -1712,16 +1693,18 @@
                     <span class="text-xs font-bold text-slate-400"><span x-text="federationMembers.length"></span> members active</span>
                 </div>
 
+                <!-- Messages Stream -->
                 <div id="fed-chat-container" class="flex-1 p-6 overflow-y-auto space-y-4">
+                    <!-- Empty state -->
                     <div x-show="filteredMessages.length === 0" class="text-center py-20 text-slate-400 transition-all">
-                        <i data-lucide="message-square" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+                        <i data-lucide="messages-square" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
                         <p class="font-bold" x-text="'No messages in channel #' + activeChannel + '...'"></p>
                         <p class="text-xs text-slate-400 mt-1">Start the first conversation in this channel!</p>
                     </div>
 
                     <template x-for="msg in filteredMessages" :key="msg.id">
                         <div class="group flex gap-3 max-w-[80%] transition-all" :class="msg.senderId === currentUserId ? 'ml-auto flex-row-reverse' : ''">
-                            <div class="h-8 w-8 rounded-xl bg-slate-100 border flex items-center justify-center text-[10px] font-black text-slate-500 shrink-0 select-none shadow-sm" 
+                            <div class="h-8 w-8 rounded-full bg-slate-100 border flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0 select-none" 
                                  x-text="msg.senderName.split(' ').map(n => n[0]).join('')">
                             </div>
                             <div class="space-y-1 min-w-0">
@@ -1756,18 +1739,40 @@
                                     </p>
                                 </template>
                                 <div class="flex items-center gap-1.5" :class="msg.senderId === currentUserId ? 'flex-row-reverse' : ''">
-                                    <div class="p-3.5 rounded-2xl text-xs font-medium leading-relaxed break-words relative group/bubble" 
-                                         :class="msg.rawContent.startsWith('[deleted_message]') ? 'bg-slate-50 border border-slate-150/50 text-slate-400 italic' : (msg.senderId === currentUserId ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none')">
-                                        <span x-text="msg.rawContent.startsWith('[deleted_message]') ? 'This message was recalled' : msg.content"></span>
+                                    <div class="p-3.5 rounded-2xl text-sm leading-relaxed" 
+                                         :class="msg.senderId === currentUserId ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'">
+                                        <div class="break-words" x-html="parseMessageContent(msg.content)"></div>
                                         
-                                        <template x-if="!msg.rawContent.startsWith('[deleted_message]') && (msg.senderId === currentUserId || currentUserRole === 'Owner' || currentUserRole === 'HeadPresident' || channelOwners[activeChannel]?.toLowerCase() === currentUserId || (channelModerators[activeChannel] && channelModerators[activeChannel].map(id => id.toLowerCase()).includes(currentUserId)))">
-                                            <button type="button" @@click="deleteChatMessage(msg.id)" 
-                                                    class="absolute -top-2.5 -right-2.5 h-6 w-6 rounded-full bg-rose-50 border border-rose-100 text-rose-500 items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity flex cursor-pointer hover:bg-rose-100 border-0 outline-none"
-                                                    title="Recall Message">
-                                                <i data-lucide="trash-2" class="w-3 h-3"></i>
-                                            </button>
+                                        <!-- Render Attachment Box if message has an attachment -->
+                                        <template x-if="msg.attachment">
+                                            <div class="mt-2.5 p-3 border rounded-xl flex items-center justify-between gap-4 max-w-sm"
+                                                 :class="msg.senderId === currentUserId ? 'bg-white/15 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-700'">
+                                                <div class="flex items-center gap-2.5 min-w-0">
+                                                    <div class="h-9 w-9 rounded-lg flex items-center justify-center shrink-0"
+                                                         :class="msg.senderId === currentUserId ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-600'">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+                                                    </div>
+                                                    <div class="min-w-0">
+                                                        <p class="text-xs font-bold truncate" :class="msg.senderId === currentUserId ? 'text-white' : 'text-slate-800'" x-text="msg.attachment.fileName"></p>
+                                                        <p class="text-[9px] font-bold uppercase" :class="msg.senderId === currentUserId ? 'text-white/70' : 'text-slate-400'" x-text="Math.round(msg.attachment.fileSize / 1024) + ' KB'"></p>
+                                                    </div>
+                                                </div>
+                                                <a :href="'/' + msg.attachment.fileUrl" class="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors" 
+                                                   :class="msg.senderId === currentUserId ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'" download>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                                </a>
+                                            </div>
                                         </template>
                                     </div>
+                                    
+                                    <!-- Hover Trash/Revoke Button -->
+                                    <template x-if="!msg.rawContent.startsWith('[deleted_message]') && msg.senderId === currentUserId">
+                                        <button type="button" @@click="deleteChatMessage(msg.id)" 
+                                                class="opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg hover:bg-slate-100 hover:text-rose-600 flex items-center justify-center text-slate-400 transition-all shrink-0 cursor-pointer select-none border-0 bg-transparent"
+                                                title="Revoke Message">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                        </button>
+                                    </template>
                                 </div>
                                 <p class="text-[9px] text-slate-400 font-bold" :class="msg.senderId === currentUserId ? 'text-right' : ''" 
                                    x-text="formatTime(msg.sentAt)"></p>
@@ -1776,13 +1781,103 @@
                     </template>
                 </div>
 
+                <!-- Autocomplete Popover Box -->
+                <div x-show="showSuggestions" 
+                     class="mx-4 p-2 bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col gap-1.5 max-h-48 overflow-y-auto transition-all"
+                     x-transition>
+                    <div class="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                        Mentions suggestions (Type <span x-text="showSuggestions?.type"></span>)
+                    </div>
+                    <div class="space-y-0.5">
+                        <!-- Member Suggestions -->
+                        <template x-if="showSuggestions?.type === '@@'">
+                            <div>
+                                <template x-for="member in filteredMembers" :key="member.id">
+                                    <button type="button" 
+                                            @@click="insertSuggestion('@@' + member.fullName)"
+                                            class="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl flex items-center gap-2 transition-all border-0 bg-transparent cursor-pointer">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 opacity-60"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                        <span x-text="member.fullName"></span>
+                                    </button>
+                                </template>
+                                <template x-if="filteredMembers.length === 0">
+                                    <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">No matching members found.</div>
+                                </template>
+                            </div>
+                        </template>
+                        
+                        <!-- Task Suggestions -->
+                        <template x-if="showSuggestions?.type === '#'">
+                            <div>
+                                <template x-for="task in filteredTasks" :key="task.id">
+                                    <button type="button" 
+                                            @@click="insertSuggestion('#' + task.title)"
+                                            class="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-600 rounded-xl flex items-center gap-2 transition-all border-0 bg-transparent cursor-pointer">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 opacity-60"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>
+                                        <span x-text="task.title"></span>
+                                    </button>
+                                </template>
+                                <template x-if="filteredTasks.length === 0">
+                                    <div class="px-3 py-2 text-xs font-bold text-slate-400 italic">No matching tasks found.</div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- File Attachments Selection Popover Panel -->
+                <div x-show="attachFileOpen" 
+                     class="mx-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-xl space-y-3 transition-all"
+                     x-transition>
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
+                        <span class="text-xs font-black text-slate-800 uppercase tracking-widest">Attach Shared document</span>
+                        <button type="button" @@click="attachFileOpen = false" class="text-xs text-slate-400 hover:text-slate-600 font-semibold cursor-pointer border-0 bg-transparent">Close</button>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                        <template x-for="file in workspaceFiles" :key="file.id">
+                            <button type="button" 
+                                    @@click="selectedAttachmentId = file.id; selectedAttachmentName = file.fileName; attachFileOpen = false;"
+                                    :class="selectedAttachmentId === file.id ? 'border-indigo-600 bg-indigo-50/50 text-indigo-700' : 'border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-700'"
+                                    class="p-2.5 border rounded-xl flex items-center gap-2 text-left text-xs font-bold transition-all cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                                <span class="truncate" x-text="file.fileName"></span>
+                            </button>
+                        </template>
+                        <template x-if="workspaceFiles.length === 0">
+                            <div class="col-span-2 text-center py-4 text-xs font-bold text-slate-400 italic">No shared documents in federation hub.</div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Selected Attachment Status Indicator Box -->
+                <div x-show="selectedAttachmentId" 
+                     class="mx-4 p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-xs font-bold text-indigo-700 transition-all"
+                     x-transition>
+                    <span class="flex items-center gap-1.5 truncate">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-indigo-600"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></svg>
+                        <span>Attachment: </span>
+                        <strong class="truncate" x-text="selectedAttachmentName"></strong>
+                    </span>
+                    <button type="button" @@click="selectedAttachmentId = null; selectedAttachmentName = '';" class="text-indigo-400 hover:text-indigo-600 transition-colors cursor-pointer flex items-center justify-center border-0 bg-transparent">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" x2="6" y2="18"/></svg>
+                    </button>
+                </div>
+
                 <div class="p-4 border-t border-slate-100">
                     @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident" || Model.CurrentUserRole == "DepartmentManager" || (await Model.GetSettingValueAsync(Model.Federation.JoinCode, "allowMemberChat", true)))
                     {
                         <form @@submit.prevent="sendChatMessage" class="flex gap-2">
-                            <input type="text" x-model="chatInput" autocomplete="off"
+                            <!-- Paperclip Button -->
+                            <button type="button" 
+                                    @@click="attachFileOpen = !attachFileOpen" 
+                                    :class="attachFileOpen || selectedAttachmentId ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400 hover:text-slate-600 border border-slate-200'"
+                                    class="p-3 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                            </button>
+
+                            <input type="text" id="chat-input-field" x-model="chatInput" autocomplete="off"
                                    :placeholder="'Message in #' + activeChannel + '...'" required
-                                   class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                                   class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                             
                             <button type="submit" class="bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0 cursor-pointer border-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
@@ -1833,7 +1928,7 @@
                             <div class="p-3.5 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between transition-all group">
                                 <div class="flex items-center gap-3.5 min-w-0">
                                     <div class="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 border @fileIconColor">
-                                        <i data-lucide="@fileIcon" class="w-4.5 h-4.5"></i>
+                                        <i data-lucide="@fileIcon" class="w-5 h-5"></i>
                                     </div>
                                     <div class="min-w-0">
                                         <p class="text-xs font-black text-slate-700 truncate leading-snug">@file.FileName</p>
@@ -2074,7 +2169,7 @@
                                 <span class="text-xs font-bold text-slate-700" x-text="member.fullName"></span>
                             </span>
                             <input type="checkbox" :value="member.id" x-model="selectedChannelMembers"
-                                   class="h-4.5 w-4.5 rounded-lg border-slate-350 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer">
+                                   class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer">
                         </label>
                     </template>
                 </div>
@@ -2122,6 +2217,12 @@
             currentUserId: '@Model.CurrentUser.Id.ToString().ToLower()',
             federationOwnerId: '@Model.Federation.OwnerId.ToString().ToLower()',
             federationMembers: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ActiveFederationMembers.Select(m => new { id = m.UserId.ToString().ToLower(), fullName = m.User?.FullName ?? "Unknown Member" }).ToList())),
+            workspaceMembers: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ActiveFederationMembers.Select(m => new { id = m.UserId.ToString().ToLower(), fullName = m.User?.FullName ?? "Unknown Member" }).ToList())),
+            workspaceTasks: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.FederationTasks.Select(t => new { id = t.Id.ToString(), title = t.Title, status = t.Status }).ToList())),
+            workspaceFiles: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.SharedFiles.Select(f => new { id = f.Id.ToString(), fileName = f.FileName, fileSize = f.FileSize, fileUrl = f.FileUrl }).ToList())),
+            attachFileOpen: false,
+            selectedAttachmentId: null,
+            selectedAttachmentName: '',
             confirmKanbanOpen: false,
             pendingKanbanTaskId: null,
             pendingKanbanStatus: null,
@@ -2331,7 +2432,17 @@
 
             get filteredMessages() {
                 return this.chatMessages
-                    .filter(msg => msg.channel === this.activeChannel && !msg.rawContent.startsWith('[system:'));
+                    .filter(msg => msg.channel === this.activeChannel && !msg.rawContent.startsWith('[system:'))
+                    .map(msg => {
+                        let attachment = null;
+                        const fileRegex = /\[file:([a-f0-9-]{36})\]/i;
+                        const match = msg.rawContent.match(fileRegex);
+                        if (match) {
+                            const fileId = match[1];
+                            attachment = this.workspaceFiles.find(f => f.id === fileId);
+                        }
+                        return { ...msg, attachment };
+                    });
             },
 
             scrollChatToBottom() {
@@ -2349,11 +2460,14 @@
             },
 
             async sendChatMessage() {
-                if (!this.chatInput.trim()) return;
+                if (!this.chatInput.trim() && !this.selectedAttachmentId) return;
                 
                 const formData = new FormData();
                 formData.append('content', this.chatInput);
                 formData.append('activeChannel', this.activeChannel);
+                if (this.selectedAttachmentId) {
+                    formData.append('selectedFileId', this.selectedAttachmentId);
+                }
                 formData.append('__RequestVerificationToken', document.querySelector('input[name="__RequestVerificationToken"]').value);
 
                 const response = await fetch('?handler=SendFederationChatMessage&joinCode=@Model.Federation.JoinCode', {
@@ -2367,6 +2481,8 @@
                 if (response.ok) {
                     const payload = await response.json();
                     this.chatInput = '';
+                    this.selectedAttachmentId = null;
+                    this.selectedAttachmentName = '';
                     if (!this.chatMessages.some(m => m.id === payload.id)) {
                         this.chatMessages.push(payload);
                         this.scrollChatToBottom();
@@ -2465,6 +2581,69 @@
                 const rate = targetSum > 0 ? Math.round((achievedSum * 100) / targetSum) : 0;
                 const displayRate = Math.min(100, rate);
                 return { targetSum, achievedSum, rate: displayRate };
+            },
+
+            get showSuggestions() {
+                if (!this.chatInput) return null;
+                const words = this.chatInput.split(' ');
+                const lastWord = words[words.length - 1];
+                if (lastWord.startsWith('@@')) {
+                    return { type: '@@', query: lastWord.substring(1).toLowerCase() };
+                }
+                if (lastWord.startsWith('#')) {
+                    return { type: '#', query: lastWord.substring(1).toLowerCase() };
+                }
+                return null;
+            },
+            get filteredMembers() {
+                const sug = this.showSuggestions;
+                if (!sug || sug.type !== '@@') return [];
+                return this.workspaceMembers.filter(m => m.fullName.toLowerCase().includes(sug.query));
+            },
+            get filteredTasks() {
+                const sug = this.showSuggestions;
+                if (!sug || sug.type !== '#') return [];
+                return this.workspaceTasks.filter(t => t.title.toLowerCase().includes(sug.query));
+            },
+            insertSuggestion(suggestionText) {
+                const words = this.chatInput.split(' ');
+                words[words.length - 1] = suggestionText + ' ';
+                this.chatInput = words.join(' ');
+                this.$nextTick(() => {
+                    const el = document.getElementById('chat-input-field');
+                    if (el) el.focus();
+                });
+            },
+            parseMessageContent(content) {
+                if (content && content.startsWith('[deleted_message]')) {
+                    return '<span class="italic text-slate-400 text-xs inline-flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Message recalled</span>';
+                }
+                let text = content.replace(/\[file:[a-f0-9-]{36}\]/gi, '').trim();
+                if (!text) return '<span class="italic text-slate-400 text-xs inline-flex items-center gap-1"><i data-lucide="file-text" class="w-4 h-4"></i> Shared document</span>';
+
+                let html = text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+
+                // 1. Parse Member Name mentions
+                this.workspaceMembers.forEach(m => {
+                    const escapeName = m.fullName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                    const regex = new RegExp('@@' + escapeName, 'g');
+                    html = html.replace(regex, `<span class="px-1.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400 font-extrabold text-[10px] inline-flex items-center gap-0.5 select-all"><i data-lucide="at-sign" class="w-3 h-3"></i>\${m.fullName}</span>`);
+                });
+
+                // 2. Parse #Task Title mentions
+                this.workspaceTasks.forEach(t => {
+                    const escapeTitle = t.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                    const regex = new RegExp('#' + escapeTitle, 'g');
+                    html = html.replace(regex, `<span class="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 font-extrabold text-[10px] inline-flex items-center gap-0.5 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/20 transition-all select-all"><i data-lucide="hash" class="w-3 h-3"></i>\${t.title}</span>`);
+                });
+
+                setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50);
+                return html;
             },
 
             initKpiRequests() {
