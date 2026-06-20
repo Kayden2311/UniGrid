@@ -258,7 +258,7 @@ namespace unigrid.Controllers
                 .Include(a => a.Moderators)
                 .FirstOrDefaultAsync(a => a.Email.ToLower() == email);
 
-            string fullName = request.Name ?? "Google User";
+            string fullName = request.Name ?? "New Google User";
 
             if (account == null)
             {
@@ -273,28 +273,19 @@ namespace unigrid.Controllers
                     CreatedAt = DateTime.UtcNow
                 };
                 await _context.Accounts.AddAsync(account);
-
-                // Create associated User Profile
-                var user = new User
-                {
-                    Id = Guid.NewGuid(),
-                    AccountId = account.Id,
-                    FullName = fullName,
-                    SubscriptionTier = "Free",
-                    AvatarUrl = "https://lh3.googleusercontent.com/a/default-user=s96-c"
-                };
-                await _context.Users.AddAsync(user);
                 await _context.SaveChangesAsync();
 
-                // Load relationships
+                // Load relationships (Users will be empty)
                 account = await _context.Accounts
                     .Include(a => a.Users)
                     .FirstOrDefaultAsync(a => a.Id == account.Id);
+
+                fullName = "New Google User";
             }
             else
             {
                 if (account.Role == 1) fullName = account.Admins.FirstOrDefault()?.FullName ?? "Admin";
-                else if (account.Role == 2) fullName = account.Users.FirstOrDefault()?.FullName ?? "User";
+                else if (account.Role == 2) fullName = account.Users.FirstOrDefault()?.FullName ?? "New Google User";
                 else if (account.Role == 3) fullName = account.Moderators.FirstOrDefault()?.FullName ?? "Moderator";
             }
 
@@ -320,7 +311,123 @@ namespace unigrid.Controllers
                 new ClaimsPrincipal(claimsIdentity),
                 authProperties);
 
-            return Ok(new { success = true });
+            // Generate JWT access/refresh tokens to prevent conflict with JWT clients
+            var accessToken = _authService.GenerateAccessToken(account, fullName);
+            var refreshToken = _authService.GenerateRefreshToken();
+
+            account.RefreshToken = refreshToken;
+            account.RefreshTokenExpiry = DateTime.UtcNow.AddDays(7);
+            await _context.SaveChangesAsync();
+
+            return Ok(new 
+            { 
+                success = true,
+                accessToken,
+                refreshToken,
+                fullName,
+                email = account.Email,
+                role = account.Role
+            });
+        }
+
+        [HttpGet("google-login")]
+        public IActionResult GoogleLogin()
+        {
+            var redirectUrl = Url.Action(nameof(GoogleCallback), "Auth");
+            var properties = new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = redirectUrl };
+            return Challenge(properties, Microsoft.AspNetCore.Authentication.Google.GoogleDefaults.AuthenticationScheme);
+        }
+
+        [HttpGet("google-callback")]
+        public async Task<IActionResult> GoogleCallback()
+        {
+            var result = await HttpContext.AuthenticateAsync("ExternalCookies");
+            if (!result.Succeeded || result.Principal == null)
+            {
+                return Redirect("/Login?error=Google+authentication+failed");
+            }
+
+            var externalUser = result.Principal;
+            var email = externalUser.FindFirstValue(ClaimTypes.Email) ?? externalUser.FindFirstValue(ClaimTypes.Name);
+            var name = externalUser.FindFirstValue(ClaimTypes.Name) ?? "New Google User";
+
+            if (string.IsNullOrEmpty(email))
+            {
+                return Redirect("/Login?error=Email+claim+not+found+from+Google");
+            }
+
+            email = email.Trim().ToLower();
+            var account = await _context.Accounts
+                .Include(a => a.Users)
+                .Include(a => a.Admins)
+                .Include(a => a.Moderators)
+                .FirstOrDefaultAsync(a => a.Email.ToLower() == email);
+
+            string fullName = name;
+
+            if (account == null)
+            {
+                // Register a new Account via Google sign-in
+                account = new Account
+                {
+                    Id = Guid.NewGuid(),
+                    Email = email,
+                    PasswordHash = "GOOGLE_OAUTH", // Flag representing Google Social OAuth
+                    Role = 2, // User Role
+                    IsLocked = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _context.Accounts.AddAsync(account);
+                await _context.SaveChangesAsync();
+
+                // Load relationships (Users will be empty)
+                account = await _context.Accounts
+                    .Include(a => a.Users)
+                    .FirstOrDefaultAsync(a => a.Id == account.Id);
+
+                fullName = "New Google User";
+            }
+            else
+            {
+                if (account.Role == 1) fullName = account.Admins.FirstOrDefault()?.FullName ?? "Admin";
+                else if (account.Role == 2) fullName = account.Users.FirstOrDefault()?.FullName ?? "New Google User";
+                else if (account.Role == 3) fullName = account.Moderators.FirstOrDefault()?.FullName ?? "Moderator";
+            }
+
+            // Create Authentication Cookie Claims
+            var claims = new System.Collections.Generic.List<Claim>
+            {
+                new Claim(ClaimTypes.Name, account.Email),
+                new Claim("FullName", fullName),
+                new Claim(ClaimTypes.Role, account.Role.ToString()),
+                new Claim("AccountId", account.Id.ToString())
+            };
+
+            var claimsIdentity = new ClaimsIdentity(claims, Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+
+            var authProperties = new Microsoft.AspNetCore.Authentication.AuthenticationProperties
+            {
+                IsPersistent = true,
+                ExpiresUtc = DateTimeOffset.UtcNow.AddDays(7)
+            };
+
+            await HttpContext.SignInAsync(
+                Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme,
+                new ClaimsPrincipal(claimsIdentity),
+                authProperties);
+
+            // Generate JWT access/refresh tokens to prevent conflict with JWT clients
+            var accessToken = _authService.GenerateAccessToken(account, fullName);
+            var refreshToken = _authService.GenerateRefreshToken();
+
+            account.RefreshToken = refreshToken;
+            account.RefreshTokenExpiry = DateTime.UtcNow.AddDays(7);
+            await _context.SaveChangesAsync();
+
+            // Clear external cookie
+            await HttpContext.SignOutAsync("ExternalCookies");
+
+            return Redirect("/Dashboard");
         }
     }
 

@@ -1208,7 +1208,12 @@
                                 <template x-if="msg.senderId !== currentUserId">
                                     <p class="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
                                         <span x-text="msg.senderName"></span>
-                                        <template x-if="channelOwners[activeChannel]?.toLowerCase() === msg.senderId.toLowerCase() && activeChannel !== 'general'">
+                                        <template x-if="msg.senderId.toLowerCase() === workspaceOwnerId.toLowerCase()">
+                                            <span class="text-[8px] bg-amber-50 text-amber-600 border border-amber-250 px-1 py-0.2 rounded font-black uppercase inline-flex items-center gap-0.5" title="Workspace Owner">
+                                                👑 Owner
+                                            </span>
+                                        </template>
+                                        <template x-if="channelOwners[activeChannel]?.toLowerCase() === msg.senderId.toLowerCase() && activeChannel !== 'general' && msg.senderId.toLowerCase() !== workspaceOwnerId.toLowerCase()">
                                             <span class="text-[8px] bg-amber-50 text-amber-600 border border-amber-250 px-1 py-0.2 rounded font-black uppercase inline-flex items-center gap-0.5" title="Channel Owner">
                                                 👑 Owner
                                             </span>
@@ -1222,7 +1227,12 @@
                                 </template>
                                 <template x-if="msg.senderId === currentUserId">
                                     <p class="text-[10px] font-bold text-slate-400 text-right flex items-center justify-end gap-1.5">
-                                        <template x-if="channelOwners[activeChannel]?.toLowerCase() === msg.senderId.toLowerCase() && activeChannel !== 'general'">
+                                        <template x-if="msg.senderId.toLowerCase() === workspaceOwnerId.toLowerCase()">
+                                            <span class="text-[8px] bg-amber-50 text-amber-600 border border-amber-200 px-1 py-0.2 rounded font-black uppercase inline-flex items-center gap-0.5" title="Workspace Owner">
+                                                👑 Owner
+                                            </span>
+                                        </template>
+                                        <template x-if="channelOwners[activeChannel]?.toLowerCase() === msg.senderId.toLowerCase() && activeChannel !== 'general' && msg.senderId.toLowerCase() !== workspaceOwnerId.toLowerCase()">
                                             <span class="text-[8px] bg-amber-50 text-amber-600 border border-amber-200 px-1 py-0.2 rounded font-black uppercase inline-flex items-center gap-0.5" title="Channel Owner">
                                                 👑 Owner
                                             </span>
@@ -2756,10 +2766,10 @@
          style="display: none;"
          x-transition>
         
-        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-sm p-8 relative flex flex-col gap-6"
+        <form @@submit.prevent="createChannel()" class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-sm p-8 relative flex flex-col gap-6"
              @@click.away="createChannelOpen = false">
             
-            <button @@click="createChannelOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all">
+            <button type="button" @@click="createChannelOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
 
@@ -2780,21 +2790,7 @@
             </div>
 
             <div class="flex gap-3">
-                <button type="button" 
-                        @@click="
-                            const clean = newChannelName.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
-                            if (clean) {
-                                if (!channels.includes(clean)) {
-                                    channels.push(clean);
-                                    this.channelOwners[clean] = this.currentUserId;
-                                    this.saveChannelRules();
-                                }
-                                activeChannel = clean;
-                                createChannelOpen = false;
-                                newChannelName = '';
-                                scrollChatToBottom();
-                            }
-                        "
+                <button type="submit" 
                         class="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-md shadow-indigo-100 transition-all flex items-center justify-center gap-1.5">
                     Create New Channel
                 </button>
@@ -2804,7 +2800,7 @@
                     Cancel
                 </button>
             </div>
-        </div>
+        </form>
     </div>
 
     <!-- ════════════════════════════════════════ -->
@@ -3750,21 +3746,20 @@
                     });
                 },
 
-                async createChannel() {
+                createChannel() {
                     const clean = this.newChannelName.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
                     if (clean) {
                         if (!this.channels.includes(clean)) {
                             this.channels.push(clean);
                             this.channelOwners[clean] = this.currentUserId;
-                            try {
-                                await this.saveChannelRules();
-                            } catch (err) {
+                            this.saveChannelRules().catch(err => {
                                 console.error('Failed to persist channel rules to database:', err);
-                            }
+                            });
                         }
                         this.activeChannel = clean;
                         this.createChannelOpen = false;
                         this.newChannelName = '';
+                        localStorage.setItem('unigrid_active_channel_' + '@Model.Workspace.JoinCode', clean);
                         this.$nextTick(() => {
                             this.scrollChatToBottom();
                         });

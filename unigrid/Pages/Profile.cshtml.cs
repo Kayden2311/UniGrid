@@ -38,6 +38,7 @@ namespace unigrid.Pages
         public string Email { get; set; } = string.Empty;
         public bool IsGoogleConnected { get; set; }
         public string Initials { get; set; } = "U";
+        public bool HasNoProfile { get; set; }
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -51,32 +52,23 @@ namespace unigrid.Pages
 
             if (user == null)
             {
+                HasNoProfile = true;
+                FullName = "";
+                AvatarUrl = "";
+                
                 var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
-                if (accountRecord != null)
-                {
-                    var fallbackName = User.FindFirst("FullName")?.Value ?? User.Identity?.Name ?? "User";
-                    var parts = accountRecord.Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
-                    var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
-                    var parsedName = string.Join(" ", fullNameParts);
-                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = fallbackName;
-                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
-
-                    user = new User
-                    {
-                        Id = Guid.NewGuid(),
-                        AccountId = accountId,
-                        FullName = parsedName,
-                        SubscriptionTier = "Free"
-                    };
-                    await _context.Users.AddAsync(user);
-                    await _context.SaveChangesAsync();
-                    
-                    _cache.Remove($"User_{accountId}");
-                }
+                Email = accountRecord?.Email ?? "";
+                IsGoogleConnected = accountRecord?.PasswordHash == "GOOGLE_OAUTH";
+                Initials = "U";
+                
+                ViewData["Workspaces"] = new List<Workspace>();
+                ViewData["UserName"] = "New User";
+                ViewData["UserInitials"] = "U";
+                
+                return Page();
             }
 
-            if (user == null) return RedirectToPage("/Login");
-
+            HasNoProfile = false;
             FullName = user.FullName;
             AvatarUrl = user.AvatarUrl;
             Email = user.Account.Email;
@@ -109,49 +101,46 @@ namespace unigrid.Pages
                 .Include(u => u.Account)
                 .FirstOrDefaultAsync(u => u.AccountId == accountId);
 
-            if (user == null)
-            {
-                var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
-                if (accountRecord != null)
-                {
-                    var fallbackName = User.FindFirst("FullName")?.Value ?? User.Identity?.Name ?? "User";
-                    var parts = accountRecord.Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
-                    var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
-                    var parsedName = string.Join(" ", fullNameParts);
-                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = fallbackName;
-                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
-
-                    user = new User
-                    {
-                        Id = Guid.NewGuid(),
-                        AccountId = accountId,
-                        FullName = parsedName,
-                        SubscriptionTier = "Free"
-                    };
-                    await _context.Users.AddAsync(user);
-                    await _context.SaveChangesAsync();
-                    
-                    _cache.Remove($"User_{accountId}");
-                }
-            }
-
-            if (user == null) return RedirectToPage("/Login");
-
             if (string.IsNullOrWhiteSpace(FullName))
             {
                 ModelState.AddModelError(nameof(FullName), "Full Name cannot be empty.");
+                var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+                Email = accountRecord?.Email ?? "";
+                IsGoogleConnected = accountRecord?.PasswordHash == "GOOGLE_OAUTH";
+                Initials = "U";
+                HasNoProfile = user == null;
+                ViewData["Workspaces"] = new List<Workspace>();
+                ViewData["UserName"] = "New User";
+                ViewData["UserInitials"] = "U";
                 return Page();
             }
 
-            // Update user details
-            user.FullName = Helpers.InputSanitizer.SanitizeInput(FullName.Trim());
-            user.AvatarUrl = string.IsNullOrWhiteSpace(AvatarUrl) ? null : Helpers.InputSanitizer.SanitizeInput(AvatarUrl.Trim());
-
-            await _context.SaveChangesAsync();
-
-            // Evict caches
-            _cache.Remove($"User_{accountId}");
-            _cache.Remove($"UserWorkspaces_{user.Id}");
+            if (user == null)
+            {
+                // Create user profile
+                user = new User
+                {
+                    Id = Guid.NewGuid(),
+                    AccountId = accountId,
+                    FullName = Helpers.InputSanitizer.SanitizeInput(FullName.Trim()),
+                    SubscriptionTier = "Free",
+                    AvatarUrl = string.IsNullOrWhiteSpace(AvatarUrl) ? null : Helpers.InputSanitizer.SanitizeInput(AvatarUrl.Trim())
+                };
+                await _context.Users.AddAsync(user);
+                await _context.SaveChangesAsync();
+                
+                _cache.Remove($"User_{accountId}");
+            }
+            else
+            {
+                // Update user details
+                user.FullName = Helpers.InputSanitizer.SanitizeInput(FullName.Trim());
+                user.AvatarUrl = string.IsNullOrWhiteSpace(AvatarUrl) ? null : Helpers.InputSanitizer.SanitizeInput(AvatarUrl.Trim());
+                await _context.SaveChangesAsync();
+                
+                _cache.Remove($"User_{accountId}");
+                _cache.Remove($"UserWorkspaces_{user.Id}");
+            }
 
             // Dynamic claim update in the active session cookie
             var claims = new List<Claim>
@@ -175,9 +164,9 @@ namespace unigrid.Pages
                 authProperties);
 
             TempData["ProfileSuccess"] = "Account profile updated successfully!";
-            _logger.LogInformation("Profile updated for user account {AccountId}", accountId);
+            _logger.LogInformation("Profile updated/created for user account {AccountId}", accountId);
 
-            return RedirectToPage();
+            return RedirectToPage("/Dashboard");
         }
     }
 }
