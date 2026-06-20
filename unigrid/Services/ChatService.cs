@@ -67,7 +67,11 @@ public class ChatService : IChatService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+        if (workspace.OwnerId != userId && userRecord == null)
+        {
+            return (null, "Access denied to this workspace.");
+        }
+        string userRole = userRecord?.Role ?? "Manager";
 
         if (userRole == "Viewer") return (null, "Viewer role cannot send chat messages.");
         if (string.IsNullOrEmpty(content)) return (null, "Message content cannot be empty.");
@@ -308,7 +312,11 @@ public class ChatService : IChatService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+        if (workspace.OwnerId != userId && userRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+        string userRole = userRecord?.Role ?? "Manager";
 
         var chatRoom = await GetRoomByWorkspaceIdAsync(workspaceId);
         if (chatRoom == null) return "Chat room not found.";
