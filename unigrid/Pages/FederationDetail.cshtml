@@ -1711,7 +1711,12 @@
                                 <template x-if="msg.senderId !== currentUserId">
                                     <p class="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
                                         <span x-text="msg.senderName"></span>
-                                        <template x-if="channelOwners[activeChannel]?.toLowerCase() === msg.senderId.toLowerCase() && activeChannel !== 'general'">
+                                        <template x-if="msg.senderId.toLowerCase() === federationOwnerId.toLowerCase()">
+                                            <span class="text-[8px] bg-amber-50 text-amber-600 border border-amber-250 px-1 py-0.2 rounded font-black uppercase inline-flex items-center gap-0.5" title="Federation Owner">
+                                                👑 Owner
+                                            </span>
+                                        </template>
+                                        <template x-if="channelOwners[activeChannel]?.toLowerCase() === msg.senderId.toLowerCase() && activeChannel !== 'general' && msg.senderId.toLowerCase() !== federationOwnerId.toLowerCase()">
                                             <span class="text-[8px] bg-amber-50 text-amber-600 border border-amber-250 px-1 py-0.2 rounded font-black uppercase inline-flex items-center gap-0.5" title="Channel Owner">
                                                 👑 Owner
                                             </span>
@@ -1725,7 +1730,12 @@
                                 </template>
                                 <template x-if="msg.senderId === currentUserId">
                                     <p class="text-[10px] font-bold text-slate-400 text-right flex items-center justify-end gap-1.5">
-                                        <template x-if="channelOwners[activeChannel]?.toLowerCase() === msg.senderId.toLowerCase() && activeChannel !== 'general'">
+                                        <template x-if="msg.senderId.toLowerCase() === federationOwnerId.toLowerCase()">
+                                            <span class="text-[8px] bg-amber-50 text-amber-600 border border-amber-200 px-1 py-0.2 rounded font-black uppercase inline-flex items-center gap-0.5" title="Federation Owner">
+                                                👑 Owner
+                                            </span>
+                                        </template>
+                                        <template x-if="channelOwners[activeChannel]?.toLowerCase() === msg.senderId.toLowerCase() && activeChannel !== 'general' && msg.senderId.toLowerCase() !== federationOwnerId.toLowerCase()">
                                             <span class="text-[8px] bg-amber-50 text-amber-600 border border-amber-200 px-1 py-0.2 rounded font-black uppercase inline-flex items-center gap-0.5" title="Channel Owner">
                                                 👑 Owner
                                             </span>
@@ -1831,7 +1841,17 @@
                      x-transition>
                     <div class="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
                         <span class="text-xs font-black text-slate-800 uppercase tracking-widest">Attach Shared document</span>
-                        <button type="button" @@click="attachFileOpen = false" class="text-xs text-slate-400 hover:text-slate-600 font-semibold cursor-pointer border-0 bg-transparent">Close</button>
+                        <div class="flex items-center gap-2">
+                            <!-- Direct File Upload Label/Input -->
+                            <template x-if="currentUserRole === 'Owner' || currentUserRole === 'HeadPresident' || currentUserRole === 'DepartmentManager'">
+                                <label class="cursor-pointer bg-indigo-600 hover:bg-indigo-750 text-white text-[9px] font-black px-2.5 py-1.5 rounded-lg flex items-center gap-1 select-none transition-all">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                                    <span>Upload New</span>
+                                    <input type="file" class="hidden" @@change="uploadFileDirectly($event)">
+                                </label>
+                            </template>
+                            <button type="button" @@click="attachFileOpen = false" class="text-xs text-slate-400 hover:text-slate-600 font-black font-semibold cursor-pointer border-0 bg-transparent">Close</button>
+                        </div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
                         <template x-for="file in workspaceFiles" :key="file.id">
@@ -1844,7 +1864,7 @@
                             </button>
                         </template>
                         <template x-if="workspaceFiles.length === 0">
-                            <div class="col-span-2 text-center py-4 text-xs font-bold text-slate-400 italic">No shared documents in federation hub.</div>
+                            <div class="col-span-2 text-center py-4 text-xs font-bold text-slate-400 italic">No shared documents in federation hub. Click Upload New to attach files!</div>
                         </template>
                     </div>
                 </div>
@@ -2082,10 +2102,10 @@
          style="display: none;"
          x-transition x-cloak>
         
-        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-sm p-8 relative flex flex-col gap-6"
+        <form @@submit.prevent="createChannel()" class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-sm p-8 relative flex flex-col gap-6"
              @@click.away="createChannelOpen = false">
             
-            <button @@click="createChannelOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all border-0 bg-transparent cursor-pointer">
+            <button type="button" @@click="createChannelOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all border-0 bg-transparent cursor-pointer">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
 
@@ -2106,21 +2126,7 @@
             </div>
 
             <div class="flex gap-3">
-                <button type="button" 
-                        @@click="
-                            const clean = newChannelName.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
-                            if (clean) {
-                                if (!channels.includes(clean)) {
-                                    channels.push(clean);
-                                    this.channelOwners[clean] = this.currentUserId;
-                                    this.saveChannelRules();
-                                }
-                                activeChannel = clean;
-                                createChannelOpen = false;
-                                newChannelName = '';
-                                scrollChatToBottom();
-                            }
-                        "
+                <button type="submit" 
                         class="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-md shadow-indigo-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0">
                     Create Channel
                 </button>
@@ -2130,7 +2136,7 @@
                     Cancel
                 </button>
             </div>
-        </div>
+        </form>
     </div>
 
     <div x-show="inviteChannelOpen" 
@@ -2196,13 +2202,13 @@
 <script>
     document.addEventListener('alpine:init', () => {
         Alpine.data('federationDetail', () => ({
-            activeTab: '@(string.IsNullOrEmpty(Model.ActiveTab) ? "overview" : Model.ActiveTab)',
+            activeTab: localStorage.getItem('unigrid_fed_tab_' + '@Model.Federation.JoinCode') || '@(string.IsNullOrEmpty(Model.ActiveTab) ? "overview" : Model.ActiveTab)',
             showPushModal: false,
             showTaskModal: false,
             chatInput: '',
             chatMessages: JSON.parse(decodeURIComponent(escape(atob('@Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(Model.SerializeFederationChatMessages()))')))),
             signalrConnection: null,
-            activeChannel: 'general',
+            activeChannel: localStorage.getItem('unigrid_fed_active_channel_' + '@Model.Federation.JoinCode') || 'general',
             newChannelName: '',
             createChannelOpen: false,
             inviteChannelOpen: false,
@@ -2252,11 +2258,13 @@
                 this.parseSystemRules();
                 this.scrollChatToBottom();
                 this.$watch('activeTab', value => {
+                    localStorage.setItem('unigrid_fed_tab_' + '@Model.Federation.JoinCode', value);
                     if (value === 'chat') {
                         this.scrollChatToBottom();
                     }
                 });
                 this.$watch('activeChannel', value => {
+                    localStorage.setItem('unigrid_fed_active_channel_' + '@Model.Federation.JoinCode', value);
                     this.scrollChatToBottom();
                 });
 
@@ -2375,6 +2383,28 @@
                 
                 this.inviteChannelOpen = false;
                 this.saveChannelRules();
+            },
+
+            createChannel() {
+                const clean = this.newChannelName.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+                if (clean) {
+                    if (!this.channels.includes(clean)) {
+                        this.channels.push(clean);
+                        this.channelOwners[clean] = this.currentUserId;
+                        this.saveChannelRules().catch(err => {
+                            console.error('Failed to persist channel rules to database:', err);
+                        });
+                    }
+                    this.activeChannel = clean;
+                    this.createChannelOpen = false;
+                    this.newChannelName = '';
+                    localStorage.setItem('unigrid_fed_active_channel_' + '@Model.Federation.JoinCode', clean);
+                    this.$nextTick(() => {
+                        this.scrollChatToBottom();
+                    });
+                } else {
+                    this.createChannelOpen = false;
+                }
             },
 
             saveChannelRules() {
@@ -2612,6 +2642,46 @@
                 this.$nextTick(() => {
                     const el = document.getElementById('chat-input-field');
                     if (el) el.focus();
+                });
+            },
+            uploadFileDirectly(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const formData = new FormData();
+                formData.append('UploadedFederationFile', file);
+
+                const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                if (tokenInput) {
+                    formData.append('__RequestVerificationToken', tokenInput.value);
+                }
+
+                fetch('?handler=UploadFederationFile&joinCode=@Model.Federation.JoinCode', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(async res => {
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.success && data.file) {
+                            this.workspaceFiles.unshift(data.file);
+                            this.selectedAttachmentId = data.file.id;
+                            this.selectedAttachmentName = data.file.fileName;
+                            this.attachFileOpen = false;
+                        }
+                    } else {
+                        const errData = await res.json().catch(() => ({}));
+                        alert(errData.message || 'File upload failed. Ensure the file is not too large and the name is valid.');
+                    }
+                    event.target.value = '';
+                })
+                .catch(err => {
+                    console.error('Error uploading file directly:', err);
+                    alert('An error occurred during upload.');
+                    event.target.value = '';
                 });
             },
             parseMessageContent(content) {

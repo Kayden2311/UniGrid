@@ -62,12 +62,22 @@ namespace unigrid.Controllers
             if (!string.IsNullOrEmpty(request.JoinCode))
             {
                 workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == request.JoinCode);
-                if (workspace != null && plan.MemberLimit > 0)
+                if (workspace != null)
                 {
-                    int memberCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == workspace.Id);
-                    if (memberCount > plan.MemberLimit)
+                    var isOwner = workspace.OwnerId == userProfile.Id;
+                    var isMember = await _context.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == workspace.Id && wm.UserId == userProfile.Id);
+                    if (!isOwner && !isMember)
                     {
-                        return BadRequest(new { message = $"Cannot switch this Workspace to the {plan.Name} plan because it currently has more than {plan.MemberLimit} members. The {plan.Name} plan allows a maximum of {plan.MemberLimit} members." });
+                        return StatusCode(403, new { message = "You do not have permission to access this workspace." });
+                    }
+
+                    if (plan.MemberLimit > 0)
+                    {
+                        int memberCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == workspace.Id);
+                        if (memberCount > plan.MemberLimit)
+                        {
+                            return BadRequest(new { message = $"Cannot switch this Workspace to the {plan.Name} plan because it currently has more than {plan.MemberLimit} members. The {plan.Name} plan allows a maximum of {plan.MemberLimit} members." });
+                        }
                     }
                 }
             }

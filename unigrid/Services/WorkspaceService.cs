@@ -125,6 +125,20 @@ public class WorkspaceService : IWorkspaceService
         var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
         if (workspace == null) return "Workspace not found.";
 
+        var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
+        var inviterRecord = members.FirstOrDefault(m => m.UserId == inviterId);
+        string inviterRole = inviterRecord?.Role ?? (workspace.OwnerId == inviterId ? "Manager" : "Member");
+
+        if (workspace.OwnerId != inviterId && inviterRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+
+        if (inviterRole != "Manager" && inviterRole != "Vice Manager")
+        {
+            return "Only Managers or Vice Managers have permission to invite members.";
+        }
+
         if (workspace.PackageTier == "Personal") return "Cannot invite members in a Personal plan workspace.";
         if (string.IsNullOrEmpty(email)) return "Email is required.";
 

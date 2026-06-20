@@ -28,11 +28,30 @@ namespace unigrid.Controllers
         {
             _logger.LogInformation("REST API: UpdateEventTime called for Event {EventId} with Start {Start} and End {End}", id, request.StartTime, request.EndTime);
 
+            var accountIdClaim = User.FindFirst("AccountId")?.Value;
+            if (string.IsNullOrEmpty(accountIdClaim))
+            {
+                return Unauthorized(new { message = "You must be logged in to perform this action." });
+            }
+
+            var accountId = Guid.Parse(accountIdClaim);
+            var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+            if (userProfile == null)
+            {
+                return Unauthorized(new { message = "User profile not found." });
+            }
+
             var ev = await _context.PersonalSchedules.FirstOrDefaultAsync(e => e.Id == id);
             if (ev == null)
             {
                 _logger.LogWarning("REST API: Event {EventId} not found.", id);
                 return NotFound(new { message = "Event not found." });
+            }
+
+            if (ev.UserId != userProfile.Id)
+            {
+                _logger.LogWarning("REST API: Unauthorized event modification attempt by User {UserId} on Event {EventId}", userProfile.Id, id);
+                return StatusCode(403, new { message = "You do not have permission to modify this event." });
             }
 
             // Convert to UTC to match seeding and database standards
