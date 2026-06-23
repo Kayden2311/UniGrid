@@ -74,7 +74,7 @@ public class WorkspacesModel : PageModel
                         .Include(w => w.WorkspaceMembers)
                             .ThenInclude(m => m.User)
                         .Include(w => w.Tasks)
-                        .Where(w => !w.IsDisabled && (w.OwnerId == profile.Id || w.WorkspaceMembers.Any(m => m.UserId == profile.Id)))
+                        .Where(w => !w.IsDisabled && (w.OwnerId == profile.Id || w.WorkspaceMembers.Any(m => !m.IsDisabled && m.UserId == profile.Id)))
                         .OrderByDescending(w => w.CreatedAt)
                         .ToListAsync();
                 });
@@ -313,6 +313,12 @@ public class WorkspacesModel : PageModel
             return RedirectToPage($"/WorkspaceDetail/{workspace.JoinCode}");
         }
 
+        if (workspace.WorkspaceType == "Personal" || workspace.PackageTier == "Personal")
+        {
+            TempData["ErrorMessage"] = "You cannot join a Personal Workspace. Personal Workspaces are restricted to a single user.";
+            return RedirectToPage("/Workspaces");
+        }
+
         var alreadyMember = await _context.WorkspaceMembers
             .AnyAsync(m => m.WorkspaceId == workspace.Id && m.UserId == userId);
 
@@ -349,6 +355,7 @@ public class WorkspacesModel : PageModel
         await _context.SaveChangesAsync();
 
         _cache.Remove($"UserWorkspaces_{userId}");
+        _cache.Remove($"WorkspaceMembers_{workspace.Id}");
 
         TempData["SuccessMessage"] = $"Successfully joined Workspace '{workspace.Name}'!";
         return RedirectToPage($"/WorkspaceDetail/{workspace.JoinCode}");

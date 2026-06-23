@@ -250,7 +250,7 @@
                         <span class="text-slate-400 font-bold text-sm">VND</span>
                     </div>
                     <p class="text-xs @planText font-bold mt-1" x-text="billing == 'monthly' ? '≈ ' + formatPrice(@plan.MonthlyPrice) + ' VND / month' : '≈ ' + formatPrice(Math.round(@plan.YearlyPrice/12)) + ' VND / month'"></p>
-                    <p class="text-sm text-slate-500 mt-3 leading-relaxed">Workspace capacity: @plan.MemberLimit members</p>
+                    <p class="text-sm text-slate-500 mt-3 leading-relaxed">Workspace capacity: @plan.MemberLimit @(plan.MemberLimit == 1 ? "member" : "members")</p>
                 </div>
                 <ul class="space-y-4 mb-8 flex-1 border-t border-slate-100 pt-6">
                     @foreach (var feature in plan.Features)
@@ -263,6 +263,9 @@
                 @if (User.Identity?.IsAuthenticated == true) {
                     @if (isCurrent) {
                         <button disabled class="w-full py-4 bg-slate-100 text-slate-400 rounded-2xl font-bold cursor-not-allowed">Current Plan</button>
+                    } else if (plan.Id.Equals("Business", StringComparison.OrdinalIgnoreCase)) {
+                        <button @@click="triggerBusinessUpgrade()" 
+                                class="w-full py-4 @planBg text-white rounded-2xl font-bold shadow-lg @planShadow transition-all">Upgrade Now</button>
                     } else if (currentRank > planRank) {
                         <button @@click="triggerUpgrade('@plan.Id', formatPrice(@plan.MonthlyPrice), formatPrice(@plan.YearlyPrice), @Html.Raw(System.Text.Json.JsonSerializer.Serialize(plan.Features).Replace("\"", "'")))" 
                                 class="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50 transition-all">Select Plan</button>
@@ -271,8 +274,13 @@
                                 class="w-full py-4 @planBg text-white rounded-2xl font-bold shadow-lg @planShadow transition-all">Upgrade Now</button>
                     }
                 } else {
-                    <button @@click="triggerUpgrade('@plan.Id', formatPrice(@plan.MonthlyPrice), formatPrice(@plan.YearlyPrice), @Html.Raw(System.Text.Json.JsonSerializer.Serialize(plan.Features).Replace("\"", "'")))" 
-                            class="w-full py-4 @planBg text-white rounded-2xl font-bold shadow-lg @planShadow transition-all">Upgrade Now</button>
+                    @if (plan.Id.Equals("Business", StringComparison.OrdinalIgnoreCase)) {
+                        <button @@click="triggerBusinessUpgrade()" 
+                                class="w-full py-4 @planBg text-white rounded-2xl font-bold shadow-lg @planShadow transition-all">Upgrade Now</button>
+                    } else {
+                        <button @@click="triggerUpgrade('@plan.Id', formatPrice(@plan.MonthlyPrice), formatPrice(@plan.YearlyPrice), @Html.Raw(System.Text.Json.JsonSerializer.Serialize(plan.Features).Replace("\"", "'")))" 
+                                class="w-full py-4 @planBg text-white rounded-2xl font-bold shadow-lg @planShadow transition-all">Upgrade Now</button>
+                    }
                 }
             </div>
         }
@@ -316,7 +324,7 @@
                     </svg>
                 </div>
                 <h4 class="text-lg font-black text-slate-800">Payment Confirmed!</h4>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Upgrading subscription, redirecting...</p>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Awaiting admin confirmation, redirecting...</p>
             </div>
 
             <!-- Main Checkout View -->
@@ -409,9 +417,9 @@
                     <!-- Option 1: Direct 899K Workspace Upgrade -->
                     <div class="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col justify-between hover:border-indigo-200 transition-all shadow-sm">
                         <div class="space-y-3">
-                            <span class="px-2.5 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black rounded-full uppercase tracking-wider">Choice 1: Group Workspace</span>
-                            <h4 class="text-lg font-black text-slate-850">Direct Upgrade to Group Workspace</h4>
-                            <p class="text-xs text-slate-500 leading-relaxed font-semibold">Automatically upgrade the current workspace to a Group Workspace (Pro/Pro Plus) for <span class="text-indigo-600 font-bold" x-text="businessMonthly.toLocaleString('vi-VN') + ' VND / month'">899,000 VND / month</span>. Includes up to 30 members, 80 GB of storage, and instant access to premium features.</p>
+                            <span class="px-2.5 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black rounded-full uppercase tracking-wider">Choice 1: Business Workspace</span>
+                            <h4 class="text-lg font-black text-slate-850">Direct Upgrade to Business Workspace</h4>
+                            <p class="text-xs text-slate-500 leading-relaxed font-semibold">Automatically upgrade the current workspace to a Business Workspace for <span class="text-indigo-600 font-bold" x-text="businessMonthly.toLocaleString('vi-VN') + ' VND / month'">899,000 VND / month</span>. Includes up to 30 members, 80 GB of storage, and instant access to premium features.</p>
                         </div>
                         <button @@click="showBusinessModal = false; triggerUpgrade('Business', formatPrice(businessMonthly), formatPrice(businessYearly), @Html.Raw(businessFeatures.Replace("\"", "'")))" 
                                 class="w-full mt-6 py-3 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all cursor-pointer flex items-center justify-center gap-1">
@@ -493,7 +501,7 @@
                     <tr>
                         <td class="py-5 px-4 text-sm font-bold text-slate-700">Members</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">5</td>
-                        <td class="py-5 px-4 text-sm text-teal-600 font-bold">5</td>
+                        <td class="py-5 px-4 text-sm text-teal-600 font-bold">1</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">10</td>
                         <td class="py-5 px-4 text-sm text-indigo-600 font-bold">15</td>
                         <td class="py-5 px-4 text-sm text-slate-500 font-medium">30</td>

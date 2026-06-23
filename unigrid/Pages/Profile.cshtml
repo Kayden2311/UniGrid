@@ -43,10 +43,10 @@
         <!-- Live Preview Profile Card -->
         <div class="bg-white border border-slate-200/80 rounded-[2.5rem] shadow-xl p-8 flex flex-col items-center text-center gap-6 relative overflow-hidden group">
             <!-- Glassmorphic Header Accent -->
-            <div class="absolute inset-x-0 top-0 h-28 bg-gradient-to-tr from-indigo-500 to-violet-500 opacity-90"></div>
+            <div class="absolute inset-x-0 top-0 h-28 bg-gradient-to-tr from-indigo-500 to-violet-500 opacity-90 z-0"></div>
             
             <!-- Live Preview Badge -->
-            <div class="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider">Live Preview</div>
+            <div class="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider z-10">Live Preview</div>
 
             <!-- Avatar Block -->
             <div class="relative z-10 mt-12">
@@ -61,20 +61,20 @@
             </div>
 
             <!-- Profile Info -->
-            <div class="space-y-1.5 z-10 w-full">
+            <div class="relative space-y-1.5 z-10 w-full">
                 <h3 class="text-lg font-black text-slate-800 truncate" x-text="fullName || 'User Profile'"></h3>
                 <p class="text-xs text-slate-400 font-bold tracking-wider truncate">@Model.Email</p>
             </div>
 
             <!-- Connected Accounts Stack -->
-            <div class="w-full pt-4 border-t border-slate-100 flex flex-col gap-2 z-10">
+            <div class="relative w-full pt-4 border-t border-slate-100 flex flex-col gap-2 z-10">
                 <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-left mb-1">Identity Provider</div>
                 
                 @if (Model.IsGoogleConnected)
                 {
                     <div class="flex items-center gap-3 p-3 bg-blue-50/50 border border-blue-100 rounded-2xl">
                         <!-- Google Logo -->
-                        <svg class="h-4.5 w-4.5 shrink-0" viewBox="0 0 24 24">
+                        <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24">
                             <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.36H12v4.47h6.44c-.28 1.47-1.11 2.71-2.36 3.55l3.67 2.84c2.15-1.98 3.39-4.9 3.39-8.5z" />
                             <path fill="#34A853" d="M12 23c3.24 0 5.96-1.08 7.95-2.93l-3.67-2.84c-1.02.68-2.33 1.09-3.8 1.09-3.13 0-5.82-2.29-6.77-5.34L.92 15.92C2.87 19.74 6.84 23 12 23z" />
                             <path fill="#FBBC05" d="M5.24 14.62c-.24-.73-.38-1.5-.38-2.31s.14-1.58.38-2.31L1.45 7.07C.52 8.94 0 11.02 0 13.23s.52 4.29 1.45 6.16l3.79-2.93z" />
@@ -90,7 +90,7 @@
                 else
                 {
                     <div class="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200/60 rounded-2xl">
-                        <i data-lucide="shield-check" class="w-4.5 h-4.5 text-indigo-500 shrink-0"></i>
+                        <i data-lucide="shield-check" class="w-5 h-5 text-indigo-500 shrink-0"></i>
                         <div class="text-left">
                             <div class="text-xs font-black text-slate-700">UniGrid Auth Credentials</div>
                             <div class="text-[9px] text-slate-400 font-semibold leading-none mt-0.5">Standard Email & Password</div>
@@ -104,29 +104,53 @@
         <div class="lg:col-span-2 bg-white border border-slate-200/80 rounded-[2.5rem] shadow-xl p-8">
             <h3 class="text-xl font-black text-slate-800 tracking-tight mb-6">Profile Details</h3>
 
-            <form method="post" class="space-y-6">
+            <form method="post" enctype="multipart/form-data" class="space-y-6">
                 <div class="space-y-1.5">
                     <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Full Name</label>
                     <div class="relative">
                         <input type="text" asp-for="FullName" x-model="fullName" required placeholder="Alice Nguyen"
                                class="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all font-semibold text-slate-700">
                         <div class="absolute inset-y-0 left-4 flex items-center justify-center text-slate-400">
-                            <i data-lucide="user" class="w-4.5 h-4.5"></i>
+                            <i data-lucide="user" class="w-5 h-5"></i>
                         </div>
                     </div>
                     <span asp-validation-for="FullName" class="text-xs text-rose-500 font-bold block mt-1"></span>
                 </div>
 
                 <div class="space-y-1.5">
-                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Avatar Picture URL</label>
-                    <div class="relative">
-                        <input type="url" asp-for="AvatarUrl" x-model="avatarUrl" placeholder="https://lh3.googleusercontent.com/... (optional)"
-                               class="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all font-semibold text-slate-700">
-                        <div class="absolute inset-y-0 left-4 flex items-center justify-center text-slate-400">
-                            <i data-lucide="image" class="w-4.5 h-4.5"></i>
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-1">Avatar Image</label>
+                    <div class="flex flex-col sm:flex-row items-center gap-4 p-4 bg-slate-50 border border-slate-200/80 rounded-3xl">
+                        <!-- Preview in form -->
+                        <div class="h-16 w-16 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center overflow-hidden shrink-0 bg-white">
+                            <template x-if="avatarUrl">
+                                <img :src="avatarUrl" class="h-full w-full object-cover">
+                            </template>
+                            <template x-if="!avatarUrl">
+                                <span class="text-slate-500 font-bold text-xl" x-text="fullName ? fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U'"></span>
+                            </template>
                         </div>
+                        
+                        <div class="flex-1 space-y-2 text-center sm:text-left">
+                            <div class="flex flex-wrap justify-center sm:justify-start gap-2">
+                                <button type="button" @@click="document.getElementById('avatar-upload-input').click()"
+                                        class="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer">
+                                    <i data-lucide="upload" class="w-3.5 h-3.5"></i> Upload New
+                                </button>
+                                <template x-if="avatarUrl">
+                                    <button type="button" @@click="avatarUrl = ''; $refs.removeAvatarInput.value = 'true'; document.getElementById('avatar-upload-input').value = ''"
+                                            class="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove
+                                    </button>
+                                </template>
+                            </div>
+                            <p class="text-[10px] text-slate-400 font-semibold leading-normal">Support JPG, PNG, GIF or WEBP. Max size of 5MB.</p>
+                        </div>
+                        
+                        <input type="file" id="avatar-upload-input" asp-for="AvatarFile" accept="image/*" class="hidden"
+                               @@change="if ($event.target.files.length) { avatarUrl = URL.createObjectURL($event.target.files[0]); $refs.removeAvatarInput.value = 'false'; }">
+                        <input type="hidden" asp-for="RemoveAvatar" x-ref="removeAvatarInput">
                     </div>
-                    <p class="text-[10px] text-slate-400 font-semibold leading-normal mt-1">Provide a link to an image (JPEG, PNG) hosted online. If left blank, your initials will be used as a dynamic avatar instead.</p>
+                    <span asp-validation-for="AvatarFile" class="text-xs text-rose-500 font-bold block mt-1"></span>
                 </div>
 
                 <div class="space-y-1.5">
@@ -135,7 +159,7 @@
                         <input type="email" value="@Model.Email" readonly disabled
                                class="w-full pl-11 pr-4 py-3.5 bg-slate-100 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-400 cursor-not-allowed">
                         <div class="absolute inset-y-0 left-4 flex items-center justify-center text-slate-400">
-                            <i data-lucide="mail" class="w-4.5 h-4.5"></i>
+                            <i data-lucide="mail" class="w-5 h-5"></i>
                         </div>
                     </div>
                     <p class="text-[10px] text-slate-400 font-semibold leading-normal mt-1">Your registered email address cannot be changed. This is used for invitations and account identification.</p>

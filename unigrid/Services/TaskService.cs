@@ -23,6 +23,7 @@ public class TaskService : ITaskService
     private readonly IHubContext<ChatHub> _hubContext;
     private readonly ILogger<TaskService> _logger;
     private readonly unigrid.Data.UniGridDbContext _context;
+    private readonly INotificationService _notificationService;
 
     public TaskService(
         IWorkspaceRepository workspaceRepo,
@@ -33,7 +34,8 @@ public class TaskService : ITaskService
         IMemoryCache cache,
         IHubContext<ChatHub> hubContext,
         ILogger<TaskService> logger,
-        unigrid.Data.UniGridDbContext context)
+        unigrid.Data.UniGridDbContext context,
+        INotificationService notificationService)
     {
         _workspaceRepo = workspaceRepo;
         _memberRepo = memberRepo;
@@ -44,6 +46,7 @@ public class TaskService : ITaskService
         _hubContext = hubContext;
         _logger = logger;
         _context = context;
+        _notificationService = notificationService;
     }
 
     public async Task<string?> CreateTaskAsync(Guid workspaceId, Guid creatorId, string title, string description, int priority, Guid? assigneeId, DateTime? dueDate, int status, Guid? categoryId = null, bool isCounterTask = false, int targetCount = 1)
@@ -94,23 +97,18 @@ public class TaskService : ITaskService
 
         var creator = await _memberRepo.GetUserByIdAsync(creatorId);
 
+        await _unitOfWork.SaveChangesAsync();
+
         if (task.AssigneeId.HasValue && task.AssigneeId.Value != creatorId)
         {
-            var notification = new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = task.AssigneeId.Value,
-                Message = $"You have been assigned the task '{task.Title}' in Workspace '{workspace.Name}' by {creator?.FullName ?? "Manager"}.",
-                Type = "TaskAssignment",
-                Link = $"/WorkspaceDetail/{workspace.JoinCode}",
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow,
-                RelatedId = task.Id
-            };
-            await _taskRepo.AddNotificationAsync(notification);
+            await _notificationService.CreateAndSendNotificationAsync(
+                task.AssigneeId.Value,
+                $"You have been assigned the task '{task.Title}' in Workspace '{workspace.Name}' by {creator?.FullName ?? "Manager"}.",
+                "TaskAssignment",
+                $"/WorkspaceDetail/{workspace.JoinCode}",
+                task.Id
+            );
         }
-
-        await _unitOfWork.SaveChangesAsync();
 
         _workspaceService.EvictWorkspaceCache(workspaceId, members.Select(m => m.UserId).ToList());
         _logger.LogInformation("Task created: {Title} in Workspace {WorkspaceId}", task.Title, workspaceId);
@@ -163,6 +161,23 @@ public class TaskService : ITaskService
 
             var operatorUser = await _memberRepo.GetUserByIdAsync(userId);
 
+            _taskRepo.Update(task);
+            await _unitOfWork.SaveChangesAsync();
+
+            // Task submitted for review: Notify workspace owner
+            if (status == 2 && oldStatus != 2)
+            {
+                var reviewMsg = $"Task '{task.Title}' in Workspace '{workspace.Name}' has been submitted for review by {operatorUser?.FullName ?? "Member"}.";
+                await _notificationService.CreateAndSendNotificationAsync(
+                    workspace.OwnerId,
+                    reviewMsg,
+                    "TaskReviewRequest",
+                    $"/WorkspaceDetail/{workspace.JoinCode}",
+                    task.Id
+                );
+            }
+
+            // Task approved or rework requested: Notify assignee
             if (task.AssigneeId.HasValue && task.AssigneeId.Value != userId)
             {
                 string msg = "";
@@ -177,23 +192,15 @@ public class TaskService : ITaskService
 
                 if (!string.IsNullOrEmpty(msg))
                 {
-                    var notification = new Notification
-                    {
-                        Id = Guid.NewGuid(),
-                        UserId = task.AssigneeId.Value,
-                        Message = msg,
-                        Type = status == 3 ? "TaskApproved" : "TaskRework",
-                        Link = $"/WorkspaceDetail/{workspace.JoinCode}",
-                        IsRead = false,
-                        CreatedAt = DateTime.UtcNow,
-                        RelatedId = task.Id
-                    };
-                    await _taskRepo.AddNotificationAsync(notification);
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        task.AssigneeId.Value,
+                        msg,
+                        status == 3 ? "TaskApproved" : "TaskRework",
+                        $"/WorkspaceDetail/{workspace.JoinCode}",
+                        task.Id
+                    );
                 }
             }
-
-            _taskRepo.Update(task);
-            await _unitOfWork.SaveChangesAsync();
 
             _workspaceService.EvictWorkspaceCache(resolvedWorkspaceId.Value, members.Select(m => m.UserId).ToList());
         }
@@ -286,23 +293,18 @@ public class TaskService : ITaskService
 
         var operatorUser = await _memberRepo.GetUserByIdAsync(userId);
 
+        await _unitOfWork.SaveChangesAsync();
+
         if (editTaskAssigneeId.HasValue && editTaskAssigneeId != oldAssigneeId && editTaskAssigneeId.Value != userId)
         {
-            var notification = new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = editTaskAssigneeId.Value,
-                Message = $"You have been assigned the task '{task.Title}' in Workspace '{workspace.Name}' by {operatorUser?.FullName ?? "Manager"}.",
-                Type = "TaskAssignment",
-                Link = $"/WorkspaceDetail/{workspace.JoinCode}",
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow,
-                RelatedId = task.Id
-            };
-            await _taskRepo.AddNotificationAsync(notification);
+            await _notificationService.CreateAndSendNotificationAsync(
+                editTaskAssigneeId.Value,
+                $"You have been assigned the task '{task.Title}' in Workspace '{workspace.Name}' by {operatorUser?.FullName ?? "Manager"}.",
+                "TaskAssignment",
+                $"/WorkspaceDetail/{workspace.JoinCode}",
+                task.Id
+            );
         }
-
-        await _unitOfWork.SaveChangesAsync();
 
         _workspaceService.EvictWorkspaceCache(workspaceId, members.Select(m => m.UserId).ToList());
         _logger.LogInformation("Task edited. TaskId: {TaskId} by User {UserId}", editTaskId, userId);
@@ -400,6 +402,20 @@ public class TaskService : ITaskService
         _logger.LogInformation("Comment added to task {TaskId} by {UserId}", taskId, userId);
 
         var user = await _memberRepo.GetUserByIdAsync(userId);
+
+        if (task.AssigneeId.HasValue && task.AssigneeId.Value != userId)
+        {
+            var commenterName = user?.FullName ?? "A member";
+            var truncatedContent = content.Length > 60 ? content.Substring(0, 57) + "..." : content;
+            var msg = $"{commenterName} commented on your task '{task.Title}': \"{truncatedContent}\"";
+            await _notificationService.CreateAndSendNotificationAsync(
+                task.AssigneeId.Value,
+                msg,
+                "TaskComment",
+                $"/WorkspaceDetail/{workspace.JoinCode}",
+                task.Id
+            );
+        }
         var payload = new
         {
             id = comment.Id,
@@ -562,6 +578,16 @@ public class TaskService : ITaskService
         }
 
         if (string.IsNullOrEmpty(name)) return "Category name is required.";
+
+        var planSetting = AdminSettings.GetPlanSetting(workspace.PackageTier, _context);
+        if (planSetting.TaskBranchLimit >= 0)
+        {
+            var categories = await _taskRepo.GetWorkspaceCategoriesAsync(workspaceId);
+            if (categories != null && categories.Count >= planSetting.TaskBranchLimit)
+            {
+                return $"Your workspace has reached the limit of {planSetting.TaskBranchLimit} task categories (branches) allowed on the {planSetting.Name} plan. Please upgrade your workspace package to create more task branches.";
+            }
+        }
 
         var category = new TaskCategory
         {
