@@ -7,6 +7,7 @@ using System.IO;
 using unigrid.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
 
 // Add services to the container.
 builder.Services.AddRazorPages()
@@ -56,6 +57,9 @@ builder.Services.AddScoped<unigrid.Services.IWorkspaceService, unigrid.Services.
 builder.Services.AddScoped<unigrid.Services.ITaskService, unigrid.Services.TaskService>();
 builder.Services.AddScoped<unigrid.Services.IFileService, unigrid.Services.FileService>();
 builder.Services.AddScoped<unigrid.Services.IChatService, unigrid.Services.ChatService>();
+builder.Services.AddScoped<unigrid.Services.IEmailService, unigrid.Services.EmailService>();
+builder.Services.AddScoped<unigrid.Services.INotificationService, unigrid.Services.NotificationService>();
+builder.Services.AddHostedService<unigrid.Services.NotificationBackgroundWorker>();
 
 // Enable Data Protection Key Persistence to keep session states active across app executions/restarts
 builder.Services.AddDataProtection()

@@ -4,16 +4,19 @@ using Microsoft.EntityFrameworkCore;
 using unigrid.Data;
 using unigrid.Models;
 using System.Security.Claims;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace unigrid.Pages;
 
 public class PricingModel : PageModel
 {
     private readonly UniGridDbContext _context;
+    private readonly IMemoryCache _cache;
 
-    public PricingModel(UniGridDbContext context)
+    public PricingModel(UniGridDbContext context, IMemoryCache cache)
     {
         _context = context;
+        _cache = cache;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -49,7 +52,7 @@ public class PricingModel : PageModel
 
                 // Fetch Workspaces for sidebar
                 var userWorkspaces = await _context.Workspaces
-                    .Where(w => w.OwnerId == userProfile.Id || w.WorkspaceMembers.Any(m => m.UserId == userProfile.Id))
+                    .Where(w => !w.IsDisabled && (w.OwnerId == userProfile.Id || w.WorkspaceMembers.Any(m => !m.IsDisabled && m.UserId == userProfile.Id)))
                     .ToListAsync();
                 ViewData["Workspaces"] = userWorkspaces;
 
@@ -99,7 +102,7 @@ public class PricingModel : PageModel
             // If upgrading an active workspace, update workspace's package tier directly
             if (!string.IsNullOrEmpty(JoinCode))
             {
-                workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == JoinCode);
+                workspace = await _context.Workspaces.Include(w => w.Owner).FirstOrDefaultAsync(w => w.JoinCode == JoinCode);
                 if (workspace != null)
                 {
                     if (plan.MemberLimit > 0)
@@ -112,6 +115,15 @@ public class PricingModel : PageModel
                         }
                     }
                     workspace.PackageTier = tier;
+
+                    if (workspace.WorkspaceType == "Personal" || tier == "Personal")
+                    {
+                        userProfile.SubscriptionTier = tier;
+                        userProfile.SubscriptionExpires = billingPeriod == "yearly" ? DateTime.UtcNow.AddYears(1) : DateTime.UtcNow.AddMonths(1);
+
+                        workspace.Owner.SubscriptionTier = tier;
+                        workspace.Owner.SubscriptionExpires = userProfile.SubscriptionExpires;
+                    }
                 }
             }
 
@@ -184,6 +196,15 @@ public class PricingModel : PageModel
             await _context.AuditLogs.AddAsync(audit);
 
             await _context.SaveChangesAsync();
+
+            // Evict cache
+            if (workspace != null)
+            {
+                _cache.Remove($"Workspace_{workspace.JoinCode}");
+                _cache.Remove($"WorkspaceMembers_{workspace.Id}");
+            }
+            _cache.Remove($"UserWorkspaces_{userProfile.Id}");
+            _cache.Remove($"User_{accountId}");
 
             if (!string.IsNullOrEmpty(JoinCode))
             {

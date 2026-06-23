@@ -73,22 +73,6 @@
             <span class="text-sm">Sign in with Google</span>
         </a>
 
-        <div class="mt-4 text-center">
-            <button onclick="openGoogleLogin()" type="button" class="text-xs text-slate-400 hover:text-indigo-600 transition-all font-semibold underline">
-                Simulate Google Sign-In (Local Sandbox)
-            </button>
-        </div>
-
-        <script>
-            function openGoogleLogin() {
-                const width = 500;
-                const height = 650;
-                const left = (screen.width / 2) - (width / 2);
-                const top = (screen.height / 2) - (height / 2);
-                window.open('/api/auth/google-simulated', 'GoogleLogin', `width=${width},height=${height},top=${top},left=${left}`);
-            }
-        </script>
-
         <div class="mt-8 text-center pt-8 border-t border-slate-100">
             <p class="text-sm text-slate-500 font-medium">
                 Don't have an account? 

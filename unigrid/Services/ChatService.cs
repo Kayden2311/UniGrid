@@ -76,6 +76,12 @@ public class ChatService : IChatService
         if (userRole == "Viewer") return (null, "Viewer role cannot send chat messages.");
         if (string.IsNullOrEmpty(content)) return (null, "Message content cannot be empty.");
 
+        var planSetting = AdminSettings.GetPlanSetting(workspace.PackageTier);
+        if (planSetting.ChatLimit == 0)
+        {
+            return (null, "Chat features are not available on the Personal plan. Please upgrade your workspace package to use chat.");
+        }
+
         var chatRoom = await GetRoomByWorkspaceIdAsync(workspaceId);
         if (chatRoom == null) return (null, "Chat room not found.");
 
@@ -111,6 +117,11 @@ public class ChatService : IChatService
                     bool isAddingChannel = incomingChannels.Any(c => !existingChannels.Contains(c));
                     if (isAddingChannel)
                     {
+                        if (planSetting.ChatLimit >= 0 && incomingChannels.Count > planSetting.ChatLimit)
+                        {
+                            return (null, $"Your workspace has reached the limit of {planSetting.ChatLimit} chat channels allowed on the {planSetting.Name} plan. Please upgrade your workspace package to create more channels.");
+                        }
+
                         if (!IsMemberAllowed(workspace, members, userId, "disabledCreateChannelUsers", userRole))
                         {
                             return (null, "You do not have permission to create chat channels.");

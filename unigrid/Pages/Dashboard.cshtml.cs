@@ -64,7 +64,7 @@ public class DashboardModel : PageModel
                 entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
                 return await _context.Workspaces
                     .Include(w => w.Tasks)
-                    .Where(w => w.OwnerId == userProfile.Id || w.WorkspaceMembers.Any(m => m.UserId == userProfile.Id))
+                    .Where(w => !w.IsDisabled && (w.OwnerId == userProfile.Id || w.WorkspaceMembers.Any(m => !m.IsDisabled && m.UserId == userProfile.Id)))
                     .ToListAsync();
             });
             
