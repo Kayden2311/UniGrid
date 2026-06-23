@@ -53,7 +53,11 @@ public class TaskService : ITaskService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var creatorRecord = members.FirstOrDefault(m => m.UserId == creatorId);
-        string creatorRole = creatorRecord?.Role ?? (workspace.OwnerId == creatorId ? "Manager" : "Member");
+        if (workspace.OwnerId != creatorId && creatorRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+        string creatorRole = creatorRecord?.Role ?? "Manager";
 
         bool canCreate = IsMemberAllowed(workspace, members, creatorId, "disabledCreateTaskUsers", creatorRole);
         if (!canCreate) return "You do not have permission to create tasks.";
@@ -128,7 +132,11 @@ public class TaskService : ITaskService
 
             var members = await _memberRepo.GetWorkspaceMembersAsync(resolvedWorkspaceId.Value);
             var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-            string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+            if (workspace.OwnerId != userId && userRecord == null)
+            {
+                return "Access denied to this workspace.";
+            }
+            string userRole = userRecord?.Role ?? "Manager";
 
             if (userRole == "Viewer") return "Viewer role cannot update task statuses.";
             if (task.WorkspaceId != resolvedWorkspaceId.Value) return "Task not found in workspace.";
@@ -238,7 +246,11 @@ public class TaskService : ITaskService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+        if (workspace.OwnerId != userId && userRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+        string userRole = userRecord?.Role ?? "Manager";
 
         bool canEdit = IsMemberAllowed(workspace, members, userId, "disabledEditTaskUsers", userRole);
         if (!canEdit) return "You do not have permission to edit tasks.";
@@ -305,7 +317,11 @@ public class TaskService : ITaskService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+        if (workspace.OwnerId != userId && userRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+        string userRole = userRecord?.Role ?? "Manager";
 
         bool canDelete = IsMemberAllowed(workspace, members, userId, "disabledDeleteTaskUsers", userRole);
         if (!canDelete) return "You do not have permission to delete tasks.";
@@ -354,7 +370,11 @@ public class TaskService : ITaskService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+        if (workspace.OwnerId != userId && userRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+        string userRole = userRecord?.Role ?? "Manager";
 
         if (userRole == "Viewer") return "Viewer role cannot add comments.";
         if (string.IsNullOrEmpty(content)) return "Comment content cannot be empty.";
@@ -443,7 +463,11 @@ public class TaskService : ITaskService
 
             var members = await _memberRepo.GetWorkspaceMembersAsync(resolvedWorkspaceId.Value);
             var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-            string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+            if (workspace.OwnerId != userId && userRecord == null)
+            {
+                return "Access denied to this workspace.";
+            }
+            string userRole = userRecord?.Role ?? "Manager";
 
             if (userRole == "Viewer") return "Viewer role cannot update task counters.";
             if (task.WorkspaceId != resolvedWorkspaceId.Value) return "Task not found in workspace.";
@@ -526,7 +550,11 @@ public class TaskService : ITaskService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+        if (workspace.OwnerId != userId && userRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+        string userRole = userRecord?.Role ?? "Manager";
 
         if (userRole != "Manager" && userRole != "Vice Manager")
         {
@@ -559,7 +587,11 @@ public class TaskService : ITaskService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+        if (workspace.OwnerId != userId && userRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+        string userRole = userRecord?.Role ?? "Manager";
 
         if (userRole != "Manager" && userRole != "Vice Manager")
         {
@@ -588,7 +620,11 @@ public class TaskService : ITaskService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+        if (workspace.OwnerId != userId && userRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+        string userRole = userRecord?.Role ?? "Manager";
 
         if (userRole != "Manager" && userRole != "Vice Manager")
         {
@@ -618,7 +654,11 @@ public class TaskService : ITaskService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var creatorRecord = members.FirstOrDefault(m => m.UserId == creatorId);
-        string creatorRole = creatorRecord?.Role ?? (workspace.OwnerId == creatorId ? "Manager" : "Member");
+        if (workspace.OwnerId != creatorId && creatorRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+        string creatorRole = creatorRecord?.Role ?? "Manager";
 
         if (creatorRole != "Manager" && creatorRole != "Vice Manager")
         {
@@ -667,7 +707,11 @@ public class TaskService : ITaskService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+        if (workspace.OwnerId != userId && userRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+        string userRole = userRecord?.Role ?? "Manager";
 
         if (userRole != "Manager" && userRole != "Vice Manager")
         {

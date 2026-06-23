@@ -102,6 +102,20 @@ builder.Services.AddAuthentication(options =>
     options.Cookie.HttpOnly = true;
     options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
 })
+.AddCookie("ExternalCookies", options =>
+{
+    options.Cookie.Name = "UniGrid.Auth.External";
+    options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
+})
+.AddGoogle(options =>
+{
+    var googleSettings = builder.Configuration.GetSection("Authentication:Google");
+    options.ClientId = googleSettings["ClientId"] ?? "placeholder-id.apps.googleusercontent.com";
+    options.ClientSecret = googleSettings["ClientSecret"] ?? "placeholder-secret";
+    options.SignInScheme = "ExternalCookies";
+})
 .AddJwtBearer(options =>
 {
     options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters

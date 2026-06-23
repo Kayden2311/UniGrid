@@ -57,27 +57,7 @@ public class WorkspacesModel : PageModel
             
             if (profile == null)
             {
-                var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
-                if (accountRecord != null)
-                {
-                    var parts = accountRecord.Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
-                    var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
-                    var parsedName = string.Join(" ", fullNameParts);
-                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
-
-                    profile = new User
-                    {
-                        Id = Guid.NewGuid(),
-                        AccountId = accountId,
-                        FullName = parsedName,
-                        SubscriptionTier = "Free"
-                    };
-                    await _context.Users.AddAsync(profile);
-                    await _context.SaveChangesAsync();
-                    
-                    // Evict cache to refresh profile
-                    _cache.Remove($"User_{accountId}");
-                }
+                return RedirectToPage("/Profile");
             }
             
             if (profile != null)
@@ -376,32 +356,6 @@ public class WorkspacesModel : PageModel
 
     private async System.Threading.Tasks.Task<User?> GetOrCreateUserProfileAsync(Guid accountId)
     {
-        var profile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
-        if (profile == null)
-        {
-            var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
-            if (accountRecord != null)
-            {
-                var fallbackName = User.FindFirst("FullName")?.Value ?? User.Identity?.Name ?? "User";
-                var parts = accountRecord.Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
-                var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
-                var parsedName = string.Join(" ", fullNameParts);
-                if (string.IsNullOrWhiteSpace(parsedName)) parsedName = fallbackName;
-                if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
-
-                profile = new User
-                {
-                    Id = Guid.NewGuid(),
-                    AccountId = accountId,
-                    FullName = parsedName,
-                    SubscriptionTier = "Free"
-                };
-                await _context.Users.AddAsync(profile);
-                await _context.SaveChangesAsync();
-                
-                _cache.Remove($"User_{accountId}");
-            }
-        }
-        return profile;
+        return await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
     }
 }
