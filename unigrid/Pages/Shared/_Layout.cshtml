@@ -8,8 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="shortcut icon" href="~/favicon.ico" type="image/x-icon" />
-    <link rel="icon" href="~/favicon.ico" type="image/x-icon" />
+    <link rel="shortcut icon" href="~/favicon.ico" type="image/png" />
+    <link rel="icon" href="~/favicon.ico" type="image/png" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -101,7 +101,7 @@
             // Query user workspaces
             var userWorkspaces = DbContext.WorkspaceMembers
                 .Include(m => m.Workspace)
-                .Where(m => m.UserId == currentUser.Id)
+                .Where(m => !m.IsDisabled && m.UserId == currentUser.Id && !m.Workspace.IsDisabled)
                 .Select(m => m.Workspace)
                 .Distinct()
                 .ToList();
@@ -118,7 +118,9 @@
                 .Include(f => f.Workspaces)
                 .Include(f => f.WorkspaceFederationMembers)
                     .ThenInclude(m => m.PersonalWorkspace)
-                .Where(f => f.OwnerId == currentUser.Id || f.WorkspaceFederationMembers.Any(m => m.UserId == currentUser.Id))
+                .Where(f => f.OwnerId == currentUser.Id 
+                            || f.WorkspaceFederationMembers.Any(m => m.UserId == currentUser.Id)
+                            || f.Workspaces.Any(w => !w.IsDisabled && DbContext.WorkspaceMembers.Any(wm => !wm.IsDisabled && wm.WorkspaceId == w.Id && wm.UserId == currentUser.Id)))
                 .Distinct()
                 .ToList();
         }
@@ -266,19 +268,39 @@
                         {
                             @foreach (var fed in sidebarFederations)
                             {
+                                var isFedMember = fed.OwnerId == currentUser.Id || fed.WorkspaceFederationMembers.Any(m => m.UserId == currentUser.Id && m.Status == "Active");
                                 <div class="space-y-1 mb-2">
-                                    <a href="/FederationDetail?joinCode=@fed.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm font-semibold">
-                                        <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-violet-50 text-[10px] font-black text-violet-600">
-                                            @fed.Name.Substring(0, 1).ToUpper()
+                                    @if (isFedMember)
+                                    {
+                                        <a href="/FederationDetail?joinCode=@fed.JoinCode" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-sm font-semibold">
+                                            <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-violet-50 text-[10px] font-black text-violet-600">
+                                                @fed.Name.Substring(0, 1).ToUpper()
+                                            </div>
+                                            <span class="truncate">@fed.Name</span>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <div class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 text-sm font-semibold select-none">
+                                            <div class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-100 text-[10px] font-black text-slate-400">
+                                                @fed.Name.Substring(0, 1).ToUpper()
+                                            </div>
+                                            <span class="truncate">@fed.Name</span>
                                         </div>
-                                        <span class="truncate">@fed.Name</span>
-                                    </a>
+                                    }
                                     
                                     <!-- Nested Federation Workspaces -->
                                     <div class="pl-5 ml-5 border-l border-slate-100 space-y-0.5 mt-1">
-                                        @if (fed.Workspaces != null && fed.Workspaces.Any())
+                                        @{
+                                            var visibleWorkspaces = fed.Workspaces ?? new List<unigrid.Models.Workspace>();
+                                            if (!isFedMember)
+                                            {
+                                                visibleWorkspaces = visibleWorkspaces.Where(w => !w.IsDisabled && (w.OwnerId == currentUser.Id || DbContext.WorkspaceMembers.Any(wm => !wm.IsDisabled && wm.WorkspaceId == w.Id && wm.UserId == currentUser.Id))).ToList();
+                                            }
+                                        }
+                                        @if (visibleWorkspaces.Any())
                                         {
-                                            @foreach (var ws in fed.Workspaces)
+                                            @foreach (var ws in visibleWorkspaces)
                                             {
                                                 <a href="/WorkspaceDetail/@ws.JoinCode" class="flex items-center gap-3 px-3 py-1.5 rounded-lg text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-xs">
                                                     <div class="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded bg-slate-50 text-[9px] font-black text-slate-500">
@@ -464,7 +486,7 @@
                         <div class="flex-1 overflow-y-auto space-y-3 py-2 max-h-[300px] scrollbar-none">
                             
                             <!-- Notifications Tab -->
-                            <div x-show="currentTab === 'notifications'" class="space-y-2">
+                            <div x-show="currentTab === 'notifications'" class="space-y-2" id="notifications-list-container">
                                 @if (notifications.Count == 0)
                                 {
                                     <div class="py-8 text-center text-xs text-slate-400 font-bold italic flex flex-col items-center gap-2">
@@ -595,6 +617,162 @@
         });
     </script>
     @await RenderSectionAsync("Scripts", required: false)
+
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
+        <script>
+            document.addEventListener("DOMContentLoaded", () => {
+                // Initialize SignalR Connection
+                const connection = new signalR.HubConnectionBuilder()
+                    .withUrl("/chatHub")
+                    .withAutomaticReconnect()
+                    .build();
+
+                connection.on("ReceiveNotification", (payload) => {
+                    console.log("Real-time Notification Received:", payload);
+                    
+                    // 1. Trigger toast notification
+                    showToastNotification(payload.message, payload.link);
+
+                    // 2. Increment Alpine.js unreadCount badge
+                    const bellBtn = document.querySelector('[x-data*="unreadCount"]');
+                    if (bellBtn) {
+                        const alpineData = Alpine.$data(bellBtn);
+                        if (alpineData) {
+                            alpineData.unreadCount++;
+                        }
+                    }
+
+                    // 3. Prepend to DOM notifications list if user is currently looking at it
+                    const container = document.getElementById("notifications-list-container");
+                    if (container) {
+                        // Remove empty notice if it is there
+                        const noNotif = container.querySelector(".bell-off")?.closest("div");
+                        if (noNotif) noNotif.remove();
+
+                        const uniqueId = "notif_" + payload.id.replace(/-/g, "");
+                        let iconName = "bell";
+                        let iconColor = "text-indigo-500 bg-indigo-50";
+                        
+                        if (payload.type === "TaskAssignment") { 
+                            iconName = "user-check"; 
+                            iconColor = "text-blue-500 bg-blue-50"; 
+                        } else if (payload.type === "TaskApproved") { 
+                            iconName = "check-circle"; 
+                            iconColor = "text-green-500 bg-green-50"; 
+                        } else if (payload.type === "TaskRework") { 
+                            iconName = "rotate-ccw"; 
+                            iconColor = "text-amber-500 bg-amber-50"; 
+                        } else if (payload.type === "InvitationAccepted") { 
+                            iconName = "user-plus"; 
+                            iconColor = "text-purple-500 bg-purple-50"; 
+                        } else if (payload.type === "TaskComment") {
+                            iconName = "message-square";
+                            iconColor = "text-sky-500 bg-sky-50";
+                        } else if (payload.type === "TaskReviewRequest") {
+                            iconName = "eye";
+                            iconColor = "text-orange-500 bg-orange-50";
+                        } else if (payload.type === "SubscriptionNotification" || payload.type === "SubscriptionExpiring") {
+                            iconName = "credit-card";
+                            iconColor = "text-emerald-500 bg-emerald-50";
+                        }
+
+                        const notifHtml = `
+                            <div id="${uniqueId}" class="p-3.5 rounded-2xl border transition-all flex gap-3 items-start relative group bg-indigo-50/10 border-indigo-100/50 hover:bg-indigo-50/20">
+                                <div class="h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${iconColor}">
+                                    <i data-lucide="${iconName}" class="w-4.5 h-4.5"></i>
+                                </div>
+                                <div class="flex-1 min-w-0 pr-4">
+                                    <p class="text-xs text-slate-600 leading-normal font-semibold">${payload.message}</p>
+                                    <span class="text-[9px] text-slate-400 font-black uppercase mt-1 block">${new Date(payload.createdAt).toLocaleString()}</span>
+                                </div>
+                                <button onclick="markNotificationAsReadDirectly('${payload.id}', '${uniqueId}')" 
+                                        class="absolute right-3 top-3.5 h-5 w-5 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
+                                        title="Mark as read">
+                                    <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        `;
+                        container.insertAdjacentHTML('afterbegin', notifHtml);
+                        if (window.lucide) {
+                            window.lucide.createIcons();
+                        }
+                    }
+                });
+
+                connection.start()
+                    .then(() => {
+                        console.log("Global Notification Hub connection active!");
+                    })
+                    .catch(err => console.error("Global Notification Hub connection failed:", err));
+            });
+
+            function showToastNotification(message, link) {
+                let container = document.getElementById("global-toast-container");
+                if (!container) {
+                    container = document.createElement("div");
+                    container.id = "global-toast-container";
+                    container.className = "fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none";
+                    document.body.appendChild(container);
+                }
+
+                const toast = document.createElement("div");
+                toast.className = "bg-white border border-slate-100 shadow-2xl rounded-2xl p-4 flex gap-3 items-start pointer-events-auto transition-all duration-300 transform translate-x-full opacity-0";
+                
+                toast.innerHTML = `
+                    <div class="h-8 w-8 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0 text-indigo-600">
+                        <i data-lucide="bell" class="w-4.5 h-4.5"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs font-semibold text-slate-800">${message}</p>
+                        ${link ? `<a href="${link}" class="text-[10px] text-indigo-600 hover:underline font-bold mt-1.5 inline-block">View details &rarr;</a>` : ''}
+                    </div>
+                    <button class="text-slate-400 hover:text-slate-600 shrink-0" onclick="this.closest('.bg-white').remove()">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                `;
+
+                container.appendChild(toast);
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+
+                // Transition in
+                setTimeout(() => {
+                    toast.classList.remove("translate-x-full", "opacity-0");
+                }, 10);
+
+                // Transition out after 6 seconds
+                setTimeout(() => {
+                    toast.classList.add("translate-x-full", "opacity-0");
+                    setTimeout(() => toast.remove(), 300);
+                }, 6000);
+            }
+
+            async function markNotificationAsReadDirectly(id, elementId) {
+                try {
+                    const res = await fetch(`/api/notifications/mark-read/${id}`, { method: 'POST' });
+                    if (res.ok) {
+                        const el = document.getElementById(elementId);
+                        if (el) {
+                            el.style.opacity = '0.5';
+                            el.style.pointerEvents = 'none';
+                        }
+                        const bellBtn = document.querySelector('[x-data*="unreadCount"]');
+                        if (bellBtn) {
+                            const alpineData = Alpine.$data(bellBtn);
+                            if (alpineData && alpineData.unreadCount > 0) {
+                                alpineData.unreadCount--;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        </script>
+    }
 
     @{
         // Only show the assistant widget when:
