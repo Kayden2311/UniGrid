@@ -16,15 +16,18 @@ namespace unigrid.Controllers
     {
         private readonly ITaskService _taskService;
         private readonly IMemberRepository _memberRepo;
+        private readonly IWorkspaceRepository _workspaceRepo;
         private readonly ILogger<KpiController> _logger;
 
         public KpiController(
             ITaskService taskService,
             IMemberRepository memberRepo,
+            IWorkspaceRepository workspaceRepo,
             ILogger<KpiController> logger)
         {
             _taskService = taskService;
             _memberRepo = memberRepo;
+            _workspaceRepo = workspaceRepo;
             _logger = logger;
         }
 
@@ -36,6 +39,12 @@ namespace unigrid.Controllers
         public async Task<IActionResult> GetCategories(Guid workspaceId)
         {
             _logger.LogInformation("KpiAPI: GetCategories for workspace {WorkspaceId}", workspaceId);
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized(new { message = "User not found." });
+
+            var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
+            if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
+
             var categories = await _taskService.GetWorkspaceCategoriesAsync(workspaceId);
             return Ok(categories);
         }
@@ -47,6 +56,9 @@ namespace unigrid.Controllers
 
             var user = await GetCurrentUserAsync();
             if (user == null) return Unauthorized(new { message = "User not found." });
+
+            var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
+            if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
 
             var error = await _taskService.CreateCategoryAsync(workspaceId, user.Id, request.Name, request.Description, request.ColorHex);
             if (error != null)
@@ -65,6 +77,9 @@ namespace unigrid.Controllers
             var user = await GetCurrentUserAsync();
             if (user == null) return Unauthorized(new { message = "User not found." });
 
+            var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
+            if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
+
             var error = await _taskService.UpdateCategoryAsync(workspaceId, user.Id, categoryId, request.Name, request.Description, request.ColorHex);
             if (error != null)
             {
@@ -81,6 +96,9 @@ namespace unigrid.Controllers
 
             var user = await GetCurrentUserAsync();
             if (user == null) return Unauthorized(new { message = "User not found." });
+
+            var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
+            if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
 
             var error = await _taskService.DeleteCategoryAsync(workspaceId, user.Id, categoryId);
             if (error != null)
@@ -99,6 +117,12 @@ namespace unigrid.Controllers
         public async Task<IActionResult> GetKpiTargets(Guid workspaceId)
         {
             _logger.LogInformation("KpiAPI: GetKpiTargets for workspace {WorkspaceId}", workspaceId);
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized(new { message = "User not found." });
+
+            var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
+            if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
+
             var targets = await _taskService.GetWorkspaceTargetsAsync(workspaceId);
             return Ok(targets);
         }
@@ -110,6 +134,9 @@ namespace unigrid.Controllers
 
             var user = await GetCurrentUserAsync();
             if (user == null) return Unauthorized(new { message = "User not found." });
+
+            var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
+            if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
 
             var error = await _taskService.CreateKpiTargetAsync(
                 workspaceId, user.Id, request.UserId, request.CategoryId, request.PeriodType, request.StartDate, request.EndDate, request.TargetValue);
@@ -130,6 +157,9 @@ namespace unigrid.Controllers
             var user = await GetCurrentUserAsync();
             if (user == null) return Unauthorized(new { message = "User not found." });
 
+            var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
+            if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
+
             var error = await _taskService.DeleteKpiTargetAsync(workspaceId, user.Id, targetId);
             if (error != null)
             {
@@ -147,7 +177,12 @@ namespace unigrid.Controllers
         public async Task<IActionResult> GetKpiReport(Guid workspaceId, [FromQuery] string periodType, [FromQuery] DateTime targetDate)
         {
             _logger.LogInformation("KpiAPI: GetKpiReport for workspace {WorkspaceId}, period {Period}, targetDate {Date}", workspaceId, periodType, targetDate);
-            
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized(new { message = "User not found." });
+
+            var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
+            if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
+
             var report = await _taskService.GetKpiReportAsync(workspaceId, periodType, targetDate);
             return Ok(report);
         }
@@ -163,6 +198,15 @@ namespace unigrid.Controllers
 
             var accountId = Guid.Parse(accountIdClaim);
             return await _memberRepo.GetUserByAccountIdAsync(accountId);
+        }
+
+        private async Task<bool> IsUserInWorkspaceAsync(Guid workspaceId, Guid userId)
+        {
+            var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
+            if (members.Any(m => m.UserId == userId)) return true;
+
+            var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
+            return workspace != null && workspace.OwnerId == userId;
         }
     }
 
