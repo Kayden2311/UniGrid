@@ -687,36 +687,36 @@ namespace unigrid.Data
                     WorkspaceId = workspaceSE.Id, 
                     PackageId = "business_monthly", 
                     Status = "Active", 
-                    EndDate = DateTime.UtcNow.AddYears(1),
+                    EndDate = DateTime.UtcNow.AddDays(15),
                     Amount = 899000,
                     UserId = userAlice.Id,
                     PaymentMethod = "Credit Card",
                     TransactionRef = "TXN-SE-001",
-                    CreatedAt = DateTime.UtcNow.AddMonths(-1)
+                    CreatedAt = DateTime.UtcNow.AddDays(-15)
                 };
                 var billingWeb = new Billing 
                 { 
                     WorkspaceId = workspaceWeb.Id, 
                     PackageId = "proplus_monthly", 
                     Status = "Active", 
-                    EndDate = DateTime.UtcNow.AddYears(10),
+                    EndDate = DateTime.UtcNow.AddDays(20),
                     Amount = 449000,
                     UserId = userAlice.Id,
                     PaymentMethod = "VNPAY QR",
                     TransactionRef = "TXN-WEB-002",
-                    CreatedAt = DateTime.UtcNow.AddMonths(-2)
+                    CreatedAt = DateTime.UtcNow.AddDays(-10)
                 };
                 var billingCalc = new Billing 
                 { 
                     WorkspaceId = workspaceCalc.Id, 
                     PackageId = "personal_monthly", 
                     Status = "Active", 
-                    EndDate = DateTime.UtcNow.AddYears(10),
+                    EndDate = DateTime.UtcNow.AddDays(25),
                     Amount = 40000,
                     UserId = userBob.Id,
                     PaymentMethod = "Momo E-Wallet",
                     TransactionRef = "TXN-CALC-003",
-                    CreatedAt = DateTime.UtcNow.AddMonths(-3)
+                    CreatedAt = DateTime.UtcNow.AddDays(-5)
                 };
                 var billingPhysics = new Billing 
                 { 
@@ -759,60 +759,60 @@ namespace unigrid.Data
                     WorkspaceId = workspaceDesign.Id, 
                     PackageId = "proplus_monthly", 
                     Status = "Active", 
-                    EndDate = DateTime.UtcNow.AddYears(5),
+                    EndDate = DateTime.UtcNow.AddDays(22),
                     Amount = 449000,
                     UserId = userBob.Id,
                     PaymentMethod = "Bank Transfer",
                     TransactionRef = "TXN-DSN-004",
-                    CreatedAt = DateTime.UtcNow.AddMonths(-4)
+                    CreatedAt = DateTime.UtcNow.AddDays(-8)
                 };
                 var billingMobile = new Billing 
                 { 
                     WorkspaceId = workspaceMobile.Id, 
                     PackageId = "pro_monthly", 
                     Status = "Active", 
-                    EndDate = DateTime.UtcNow.AddYears(5),
+                    EndDate = DateTime.UtcNow.AddDays(18),
                     Amount = 299000,
                     UserId = userCharlie.Id,
                     PaymentMethod = "Credit Card",
                     TransactionRef = "TXN-MBL-005",
-                    CreatedAt = DateTime.UtcNow.AddMonths(-5)
+                    CreatedAt = DateTime.UtcNow.AddDays(-12)
                 };
                 var billingGlobal = new Billing 
                 { 
                     WorkspaceId = workspaceGlobal.Id, 
                     PackageId = "business_monthly", 
                     Status = "Active", 
-                    EndDate = DateTime.UtcNow.AddYears(2),
+                    EndDate = DateTime.UtcNow.AddDays(24),
                     Amount = 899000,
                     UserId = userFrank.Id,
                     PaymentMethod = "Bank Transfer",
                     TransactionRef = "TXN-GLB-006",
-                    CreatedAt = DateTime.UtcNow.AddMonths(-6)
+                    CreatedAt = DateTime.UtcNow.AddDays(-6)
                 };
                 var billingAI = new Billing 
                 { 
                     WorkspaceId = workspaceAI.Id, 
                     PackageId = "proplus_monthly", 
                     Status = "Active", 
-                    EndDate = DateTime.UtcNow.AddYears(3),
+                    EndDate = DateTime.UtcNow.AddDays(26),
                     Amount = 449000,
                     UserId = userAlice.Id,
                     PaymentMethod = "VNPAY QR",
                     TransactionRef = "TXN-AI-007",
-                    CreatedAt = DateTime.UtcNow.AddMonths(-7)
+                    CreatedAt = DateTime.UtcNow.AddDays(-4)
                 };
                 var billingData = new Billing 
                 { 
                     WorkspaceId = workspaceData.Id, 
                     PackageId = "pro_monthly", 
                     Status = "Active", 
-                    EndDate = DateTime.UtcNow.AddYears(3),
+                    EndDate = DateTime.UtcNow.AddDays(28),
                     Amount = 299000,
                     UserId = userBob.Id,
                     PaymentMethod = "Momo E-Wallet",
                     TransactionRef = "TXN-DAT-008",
-                    CreatedAt = DateTime.UtcNow.AddMonths(-8)
+                    CreatedAt = DateTime.UtcNow.AddDays(-2)
                 };
 
                 await context.Billings.AddRangeAsync(billingSE, billingWeb, billingCalc, billingPhysics, billingEnglish, billingResearch, billingDesign, billingMobile, billingGlobal, billingAI, billingData);
@@ -840,8 +840,7 @@ namespace unigrid.Data
                     new WorkspaceMember { WorkspaceId = workspaceWeb.Id, UserId = userLiam.Id, Role = "Member", DisplayRole = "UI Designer" },
 
                     // Planner
-                    new WorkspaceMember { WorkspaceId = workspaceCalc.Id, UserId = userBob.Id, Role = "Manager", DisplayRole = "Student" }, 
-                    new WorkspaceMember { WorkspaceId = workspaceCalc.Id, UserId = userAlice.Id, Role = "Member", DisplayRole = "Tutor" },
+                    new WorkspaceMember { WorkspaceId = workspaceCalc.Id, UserId = userBob.Id, Role = "Manager", DisplayRole = "Student" },
 
                     // Physics, English, Research
                     new WorkspaceMember { WorkspaceId = workspacePhysics.Id, UserId = userAlice.Id, Role = "Manager", DisplayRole = "Researcher" },

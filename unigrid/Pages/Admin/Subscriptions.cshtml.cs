@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace unigrid.Pages.Admin
 {
@@ -15,10 +16,45 @@ namespace unigrid.Pages.Admin
     public class SubscriptionsModel : PageModel
     {
         private readonly UniGridDbContext _context;
+        private readonly IMemoryCache _cache;
+        private readonly unigrid.Services.INotificationService _notificationService;
 
-        public SubscriptionsModel(UniGridDbContext context)
+        public SubscriptionsModel(UniGridDbContext context, IMemoryCache cache, unigrid.Services.INotificationService notificationService)
         {
             _context = context;
+            _cache = cache;
+            _notificationService = notificationService;
+        }
+
+        private async System.Threading.Tasks.Task EvictWorkspaceCacheAsync(Guid workspaceId)
+        {
+            var workspace = await _context.Workspaces.FindAsync(workspaceId);
+            if (workspace != null)
+            {
+                _cache.Remove($"Workspace_{workspace.JoinCode}");
+                _cache.Remove($"WorkspaceMembers_{workspace.Id}");
+                _cache.Remove($"WorkspaceTasks_{workspace.Id}");
+                _cache.Remove($"WorkspaceFiles_{workspace.Id}");
+                _cache.Remove($"WorkspaceChatRoom_{workspace.Id}");
+                _cache.Remove($"UserWorkspaces_{workspace.OwnerId}");
+                _cache.Remove($"UserTasks_{workspace.OwnerId}");
+
+                var owner = await _context.Users.FindAsync(workspace.OwnerId);
+                if (owner != null)
+                {
+                    _cache.Remove($"User_{owner.AccountId}");
+                }
+
+                var memberIds = await _context.WorkspaceMembers
+                    .Where(m => m.WorkspaceId == workspace.Id)
+                    .Select(m => m.UserId)
+                    .ToListAsync();
+                foreach (var memberId in memberIds)
+                {
+                    _cache.Remove($"UserWorkspaces_{memberId}");
+                    _cache.Remove($"UserTasks_{memberId}");
+                }
+            }
         }
 
         public class WorkspaceSubscriptionViewModel
@@ -132,9 +168,13 @@ namespace unigrid.Pages.Admin
                 .Include(w => w.Owner)
                 .FirstOrDefaultAsync(w => w.Id == workspaceId);
 
-            if (workspace == null) return NotFound();
-
             workspace.PackageTier = tier;
+
+            if (workspace.WorkspaceType == "Personal" || tier == "Personal")
+            {
+                workspace.Owner.SubscriptionTier = tier;
+                workspace.Owner.SubscriptionExpires = tier == "Free" ? null : DateTime.UtcNow.AddMonths(1);
+            }
 
             // Handle corresponding billing entry
             var activeBilling = workspace.Billings.FirstOrDefault(b => b.Status == "Active");
@@ -186,7 +226,81 @@ namespace unigrid.Pages.Admin
             }
 
             await _context.SaveChangesAsync();
+            await EvictWorkspaceCacheAsync(workspaceId);
             TempData["SubSuccess"] = $"Workspace '{workspace.Name}' plan tier updated to {tier}.";
+            return RedirectToPage();
+        }
+
+        // Action: Approve/Confirm a pending billing transaction
+        public async System.Threading.Tasks.Task<IActionResult> OnPostApproveBillingAsync(Guid billingId)
+        {
+            var billing = await _context.Billings
+                .Include(b => b.Workspace)
+                .ThenInclude(w => w.Owner)
+                .FirstOrDefaultAsync(b => b.Id == billingId);
+
+            if (billing == null) return NotFound();
+
+            // Set billing status to "Active"
+            billing.Status = "Active";
+
+            var workspace = billing.Workspace;
+            if (workspace != null)
+            {
+                // Identify Tier from PackageId, e.g., "personal_monthly" -> "Personal"
+                string tier = "Free";
+                var pkgId = billing.PackageId.ToLower();
+                if (pkgId.Contains("business")) tier = "Business";
+                else if (pkgId.Contains("proplus")) tier = "ProPlus";
+                else if (pkgId.Contains("pro")) tier = "Pro";
+                else if (pkgId.Contains("personal")) tier = "Personal";
+
+                workspace.PackageTier = tier;
+
+                // For the workspace owner
+                var owner = workspace.Owner;
+                if (owner != null)
+                {
+                    // Compute duration
+                    bool isYearly = pkgId.Contains("yearly");
+                    var duration = isYearly ? DateTime.UtcNow.AddYears(1) : DateTime.UtcNow.AddMonths(1);
+
+                    billing.EndDate = duration;
+
+                    // Deactivate/Expire other active billing transactions for this workspace
+                    var otherActiveBillings = await _context.Billings
+                        .Where(b => b.WorkspaceId == workspace.Id && b.Id != billing.Id && b.Status == "Active")
+                        .ToListAsync();
+                    foreach (var other in otherActiveBillings)
+                    {
+                        other.Status = "Expired";
+                    }
+
+                    if (workspace.WorkspaceType == "Personal" || tier == "Personal")
+                    {
+                        owner.SubscriptionTier = tier;
+                        owner.SubscriptionExpires = duration;
+                    }
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            if (workspace != null)
+            {
+                var pkgName = billing.PackageId.Replace("_monthly", " Monthly").Replace("_yearly", " Yearly").ToUpper();
+                var msg = $"Congratulations! Your payment for subscription plan '{pkgName}' on Workspace '{workspace.Name}' has been APPROVED. Your active plan tier is now '{workspace.PackageTier}'.";
+                await _notificationService.CreateAndSendNotificationAsync(
+                    workspace.OwnerId,
+                    msg,
+                    "SubscriptionNotification",
+                    "/Pricing",
+                    billing.Id
+                );
+            }
+
+            await EvictWorkspaceCacheAsync(billing.WorkspaceId);
+            TempData["SubSuccess"] = $"Billing transaction {billing.TransactionRef} has been approved and plan applied successfully.";
             return RedirectToPage();
         }
 
@@ -195,6 +309,7 @@ namespace unigrid.Pages.Admin
         {
             var billing = await _context.Billings
                 .Include(b => b.Workspace)
+                .ThenInclude(w => w.Owner)
                 .FirstOrDefaultAsync(b => b.Id == billingId);
 
             if (billing == null) return NotFound();
@@ -216,16 +331,35 @@ namespace unigrid.Pages.Admin
             }
 
             billing.Status = "Active"; // Ensure it is active
+
+            if (billing.Workspace.WorkspaceType == "Personal" || billing.Workspace.PackageTier == "Personal")
+            {
+                billing.Workspace.Owner.SubscriptionExpires = billing.EndDate;
+            }
+
             await _context.SaveChangesAsync();
 
-            TempData["SubSuccess"] = $"Billing plan for workspace '{billing.Workspace.Name}' extended by {extensionMonths} months.";
+            if (billing.Workspace != null)
+            {
+                var msg = $"Admin has extended your workspace '{billing.Workspace.Name}' subscription to {billing.EndDate.ToLocalTime():yyyy-MM-dd HH:mm}.";
+                await _notificationService.CreateAndSendNotificationAsync(
+                    billing.Workspace.OwnerId,
+                    msg,
+                    "SubscriptionNotification",
+                    "/Pricing",
+                    billing.Id
+                );
+            }
+
+            await EvictWorkspaceCacheAsync(billing.WorkspaceId);
+            TempData["SubSuccess"] = $"Workspace subscription end date extended by {extensionMonths} months successfully.";
             return RedirectToPage();
         }
 
         // Action: Create manually a Billing Record
         public async System.Threading.Tasks.Task<IActionResult> OnPostCreateBillingAsync(Guid workspaceId, string packageId, int durationMonths)
         {
-            var workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.Id == workspaceId);
+            var workspace = await _context.Workspaces.Include(w => w.Owner).FirstOrDefaultAsync(w => w.Id == workspaceId);
             if (workspace == null) return NotFound();
 
             if (durationMonths <= 0)
@@ -253,6 +387,12 @@ namespace unigrid.Pages.Admin
 
             workspace.PackageTier = tier;
 
+            if (workspace.WorkspaceType == "Personal" || tier == "Personal")
+            {
+                workspace.Owner.SubscriptionTier = tier;
+                workspace.Owner.SubscriptionExpires = tier == "Free" ? null : DateTime.UtcNow.AddMonths(durationMonths);
+            }
+
             decimal amount = tier switch
             {
                 "Business" => packageId.Contains("yearly") ? 8900000 : 899000,
@@ -279,6 +419,7 @@ namespace unigrid.Pages.Admin
 
             await _context.Billings.AddAsync(billing);
             await _context.SaveChangesAsync();
+            await EvictWorkspaceCacheAsync(workspaceId);
 
             TempData["SubSuccess"] = $"Billing transaction successfully recorded for workspace '{workspace.Name}'.";
             return RedirectToPage();
@@ -352,6 +493,11 @@ namespace unigrid.Pages.Admin
                     else if (receipt.Plan.Contains("personal")) tier = "Personal";
 
                     targetWorkspace.PackageTier = tier;
+                    if (targetWorkspace.WorkspaceType == "Personal" || tier == "Personal")
+                    {
+                        targetWorkspace.Owner.SubscriptionTier = tier;
+                        targetWorkspace.Owner.SubscriptionExpires = tier == "Free" ? null : DateTime.UtcNow.AddMonths(1);
+                    }
                     await _context.Billings.AddAsync(billing);
 
                     var audit = new AuditLog
@@ -413,6 +559,11 @@ namespace unigrid.Pages.Admin
                     };
 
                     ws.PackageTier = tier;
+                    if (ws.WorkspaceType == "Personal" || tier == "Personal")
+                    {
+                        ws.Owner.SubscriptionTier = tier;
+                        ws.Owner.SubscriptionExpires = tier == "Free" ? null : DateTime.UtcNow.AddMonths(1);
+                    }
                     await _context.Billings.AddAsync(billing);
 
                     var audit = new AuditLog
@@ -434,6 +585,20 @@ namespace unigrid.Pages.Admin
             if (syncedCount > 0)
             {
                 await _context.SaveChangesAsync();
+
+                foreach (var receipt in mockEmailReceipts)
+                {
+                    var targetWorkspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == receipt.WorkspaceJoinCode);
+                    if (targetWorkspace != null)
+                    {
+                        await EvictWorkspaceCacheAsync(targetWorkspace.Id);
+                    }
+                }
+                foreach (var ws in workspaces)
+                {
+                    await EvictWorkspaceCacheAsync(ws.Id);
+                }
+
                 TempData["SubSuccess"] = $"Experimental Sync: Successfully scanned admin mailbox and synchronized {syncedCount} payment receipts.";
             }
             else
