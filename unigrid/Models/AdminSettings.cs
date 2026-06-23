@@ -37,6 +37,42 @@ namespace unigrid.Models
         public List<OperationCostSetting> OperationCosts { get; set; } = new();
         public List<PlanSetting> Plans { get; set; } = new();
 
+        public static PlanSetting GetPlanSetting(string? tier, UniGridDbContext? context = null)
+        {
+            if (string.IsNullOrEmpty(tier) || tier.Equals("Free", StringComparison.OrdinalIgnoreCase))
+            {
+                return new PlanSetting
+                {
+                    Id = "Free",
+                    Name = "Free",
+                    MemberLimit = 5,
+                    StorageLimit = "0 GB Storage",
+                    ChatLimit = 1,
+                    TaskBranchLimit = 1,
+                    HasAdvancedAnalytics = false,
+                    HasRolePermissions = false
+                };
+            }
+            
+            var settings = Load(context);
+            var plan = settings.Plans.FirstOrDefault(p => p.Id.Equals(tier, StringComparison.OrdinalIgnoreCase) || p.Name.Equals(tier, StringComparison.OrdinalIgnoreCase));
+            if (plan == null)
+            {
+                return new PlanSetting
+                {
+                    Id = "Free",
+                    Name = "Free",
+                    MemberLimit = 5,
+                    StorageLimit = "0 GB Storage",
+                    ChatLimit = 1,
+                    TaskBranchLimit = 1,
+                    HasAdvancedAnalytics = false,
+                    HasRolePermissions = false
+                };
+            }
+            return plan;
+        }
+
         public static AdminSettings Load(UniGridDbContext? context = null)
         {
             bool createdContext = false;
@@ -267,8 +303,8 @@ namespace unigrid.Models
                     YearlyPrice = 399000, 
                     Description = "Dedicated solo power workspace", 
                     ColorClass = "teal",
-                    Features = new() { "1 Workspace", "5 Members", "2 GB Storage (Individual)", "0 Chat Channels", "1 Task Branch", "Basic Analytics" },
-                    MemberLimit = 5,
+                    Features = new() { "1 Workspace", "1 Member", "2 GB Storage (Individual)", "0 Chat Channels", "1 Task Branch", "Basic Analytics" },
+                    MemberLimit = 1,
                     StorageLimit = "2 GB Storage (Individual)",
                     ChatLimit = 0,
                     TaskBranchLimit = 1,

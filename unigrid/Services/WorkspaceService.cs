@@ -22,6 +22,8 @@ public class WorkspaceService : IWorkspaceService
     private readonly IMemoryCache _cache;
     private readonly IHubContext<ChatHub> _hubContext;
     private readonly ILogger<WorkspaceService> _logger;
+    private readonly INotificationService _notificationService;
+    private readonly IEmailService _emailService;
 
     public WorkspaceService(
         IWorkspaceRepository workspaceRepo,
@@ -32,7 +34,9 @@ public class WorkspaceService : IWorkspaceService
         IUnitOfWork unitOfWork,
         IMemoryCache cache,
         IHubContext<ChatHub> hubContext,
-        ILogger<WorkspaceService> logger)
+        ILogger<WorkspaceService> logger,
+        INotificationService notificationService,
+        IEmailService emailService)
     {
         _workspaceRepo = workspaceRepo;
         _memberRepo = memberRepo;
@@ -43,6 +47,8 @@ public class WorkspaceService : IWorkspaceService
         _cache = cache;
         _hubContext = hubContext;
         _logger = logger;
+        _notificationService = notificationService;
+        _emailService = emailService;
     }
 
     public async Task<Workspace?> GetWorkspaceByJoinCodeAsync(string joinCode)
@@ -111,7 +117,14 @@ public class WorkspaceService : IWorkspaceService
             }
         }
 
-        _memberRepo.RemoveMember(currentMember);
+        if (!otherMembers.Any())
+        {
+            _workspaceRepo.Remove(workspace);
+        }
+        else
+        {
+            _memberRepo.RemoveMember(currentMember);
+        }
         await _unitOfWork.SaveChangesAsync();
 
         EvictWorkspaceCache(workspaceId, members.Select(m => m.UserId).ToList());
@@ -160,11 +173,14 @@ public class WorkspaceService : IWorkspaceService
         int currentMembersCount = (await _memberRepo.GetWorkspaceMembersAsync(workspaceId)).Count;
         int pendingInvitesCount = await _memberRepo.GetPendingInvitationsCountAsync(workspaceId);
         
-        int maxMembersAllowed = 5;
         string tier = workspace.PackageTier ?? "Free";
-        if (tier == "Pro") maxMembersAllowed = 10;
-        else if (tier == "ProPlus") maxMembersAllowed = 15;
-        else if (tier == "Business") maxMembersAllowed = 30;
+        if (tier.Equals("Personal", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Adding members is not allowed on the Personal plan. Upgrade to Pro or Business to collaborate.";
+        }
+
+        var planSetting = AdminSettings.GetPlanSetting(tier);
+        int maxMembersAllowed = planSetting?.MemberLimit ?? 5;
 
         if (currentMembersCount + pendingInvitesCount >= maxMembersAllowed)
         {
@@ -184,25 +200,38 @@ public class WorkspaceService : IWorkspaceService
         };
 
         await _memberRepo.AddInvitationAsync(invitation);
+        await _unitOfWork.SaveChangesAsync();
 
+        var inviter = await _memberRepo.GetUserByIdAsync(inviterId);
         if (inviteeUser != null)
         {
-            var inviter = await _memberRepo.GetUserByIdAsync(inviterId);
-            var notification = new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = inviteeUser.Id,
-                Message = $"{inviter?.FullName ?? "Someone"} has invited you to join Workspace '{workspace.Name}' as a '{role}'.",
-                Type = "WorkspaceInvitation",
-                Link = $"/api/invitations/{invitation.Id}/accept",
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow,
-                RelatedId = workspaceId
-            };
-            await _taskRepo.AddNotificationAsync(notification);
+            var msg = $"{inviter?.FullName ?? "Someone"} has invited you to join Workspace '{workspace.Name}' as a '{role}'.";
+            await _notificationService.CreateAndSendNotificationAsync(
+                inviteeUser.Id,
+                msg,
+                "WorkspaceInvite",
+                "/workspaces",
+                invitation.Id
+            );
+        }
+        else
+        {
+            var subject = "UniGrid - Invitation to Join Workspace";
+            var body = $@"
+<div style='font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;'>
+    <h2>Hello!</h2>
+    <p>You have been invited by <strong>{inviter?.FullName ?? "a member"}</strong> to join the workspace <strong>{workspace.Name}</strong> as a <strong>{role}</strong> on UniGrid.</p>
+    <p>UniGrid is a lightweight, unified Workspace and Team Management platform custom-built for student teams, clubs, and startups.</p>
+    <p>Please register a new account on UniGrid using this email address ({emailTrimmed}) to accept the invitation and start collaborating!</p>
+    <div style='margin: 30px 0;'>
+        <a href='https://localhost:7158/Signup' style='background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;'>Register on UniGrid</a>
+    </div>
+    <hr style='border: none; border-top: 1px solid #eee;' />
+    <p style='font-size: 12px; color: #777;'>This is an automated invitation from UniGrid. Please do not reply directly to this email.</p>
+</div>";
+            _ = System.Threading.Tasks.Task.Run(() => _emailService.SendEmailAsync(emailTrimmed, subject, body));
         }
 
-        await _unitOfWork.SaveChangesAsync();
         _logger.LogInformation("Invitation sent to email {Email} as {Role} in Workspace {WorkspaceId}", emailTrimmed, role, workspaceId);
 
         return null; // Success
@@ -241,6 +270,17 @@ public class WorkspaceService : IWorkspaceService
 
         var validRoles = new List<string> { "Vice Manager", "Member", "Viewer" };
         if (!validRoles.Contains(newRole)) return "Invalid role specified.";
+
+        var planSetting = AdminSettings.GetPlanSetting(workspace.PackageTier);
+        if (!planSetting.HasRolePermissions)
+        {
+            bool isViewer = newRole == "Viewer";
+            canDeleteFile = !isViewer;
+            canCreateTask = !isViewer;
+            canEditTask = !isViewer;
+            canCreateChannel = !isViewer;
+            canDeleteTask = !isViewer;
+        }
 
         memberToUpdate.Role = newRole;
         memberToUpdate.DisplayRole = Helpers.InputSanitizer.SanitizeInput(newDisplayRole);
@@ -385,6 +425,7 @@ public class WorkspaceService : IWorkspaceService
         _cache.Remove($"WorkspaceTasks_{workspaceId}");
         _cache.Remove($"WorkspaceFiles_{workspaceId}");
         _cache.Remove($"WorkspaceChatRoom_{workspaceId}");
+        _cache.Remove($"WorkspaceMembers_{workspaceId}");
 
         if (memberIds != null)
         {

@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.IO;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -34,6 +36,12 @@ namespace unigrid.Pages
 
         [BindProperty]
         public string? AvatarUrl { get; set; }
+
+        [BindProperty]
+        public IFormFile? AvatarFile { get; set; }
+
+        [BindProperty]
+        public bool RemoveAvatar { get; set; }
 
         public string Email { get; set; } = string.Empty;
         public bool IsGoogleConnected { get; set; }
@@ -81,7 +89,7 @@ namespace unigrid.Pages
             {
                 entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
                 return await _context.Workspaces
-                    .Where(w => w.OwnerId == user.Id || w.WorkspaceMembers.Any(m => m.UserId == user.Id))
+                    .Where(w => !w.IsDisabled && (w.OwnerId == user.Id || w.WorkspaceMembers.Any(m => !m.IsDisabled && m.UserId == user.Id)))
                     .ToListAsync();
             });
             ViewData["Workspaces"] = userWorkspaces;
@@ -101,17 +109,88 @@ namespace unigrid.Pages
                 .Include(u => u.Account)
                 .FirstOrDefaultAsync(u => u.AccountId == accountId);
 
+            // Handle Avatar Upload or Removal
+            if (AvatarFile != null && AvatarFile.Length > 0)
+            {
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+                var extension = Path.GetExtension(AvatarFile.FileName).ToLower();
+                if (!allowedExtensions.Contains(extension))
+                {
+                    ModelState.AddModelError(nameof(AvatarFile), "Invalid image file type. Only JPG, PNG, GIF, and WEBP are allowed.");
+                }
+                else if (AvatarFile.Length > 5 * 1024 * 1024)
+                {
+                    ModelState.AddModelError(nameof(AvatarFile), "Image file size exceeds the 5MB limit.");
+                }
+                else
+                {
+                    var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "avatars");
+                    if (!Directory.Exists(uploadDir))
+                    {
+                        Directory.CreateDirectory(uploadDir);
+                    }
+
+                    // Delete old local avatar file
+                    if (user != null && !string.IsNullOrEmpty(user.AvatarUrl) && user.AvatarUrl.StartsWith("/uploads/avatars/"))
+                    {
+                        var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", user.AvatarUrl.TrimStart('/'));
+                        if (System.IO.File.Exists(oldFilePath))
+                        {
+                            try { System.IO.File.Delete(oldFilePath); } catch (Exception ex) { _logger.LogError(ex, "Failed to delete old file"); }
+                        }
+                    }
+
+                    var uniqueFileName = $"{Guid.NewGuid()}{extension}";
+                    var filePath = Path.Combine(uploadDir, uniqueFileName);
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await AvatarFile.CopyToAsync(stream);
+                    }
+                    AvatarUrl = $"/uploads/avatars/{uniqueFileName}";
+                }
+            }
+            else if (RemoveAvatar)
+            {
+                // Delete old local avatar file
+                if (user != null && !string.IsNullOrEmpty(user.AvatarUrl) && user.AvatarUrl.StartsWith("/uploads/avatars/"))
+                {
+                    var oldFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", user.AvatarUrl.TrimStart('/'));
+                    if (System.IO.File.Exists(oldFilePath))
+                    {
+                        try { System.IO.File.Delete(oldFilePath); } catch (Exception ex) { _logger.LogError(ex, "Failed to delete old file"); }
+                    }
+                }
+                AvatarUrl = null;
+            }
+            else
+            {
+                AvatarUrl = user?.AvatarUrl;
+            }
+
             if (string.IsNullOrWhiteSpace(FullName))
             {
                 ModelState.AddModelError(nameof(FullName), "Full Name cannot be empty.");
+            }
+
+            if (!ModelState.IsValid)
+            {
                 var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
                 Email = accountRecord?.Email ?? "";
                 IsGoogleConnected = accountRecord?.PasswordHash == "GOOGLE_OAUTH";
-                Initials = "U";
+                Initials = user != null ? string.Concat(user.FullName.Split(' ').Select(n => n[0])) : "U";
                 HasNoProfile = user == null;
-                ViewData["Workspaces"] = new List<Workspace>();
-                ViewData["UserName"] = "New User";
-                ViewData["UserInitials"] = "U";
+                
+                var userWorkspaces = user != null ? await _cache.GetOrCreateAsync($"UserWorkspaces_{user.Id}", async entry =>
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+                    return await _context.Workspaces
+                        .Where(w => !w.IsDisabled && (w.OwnerId == user.Id || w.WorkspaceMembers.Any(m => !m.IsDisabled && m.UserId == user.Id)))
+                        .ToListAsync();
+                }) : new List<Workspace>();
+
+                ViewData["Workspaces"] = userWorkspaces;
+                ViewData["UserName"] = user?.FullName ?? "New User";
+                ViewData["UserInitials"] = Initials;
                 return Page();
             }
 
@@ -124,7 +203,7 @@ namespace unigrid.Pages
                     AccountId = accountId,
                     FullName = Helpers.InputSanitizer.SanitizeInput(FullName.Trim()),
                     SubscriptionTier = "Free",
-                    AvatarUrl = string.IsNullOrWhiteSpace(AvatarUrl) ? null : Helpers.InputSanitizer.SanitizeInput(AvatarUrl.Trim())
+                    AvatarUrl = AvatarUrl
                 };
                 await _context.Users.AddAsync(user);
                 await _context.SaveChangesAsync();
@@ -135,7 +214,7 @@ namespace unigrid.Pages
             {
                 // Update user details
                 user.FullName = Helpers.InputSanitizer.SanitizeInput(FullName.Trim());
-                user.AvatarUrl = string.IsNullOrWhiteSpace(AvatarUrl) ? null : Helpers.InputSanitizer.SanitizeInput(AvatarUrl.Trim());
+                user.AvatarUrl = AvatarUrl;
                 await _context.SaveChangesAsync();
                 
                 _cache.Remove($"User_{accountId}");

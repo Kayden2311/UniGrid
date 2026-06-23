@@ -197,6 +197,62 @@ public class WorkspaceDetailModel : PageModel
         Workspace = await _workspaceService.GetWorkspaceByJoinCodeAsync(joinCode);
         if (Workspace == null) return false;
 
+        // Check plan expiration
+        if (Workspace.PackageTier != "Free")
+        {
+            var activeBilling = await _context.Billings
+                .Where(b => b.WorkspaceId == Workspace.Id && b.Status == "Active")
+                .OrderByDescending(b => b.EndDate)
+                .FirstOrDefaultAsync();
+
+            if (activeBilling == null || activeBilling.EndDate < DateTime.UtcNow)
+            {
+                var wsToUpdate = await _context.Workspaces.FindAsync(Workspace.Id);
+                if (wsToUpdate != null)
+                {
+                    wsToUpdate.PackageTier = "Free";
+                    
+                    if (activeBilling != null)
+                    {
+                        var billingToUpdate = await _context.Billings.FindAsync(activeBilling.Id);
+                        if (billingToUpdate != null)
+                        {
+                            billingToUpdate.Status = "Expired";
+                        }
+                    }
+
+                    var owner = await _context.Users.FindAsync(wsToUpdate.OwnerId);
+                    if (owner != null && (wsToUpdate.WorkspaceType == "Personal" || owner.SubscriptionTier == "Personal"))
+                    {
+                        owner.SubscriptionTier = "Free";
+                        owner.SubscriptionExpires = null;
+                        _cache.Remove($"User_{owner.AccountId}");
+                    }
+
+                    await _context.SaveChangesAsync();
+
+                    // Evict cache
+                    _cache.Remove($"Workspace_{joinCode}");
+                    _cache.Remove($"WorkspaceMembers_{Workspace.Id}");
+                    
+                    var memberIds = await _context.WorkspaceMembers
+                        .Where(m => m.WorkspaceId == Workspace.Id)
+                        .Select(m => m.UserId)
+                        .ToListAsync();
+                    foreach (var memberId in memberIds)
+                    {
+                        _cache.Remove($"UserWorkspaces_{memberId}");
+                    }
+
+                    // Reload workspace metadata
+                    Workspace = await _workspaceService.GetWorkspaceByJoinCodeAsync(joinCode);
+                    if (Workspace == null) return false;
+
+                    TempData["ErrorMessage"] = "This workspace's subscription has expired and has been reverted to the Free plan. File uploads and paid features are now disabled.";
+                }
+            }
+        }
+
         var workspaceId = Workspace.Id;
 
         // Cache Workspace Members
@@ -851,6 +907,13 @@ public class WorkspaceDetailModel : PageModel
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
 
+        var planSetting = AdminSettings.GetPlanSetting(Workspace.PackageTier, _context);
+        if (!planSetting.HasAdvancedAnalytics)
+        {
+            TempData["ErrorMessage"] = "Advanced KPI target analytics is not supported on your workspace plan. Please upgrade to Pro+ or higher.";
+            return RedirectToPage(new { joinCode });
+        }
+
         // Compute startDate and endDate based on periodType
         DateTime startDate = DateTime.UtcNow;
         DateTime endDate = DateTime.UtcNow;
@@ -894,6 +957,13 @@ public class WorkspaceDetailModel : PageModel
     public async System.Threading.Tasks.Task<IActionResult> OnPostDeleteKpiTargetAsync(string joinCode, Guid targetId)
     {
         if (!await LoadWorkspaceDataAsync(joinCode)) return RedirectToPage("/Dashboard");
+
+        var planSetting = AdminSettings.GetPlanSetting(Workspace.PackageTier, _context);
+        if (!planSetting.HasAdvancedAnalytics)
+        {
+            TempData["ErrorMessage"] = "Advanced KPI target analytics is not supported on your workspace plan. Please upgrade to Pro+ or higher.";
+            return RedirectToPage(new { joinCode });
+        }
 
         var error = await _taskService.DeleteKpiTargetAsync(Workspace.Id, CurrentUser.Id, targetId);
         if (error != null)
