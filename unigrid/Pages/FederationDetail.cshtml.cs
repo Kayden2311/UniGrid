@@ -64,6 +64,16 @@ namespace unigrid.Pages
 
         public async System.Threading.Tasks.Task<IActionResult> OnGetAsync(string joinCode)
         {
+            var accountIdClaim = User.FindFirst("AccountId")?.Value;
+            if (string.IsNullOrEmpty(accountIdClaim)) return RedirectToPage("/Login");
+
+            var accountId = Guid.Parse(accountIdClaim);
+            var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+            if (userProfile == null)
+            {
+                return RedirectToPage("/Profile");
+            }
+
             var success = await LoadFederationDataAsync(joinCode);
             if (!success)
             {
@@ -82,28 +92,6 @@ namespace unigrid.Pages
 
             var accountId = Guid.Parse(accountIdClaim);
             CurrentUser = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
-            if (CurrentUser == null)
-            {
-                var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
-                if (accountRecord != null)
-                {
-                    var parts = accountRecord.Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
-                    var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
-                    var parsedName = string.Join(" ", fullNameParts);
-                    if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
-
-                    CurrentUser = new User
-                    {
-                        Id = Guid.NewGuid(),
-                        AccountId = accountId,
-                        FullName = parsedName,
-                        SubscriptionTier = "Free"
-                    };
-                    await _context.Users.AddAsync(CurrentUser);
-                    await _context.SaveChangesAsync();
-                }
-            }
-
             if (CurrentUser == null) return false;
 
             // Load Federation including Workspaces and Federation Members
@@ -1124,17 +1112,32 @@ namespace unigrid.Pages
         public async System.Threading.Tasks.Task<IActionResult> OnPostUploadFederationFileAsync(string joinCode)
         {
             var success = await LoadFederationDataAsync(joinCode);
-            if (!success) return RedirectToPage("/Workspaces");
+            if (!success)
+            {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return new BadRequestObjectResult(new { message = "Federation not found or unauthorized." });
+                }
+                return RedirectToPage("/Workspaces");
+            }
 
             bool canUpload = CurrentUserRole == "Owner" || CurrentUserRole == "HeadPresident" || CurrentUserRole == "DepartmentManager";
             if (!canUpload)
             {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return new BadRequestObjectResult(new { message = "You do not have permission to upload files directly to the federation." });
+                }
                 TempData["ErrorMessage"] = "You do not have permission to upload files directly to the federation.";
                 return RedirectToPage("/FederationDetail", new { joinCode });
             }
 
             if (UploadedFederationFile == null || UploadedFederationFile.Length == 0)
             {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return new BadRequestObjectResult(new { message = "No file selected." });
+                }
                 TempData["ErrorMessage"] = "No file selected.";
                 return RedirectToPage("/FederationDetail", new { joinCode });
             }
@@ -1145,6 +1148,10 @@ namespace unigrid.Pages
 
             if (string.IsNullOrEmpty(baseName))
             {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return new BadRequestObjectResult(new { message = "Invalid file name." });
+                }
                 TempData["ErrorMessage"] = "Invalid file name.";
                 return RedirectToPage("/FederationDetail", new { joinCode });
             }
@@ -1153,6 +1160,10 @@ namespace unigrid.Pages
             {
                 if (!char.IsLetterOrDigit(c) && c != ' ' && c != '-' && c != '_')
                 {
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return new BadRequestObjectResult(new { message = "File name contains invalid characters. Only letters, numbers, spaces, hyphens, and underscores are allowed." });
+                    }
                     TempData["ErrorMessage"] = "File name contains invalid characters. Only letters, numbers, spaces, hyphens, and underscores are allowed.";
                     return RedirectToPage("/FederationDetail", new { joinCode });
                 }
@@ -1193,6 +1204,20 @@ namespace unigrid.Pages
 
             await _context.WorkspaceFiles.AddAsync(file);
             await _context.SaveChangesAsync();
+
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new JsonResult(new {
+                    success = true,
+                    file = new {
+                        id = file.Id.ToString(),
+                        fileName = file.FileName,
+                        fileUrl = file.FileUrl,
+                        fileSize = file.FileSize,
+                        fileType = file.FileType
+                    }
+                });
+            }
 
             TempData["SuccessMessage"] = $"Successfully uploaded file: {originalFileName}";
             return RedirectToPage("/FederationDetail", new { joinCode });

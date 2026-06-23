@@ -42,7 +42,11 @@ public class FileService : IFileService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+        if (workspace.OwnerId != userId && userRecord == null)
+        {
+            return (null, "Access denied to this workspace.");
+        }
+        string userRole = userRecord?.Role ?? "Manager";
 
         if (userRole == "Viewer") return (null, "Viewer role cannot upload files.");
 
@@ -169,7 +173,11 @@ public class FileService : IFileService
 
         var members = await _memberRepo.GetWorkspaceMembersAsync(workspaceId);
         var userRecord = members.FirstOrDefault(m => m.UserId == userId);
-        string userRole = userRecord?.Role ?? (workspace.OwnerId == userId ? "Manager" : "Member");
+        if (workspace.OwnerId != userId && userRecord == null)
+        {
+            return "Access denied to this workspace.";
+        }
+        string userRole = userRecord?.Role ?? "Manager";
 
         bool canDelete = IsMemberAllowed(workspace, members, userId, "disabledDeleteFileUsers", userRole);
         if (!canDelete) return "You do not have permission to delete files.";

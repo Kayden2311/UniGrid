@@ -145,6 +145,16 @@ public class WorkspaceDetailModel : PageModel
 
     public async System.Threading.Tasks.Task<IActionResult> OnGetAsync(string joinCode)
     {
+        var accountIdClaim = User.FindFirst("AccountId")?.Value;
+        if (string.IsNullOrEmpty(accountIdClaim)) return RedirectToPage("/Login");
+
+        var accountId = Guid.Parse(accountIdClaim);
+        var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+        if (userProfile == null)
+        {
+            return RedirectToPage("/Profile");
+        }
+
         var result = await LoadWorkspaceDataAsync(joinCode);
         if (!result)
         {
@@ -176,31 +186,6 @@ public class WorkspaceDetailModel : PageModel
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
             return await _memberRepo.GetUserByAccountIdAsync(accountId);
         });
-
-        if (CurrentUser == null)
-        {
-            var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
-            if (accountRecord != null)
-            {
-                var parts = accountRecord.Email.Split('@')[0].Split(new[] { '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
-                var fullNameParts = parts.Select(n => n.Length > 0 ? char.ToUpper(n[0]) + n.Substring(1).ToLower() : string.Empty);
-                var parsedName = string.Join(" ", fullNameParts);
-                if (string.IsNullOrWhiteSpace(parsedName)) parsedName = "User";
-
-                CurrentUser = new User
-                {
-                    Id = Guid.NewGuid(),
-                    AccountId = accountId,
-                    FullName = parsedName,
-                    SubscriptionTier = "Free"
-                };
-                await _context.Users.AddAsync(CurrentUser);
-                await _context.SaveChangesAsync();
-                
-                // Evict cache to refresh profile
-                _cache.Remove($"User_{accountId}");
-            }
-        }
 
         if (CurrentUser == null) return false;
         
