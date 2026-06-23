@@ -1,5 +1,10 @@
 @echo off
 
-start cmd /k "cd /d M:\UniGrid\unigrid\Python && .venv\Scripts\activate && uvicorn runeterra.api:app --reload"
+:: 1. Start the Python AI service
+start cmd /k "cd /d "%~dp0Python" && .venv\Scripts\activate && uvicorn runeterra.api:app --reload"
 
-start cmd /k "cd /d M:\UniGrid\unigrid && dotnet run"
+:: 2. Start the ASP.NET Core backend
+start cmd /k "cd /d "%~dp0" && dotnet run"
+
+:: 3. Start the Vite React frontend
+start cmd /k "cd /d "%~dp0..\..\unigrid_fe" && npm run dev"

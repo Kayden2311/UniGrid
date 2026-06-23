@@ -2218,7 +2218,7 @@
                 <h2 class="text-lg font-black text-slate-800">Workspace KPI Performance</h2>
                 <p class="text-xs font-semibold text-slate-400">Monitor and compare member contributions by category.</p>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
                 <template x-if="currentUserRole === 'Owner' || currentUserRole === 'Manager'">
                     <div class="flex gap-2">
                         <button type="button" @@click="assignKpiOpen = true"
@@ -2232,9 +2232,19 @@
                     </div>
                 </template>
                 <div class="h-6 w-px bg-slate-200"></div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Category:</span>
+                <select x-model="selectedKpiCategoryFilter" 
+                        class="bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/50 text-xs font-bold px-3 py-1.5 rounded-lg outline-none transition-all cursor-pointer">
+                    <option value="all">All Categories</option>
+                    <template x-for="cat in demoCategories" :key="cat.id">
+                        <option :value="cat.id" x-text="cat.name"></option>
+                    </template>
+                </select>
+
+                <div class="h-6 w-px bg-slate-200"></div>
                 <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Period:</span>
                 <div class="flex gap-1.5">
-                    <template x-for="period in ['Weekly', 'Monthly']" :key="period">
+                    <template x-for="period in ['Daily', 'Weekly', 'Monthly']" :key="period">
                         <button type="button" @@click="selectedKpiPeriodFilter = period"
                                 :class="selectedKpiPeriodFilter === period ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
                                 class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" x-text="period"></button>
@@ -2247,11 +2257,11 @@
                     <button type="button" @@click="selectedKpiTimeframe = 'current'"
                             :class="selectedKpiTimeframe === 'current' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
                             class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
-                            x-text="selectedKpiPeriodFilter === 'Weekly' ? 'This Week' : 'This Month'"></button>
+                            x-text="selectedKpiPeriodFilter === 'Daily' ? 'Today' : selectedKpiPeriodFilter === 'Weekly' ? 'This Week' : 'This Month'"></button>
                     <button type="button" @@click="selectedKpiTimeframe = 'previous'"
                             :class="selectedKpiTimeframe === 'previous' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
                             class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
-                            x-text="selectedKpiPeriodFilter === 'Weekly' ? 'Last Week' : 'Last Month'"></button>
+                            x-text="selectedKpiPeriodFilter === 'Daily' ? 'Yesterday' : selectedKpiPeriodFilter === 'Weekly' ? 'Last Week' : 'Last Month'"></button>
                 </div>
             </div>
         </div>
@@ -2277,7 +2287,7 @@
                         <template x-if="workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner').length > 0">
                             <div class="grid sm:grid-cols-2 gap-4">
                                 <template x-for="m in workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner')" :key="m.id">
-                                    <div class="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4" x-data="{ get metrics() { return getMemberKpiMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe); } }">
+                                    <div class="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4" x-data="{ get metrics() { return getMemberKpiMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe, selectedKpiCategoryFilter); } }">
                                         <div class="flex items-center gap-2.5">
                                             <div class="h-7 w-7 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] font-black text-indigo-600"
                                                  x-text="m.fullName.split(' ').map(n => n[0]).join('')"></div>
@@ -2338,7 +2348,7 @@
                                 
                                 <div class="grid sm:grid-cols-2 gap-4">
                                     <!-- List member targets -->
-                                    <template x-for="target in kpiTargets.filter(t => t.userId === m.id).sort((a, b) => {
+                                    <template x-for="target in kpiTargets.filter(t => t.userId === m.id && (selectedKpiCategoryFilter === 'all' || t.categoryId === selectedKpiCategoryFilter)).sort((a, b) => {
                                         const order = { 'Daily': 1, 'Weekly': 2, 'Monthly': 3 };
                                         return (order[a.periodType] || 99) - (order[b.periodType] || 99);
                                     })" :key="target.id">
@@ -2389,7 +2399,7 @@
                                         </div>
                                     </template>
                                     
-                                    <template x-if="kpiTargets.filter(t => t.userId === m.id).length === 0">
+                                    <template x-if="kpiTargets.filter(t => t.userId === m.id && (selectedKpiCategoryFilter === 'all' || t.categoryId === selectedKpiCategoryFilter)).length === 0">
                                         <div class="col-span-2 text-xs text-slate-400 italic py-2">No KPIs assigned.</div>
                                     </template>
                                 </div>
@@ -2448,7 +2458,7 @@
                     
                     <div class="space-y-3">
                         <template x-for="(m, idx) in workspaceMembers.filter(m => m.role !== 'Owner').map(m => {
-                            const metrics = getMemberKpiMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe);
+                            const metrics = getMemberKpiMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe, selectedKpiCategoryFilter);
                             return { id: m.id, fullName: m.fullName, targetSum: metrics.targetSum, actualSum: metrics.achievedSum, rate: metrics.rate };
                         }).sort((a, b) => b.rate - a.rate)" :key="m.id">
                             <div class="flex items-center gap-3 p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50">
@@ -2476,6 +2486,118 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Task-to-KPI Conversion & Productivity Analysis Panel -->
+        <div class="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
+                <div>
+                    <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+                        <i data-lucide="shuffle" class="w-5 h-5 text-indigo-600 animate-pulse"></i>
+                        Task-to-KPI Conversion & Productivity Analysis
+                    </h3>
+                    <p class="text-xs font-semibold text-slate-400">Evaluate conversion rates from task completions (Công việc) into KPI achievements (Thành quả).</p>
+                </div>
+                <div class="text-[10px] font-black uppercase bg-indigo-50 border border-indigo-100/50 text-indigo-600 px-3 py-1.5 rounded-xl self-start">
+                    Active Filters applied
+                </div>
+            </div>
+
+            <template x-if="workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner').length === 0">
+                <p class="text-xs text-slate-400 text-center py-10 font-bold italic">No member conversion data available.</p>
+            </template>
+
+            <template x-if="workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner').length > 0">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <template x-for="m in workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner')" :key="m.id">
+                        <div class="p-6 rounded-[2rem] border border-slate-150/70 bg-slate-50/20 shadow-sm flex flex-col justify-between" 
+                             x-data="{ get conv() { return getMemberConversionMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe, selectedKpiCategoryFilter); } }">
+                            
+                            <!-- Member Header -->
+                            <div class="flex items-center justify-between pb-4 border-b border-slate-100/50 mb-4">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="h-8 w-8 rounded-full bg-indigo-50 border border-indigo-100/30 flex items-center justify-center text-xs font-black text-indigo-600"
+                                         x-text="m.fullName.split(' ').map(n => n[0]).join('')"></div>
+                                    <div>
+                                        <span class="text-xs font-black text-slate-700 block leading-tight" x-text="m.fullName"></span>
+                                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest" x-text="m.role"></span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100/55" 
+                                          x-text="conv.efficiency + ' KPI/Task'"></span>
+                                    <span class="block text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Efficiency Ratio</span>
+                                </div>
+                            </div>
+
+                            <!-- Conversion Metrics Comparison -->
+                            <div class="space-y-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <!-- Task completion widget -->
+                                    <div class="p-4 bg-white border border-slate-150/55 rounded-2xl space-y-2 relative overflow-hidden shadow-sm">
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Task Completion (Công việc)</span>
+                                        <div class="flex items-baseline gap-1.5">
+                                            <span class="text-xl font-black text-slate-800" x-text="conv.completedTasks"></span>
+                                            <span class="text-xs font-semibold text-slate-400" x-text="'/ ' + conv.totalTasks + ' assigned'"></span>
+                                        </div>
+                                        <div class="flex items-center justify-between pt-1">
+                                            <span class="text-[10px] font-black text-indigo-600" x-text="conv.taskCompletionRate + '%'"></span>
+                                            <div class="h-1.5 w-16 bg-slate-100 rounded-full overflow-hidden">
+                                                <div class="h-full bg-indigo-600 rounded-full" :style="'width: ' + conv.taskCompletionRate + '%'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- KPI achievement widget -->
+                                    <div class="p-4 bg-white border border-slate-150/55 rounded-2xl space-y-2 relative overflow-hidden shadow-sm">
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">KPI Achievement (Thành quả)</span>
+                                        <div class="flex items-baseline gap-1.5">
+                                            <span class="text-xl font-black text-slate-800" x-text="conv.kpiAchieved"></span>
+                                            <span class="text-xs font-semibold text-slate-400" x-text="'/ ' + conv.kpiTarget + ' target'"></span>
+                                        </div>
+                                        <div class="flex items-center justify-between pt-1">
+                                            <span class="text-[10px] font-black text-emerald-600" x-text="conv.kpiAchievementRate + '%'"></span>
+                                            <div class="h-1.5 w-16 bg-slate-100 rounded-full overflow-hidden">
+                                                <div class="h-full bg-emerald-500 rounded-full" :style="'width: ' + Math.min(100, conv.kpiAchievementRate) + '%'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Conversion Rate visual bar -->
+                                <div class="bg-white border border-slate-150/60 p-4 rounded-2xl space-y-2.5 shadow-sm">
+                                    <div class="flex items-center justify-between text-[10px] font-black uppercase tracking-wider">
+                                        <span class="text-slate-400">Task-to-KPI Conversion Progress</span>
+                                        <span class="text-indigo-600" x-text="conv.totalTasks > 0 ? Math.round((conv.kpiAchieved * 100) / (conv.totalTasks + conv.kpiTarget)) + '%' : '0%'"></span>
+                                    </div>
+                                    <div class="h-3 w-full bg-slate-100 rounded-full p-0.5 overflow-hidden flex">
+                                        <!-- Completed Tasks block -->
+                                        <div class="h-full bg-indigo-600 rounded-l-full transition-all duration-300" 
+                                             :style="'width: ' + (conv.totalTasks > 0 ? (conv.completedTasks * 100 / (conv.totalTasks + conv.kpiTarget)) + '%' : '0%')"></div>
+                                        <!-- Achieved KPI block -->
+                                        <div class="h-full bg-emerald-500 rounded-r-full transition-all duration-300 border-l border-white" 
+                                             :style="'width: ' + (conv.totalTasks > 0 ? (conv.kpiAchieved * 100 / (conv.totalTasks + conv.kpiTarget)) + '%' : '0%')"></div>
+                                    </div>
+                                    <div class="flex justify-between text-[8px] font-bold text-slate-400 uppercase tracking-widest pt-0.5">
+                                        <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 bg-indigo-600 rounded-full inline-block"></span> Tasks Completed</span>
+                                        <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 bg-emerald-500 rounded-full inline-block"></span> KPI Achieved</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Conversion Advice & Insights -->
+                            <div class="mt-4 p-3.5 bg-indigo-50/30 border border-indigo-100/50 rounded-2xl flex items-start gap-2.5">
+                                <i data-lucide="lightbulb" class="w-4 h-4 text-indigo-500 shrink-0 mt-0.5"></i>
+                                <div>
+                                    <span class="text-[9px] font-black text-indigo-650 uppercase tracking-widest block mb-0.5">Productivity Alignment Advice</span>
+                                    <p class="text-[10px] font-semibold text-slate-500 leading-normal" x-text="conv.advice"></p>
+                                </div>
+                            </div>
+
+                        </div>
+                    </template>
+                </div>
+            </template>
         </div>
     </div>
 
@@ -2592,6 +2714,17 @@
                         </div>
                         <input type="hidden" name="NewTaskDueDate" :value="createTaskDate ? (createTaskTime ? (createTaskDate + 'T' + createTaskTime) : createTaskDate) : ''">
                     </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Category</label>
+                    <select asp-for="NewTaskCategoryId" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        <option value="">No Category</option>
+                        @foreach (var cat in Model.WorkspaceCategories)
+                        {
+                            <option value="@cat.Id">@cat.Name</option>
+                        }
+                    </select>
                 </div>
 
                 <div class="space-y-1">
@@ -3230,7 +3363,17 @@
                 // Bootstrap data sets serialized from C# models
                 chatMessages: JSON.parse(atob('@Model.SerializeChatMessagesBase64()')),
                 workspaceMembers: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Members.Select(m => new { id = m.UserId.ToString(), fullName = m.User.FullName, role = m.Role }).ToList())),
-                workspaceTasks: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceTasks.Select(t => new { id = t.Id.ToString(), title = t.Title, status = t.Status }).ToList())),
+                workspaceTasks: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceTasks.Select(t => new { 
+                    id = t.Id.ToString(), 
+                    title = t.Title, 
+                    status = t.Status,
+                    assigneeId = t.AssigneeId.HasValue ? t.AssigneeId.Value.ToString().ToLower() : null,
+                    categoryId = t.CategoryId.HasValue ? t.CategoryId.Value.ToString() : null,
+                    dueDate = t.DueDate.HasValue ? t.DueDate.Value.ToString("yyyy-MM-dd") : null,
+                    isCounterTask = t.IsCounterTask,
+                    targetCount = t.TargetCount,
+                    currentCount = t.CurrentCount
+                }).ToList())),
                 workspaceFiles: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Files.Select(f => new { id = f.Id.ToString(), fileName = f.FileName, fileUrl = f.FileUrl, fileSize = f.FileSize, fileType = f.FileType }).ToList())),
 
                 // KPI States & Handlers
@@ -3244,6 +3387,7 @@
                 kpiFormMembers: [],
                 selectedKpiPeriodFilter: 'Weekly',
                 selectedKpiTimeframe: 'current',
+                selectedKpiCategoryFilter: 'all',
                 demoCategories: [
                     { id: 'cat-1', name: 'Development', color: '#3B82F6' },
                     { id: 'cat-2', name: 'Design', color: '#EC4899' },
@@ -3256,14 +3400,19 @@
                     localStorage.setItem('unigrid_kpi_requests_' + wsCode, JSON.stringify(this.kpiRequests));
                     localStorage.setItem('unigrid_kpi_categories_' + wsCode, JSON.stringify(this.demoCategories));
                 },
-                getMemberKpiMetrics(memberId, periodFilter, timeframe) {
-                    const targets = this.kpiTargets.filter(t => t.userId === memberId);
+                getMemberKpiMetrics(memberId, periodFilter, timeframe, categoryFilter = 'all') {
+                    const targets = this.kpiTargets.filter(t => t.userId === memberId && (categoryFilter === 'all' || t.categoryId === categoryFilter));
                     let targetSum = 0;
                     let achievedSum = 0;
 
                     targets.forEach(t => {
                         const val = (timeframe === 'previous') ? (t.prevAchievedValue !== undefined ? t.prevAchievedValue : Math.round(t.targetValue * 0.7)) : t.achievedValue;
-                        if (periodFilter === 'Weekly') {
+                        if (periodFilter === 'Daily') {
+                            if (t.periodType === 'Daily') {
+                                targetSum += t.targetValue;
+                                achievedSum += val;
+                            }
+                        } else if (periodFilter === 'Weekly') {
                             if (t.periodType === 'Weekly' || t.periodType === 'Daily') {
                                 targetSum += t.targetValue;
                                 achievedSum += val;
@@ -3278,6 +3427,96 @@
 
                     const rate = targetSum > 0 ? Math.round((achievedSum * 100) / targetSum) : 0;
                     return { targetSum, achievedSum, rate };
+                },
+                getMemberConversionMetrics(memberId, periodFilter, timeframe, categoryFilter = 'all') {
+                    const tasks = this.workspaceTasks.filter(t => {
+                        const matchesAssignee = t.assigneeId === memberId.toLowerCase();
+                        let matchesCategory = true;
+                        
+                        // Map local storage demoCategories (cat-1, cat-2 etc) to task category names/indices if possible
+                        // Or if categoryFilter is 'all', matches is true.
+                        // Let's do a smart match: if categoryFilter !== 'all', let's see if the category matches.
+                        if (categoryFilter !== 'all') {
+                            const catObj = this.demoCategories.find(c => c.id === categoryFilter);
+                            if (catObj && t.categoryId) {
+                                // Real task categories in workspace models are GUIDs. But we can map by Name!
+                                // Let's check: if there is a category in Model.WorkspaceCategories that has the same name as the demo category name,
+                                // we can match by that C# Category's Id.
+                                // Let's find the matching GUID category from C#
+                                const dbCats = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceCategories.Select(c => new { id = c.Id.ToString(), name = c.Name }).ToList()));
+                                const dbCat = dbCats.find(c => c.name.toLowerCase() === catObj.name.toLowerCase());
+                                if (dbCat) {
+                                    matchesCategory = t.categoryId.toLowerCase() === dbCat.id.toLowerCase();
+                                } else {
+                                    // Fallback: match by prefix/suffix or index
+                                    matchesCategory = false;
+                                }
+                            } else {
+                                matchesCategory = false;
+                            }
+                        }
+                        
+                        let matchesPeriod = true;
+                        if (t.dueDate) {
+                            const taskDate = new Date(t.dueDate);
+                            let startDate, endDate;
+                            if (periodFilter === 'Daily') {
+                                const target = new Date();
+                                if (timeframe === 'previous') target.setDate(target.getDate() - 1);
+                                startDate = new Date(target.setHours(0,0,0,0));
+                                endDate = new Date(target.setHours(23,59,59,999));
+                            } else if (periodFilter === 'Weekly') {
+                                const target = new Date();
+                                if (timeframe === 'previous') target.setDate(target.getDate() - 7);
+                                const diff = (7 + (target.getDay() - 1)) % 7;
+                                startDate = new Date(target.setDate(target.getDate() - diff));
+                                startDate.setHours(0,0,0,0);
+                                endDate = new Date(startDate.getTime());
+                                endDate.setDate(endDate.getDate() + 7);
+                                endDate.setHours(23,59,59,999);
+                            } else { // Monthly
+                                const target = new Date();
+                                if (timeframe === 'previous') target.setMonth(target.getMonth() - 1);
+                                startDate = new Date(target.getFullYear(), target.getMonth(), 1);
+                                endDate = new Date(target.getFullYear(), target.getMonth() + 1, 0, 23, 59, 59, 999);
+                            }
+                            matchesPeriod = (taskDate >= startDate && taskDate <= endDate);
+                        }
+                        
+                        return matchesAssignee && matchesCategory && matchesPeriod;
+                    });
+
+                    const totalTasks = tasks.length;
+                    const completedTasks = tasks.filter(t => t.status === 3).length;
+                    const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks * 100) / totalTasks) : 0;
+
+                    const kpi = this.getMemberKpiMetrics(memberId, periodFilter, timeframe, categoryFilter);
+                    
+                    const efficiency = completedTasks > 0 ? Math.round((kpi.achievedSum * 10) / completedTasks) / 10 : 0.0;
+
+                    let advice = "No tasks assigned in this timeframe.";
+                    if (totalTasks > 0) {
+                        if (taskCompletionRate >= 70 && kpi.rate >= 70) {
+                            advice = "Excellent alignment! Tasks completed directly converted to KPI success.";
+                        } else if (taskCompletionRate >= 70 && kpi.rate < 40) {
+                            advice = "High completion rate, but low KPI contribution. Focus on higher-impact tasks.";
+                        } else if (taskCompletionRate < 45 && kpi.rate >= 70) {
+                            advice = "High efficiency! Achieved targets despite low task volume.";
+                        } else {
+                            advice = "Productivity gap. Align task execution with defined KPI metrics.";
+                        }
+                    }
+
+                    return {
+                        totalTasks,
+                        completedTasks,
+                        taskCompletionRate,
+                        kpiTarget: kpi.targetSum,
+                        kpiAchieved: kpi.achievedSum,
+                        kpiAchievementRate: kpi.rate,
+                        efficiency,
+                        advice
+                    };
                 },
                 initKpiData() {
                     const wsCode = '@Model.Workspace.JoinCode';
