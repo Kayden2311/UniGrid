@@ -32,7 +32,7 @@ public class WorkspaceRepository : IWorkspaceRepository
     public async System.Threading.Tasks.Task<List<Workspace>> GetUserWorkspacesAsync(Guid userId)
     {
         return await _context.Workspaces
-            .Where(w => !w.IsDisabled && (w.OwnerId == userId || w.WorkspaceMembers.Any(m => m.UserId == userId)))
+            .Where(w => !w.IsDisabled && (w.OwnerId == userId || w.WorkspaceMembers.Any(m => !m.IsDisabled && m.UserId == userId)))
             .ToListAsync();
     }
 

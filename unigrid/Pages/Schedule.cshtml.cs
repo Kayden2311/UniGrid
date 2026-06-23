@@ -39,7 +39,7 @@ public class ScheduleModel : PageModel
 
             // Fetch Workspaces for sidebar
             var userWorkspaces = await _context.Workspaces
-                .Where(w => w.OwnerId == userProfile.Id || w.WorkspaceMembers.Any(m => m.UserId == userProfile.Id))
+                .Where(w => !w.IsDisabled && (w.OwnerId == userProfile.Id || w.WorkspaceMembers.Any(m => !m.IsDisabled && m.UserId == userProfile.Id)))
                 .ToListAsync();
             ViewData["Workspaces"] = userWorkspaces;
 

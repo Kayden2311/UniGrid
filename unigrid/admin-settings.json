@@ -23,13 +23,13 @@
       "ColorClass": "teal",
       "Features": [
         "1 Workspace",
-        "5 Members",
+        "1 Member",
         "2 GB Storage (Individual)",
         "0 Chat Channels",
         "1 Task Branch",
         "Basic Analytics"
       ],
-      "MemberLimit": 5,
+      "MemberLimit": 1,
       "StorageLimit": "2 GB Storage (Individual)",
       "ChatLimit": 0,
       "TaskBranchLimit": 1,

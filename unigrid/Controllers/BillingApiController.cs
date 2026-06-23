@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using unigrid.Data;
 using unigrid.Models;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace unigrid.Controllers
 {
@@ -16,10 +17,12 @@ namespace unigrid.Controllers
     public class BillingApiController : ControllerBase
     {
         private readonly UniGridDbContext _context;
+        private readonly IMemoryCache _cache;
 
-        public BillingApiController(UniGridDbContext context)
+        public BillingApiController(UniGridDbContext context, IMemoryCache cache)
         {
             _context = context;
+            _cache = cache;
         }
 
         [HttpPost("create-checkout")]
@@ -65,7 +68,7 @@ namespace unigrid.Controllers
                 if (workspace != null)
                 {
                     var isOwner = workspace.OwnerId == userProfile.Id;
-                    var isMember = await _context.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == workspace.Id && wm.UserId == userProfile.Id);
+                    var isMember = await _context.WorkspaceMembers.AnyAsync(wm => !wm.IsDisabled && wm.WorkspaceId == workspace.Id && wm.UserId == userProfile.Id);
                     if (!isOwner && !isMember)
                     {
                         return StatusCode(403, new { message = "You do not have permission to access this workspace." });
@@ -73,7 +76,7 @@ namespace unigrid.Controllers
 
                     if (plan.MemberLimit > 0)
                     {
-                        int memberCount = await _context.WorkspaceMembers.CountAsync(wm => wm.WorkspaceId == workspace.Id);
+                        int memberCount = await _context.WorkspaceMembers.CountAsync(wm => !wm.IsDisabled && wm.WorkspaceId == workspace.Id);
                         if (memberCount > plan.MemberLimit)
                         {
                             return BadRequest(new { message = $"Cannot switch this Workspace to the {plan.Name} plan because it currently has more than {plan.MemberLimit} members. The {plan.Name} plan allows a maximum of {plan.MemberLimit} members." });
@@ -151,7 +154,7 @@ namespace unigrid.Controllers
             // Apply workspace changes
             if (!string.IsNullOrEmpty(request.JoinCode))
             {
-                workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == request.JoinCode);
+                workspace = await _context.Workspaces.Include(w => w.Owner).FirstOrDefaultAsync(w => w.JoinCode == request.JoinCode);
                 if (workspace != null)
                 {
                     if (plan.MemberLimit > 0)
@@ -162,7 +165,6 @@ namespace unigrid.Controllers
                             return BadRequest(new { message = $"Cannot switch this Workspace to the {plan.Name} plan because it currently has more than {plan.MemberLimit} members." });
                         }
                     }
-                    workspace.PackageTier = request.Tier;
                 }
             }
 
@@ -179,37 +181,20 @@ namespace unigrid.Controllers
                         JoinCode = Guid.NewGuid().ToString("N").Substring(0, 10).ToUpper(),
                         OwnerId = userProfile.Id,
                         WorkspaceType = "Personal",
-                        PackageTier = request.Tier,
+                        PackageTier = "Free",
                         CreatedAt = DateTime.UtcNow
                     };
                     await _context.Workspaces.AddAsync(workspace);
                 }
-                else
-                {
-                    workspace.PackageTier = request.Tier;
-                }
-
-                // Update personal subscription claims
-                userProfile.SubscriptionTier = request.Tier;
-                userProfile.SubscriptionExpires = billingPeriod == "yearly" ? DateTime.UtcNow.AddYears(1) : DateTime.UtcNow.AddMonths(1);
             }
 
-            // Expire existing active billings for this workspace
-            var activeBillings = await _context.Billings
-                .Where(b => b.WorkspaceId == workspace.Id && b.Status == "Active")
-                .ToListAsync();
-            foreach (var active in activeBillings)
-            {
-                active.Status = "Expired";
-            }
-
-            // Create new detailed billing transaction record
+            // Create new detailed billing transaction record with Pending status
             var billing = new Billing
             {
                 Id = Guid.NewGuid(),
                 WorkspaceId = workspace.Id,
                 PackageId = $"{request.Tier.ToLower()}_{billingPeriod}",
-                Status = "Active",
+                Status = "Pending",
                 EndDate = billingPeriod == "yearly" ? DateTime.UtcNow.AddYears(1) : DateTime.UtcNow.AddMonths(1),
                 Amount = amount,
                 UserId = userProfile.Id,
@@ -225,7 +210,7 @@ namespace unigrid.Controllers
             {
                 Id = Guid.NewGuid(),
                 UserId = userProfile.Id,
-                Action = "Upgrade",
+                Action = "UpgradeRequest",
                 TargetType = "Billing",
                 TargetId = billing.Id,
                 Timestamp = DateTime.UtcNow,
@@ -235,10 +220,18 @@ namespace unigrid.Controllers
 
             await _context.SaveChangesAsync();
 
+            // Evict cache
+            _cache.Remove($"UserWorkspaces_{userProfile.Id}");
+            if (workspace != null)
+            {
+                _cache.Remove($"Workspace_{workspace.JoinCode}");
+                _cache.Remove($"WorkspaceMembers_{workspace.Id}");
+            }
+
             return Ok(new
             {
                 success = true,
-                message = "Payment successfully validated and workspace plan upgraded!",
+                message = "Payment successfully submitted for verification. Plan will be applied upon admin confirmation.",
                 joinCode = workspace.JoinCode
             });
         }

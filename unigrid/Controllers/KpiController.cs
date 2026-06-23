@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using unigrid.Data.Repositories;
 using unigrid.Services;
+using unigrid.Models;
 
 namespace unigrid.Controllers
 {
@@ -123,6 +124,14 @@ namespace unigrid.Controllers
             var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
             if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
 
+            var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
+            if (workspace == null) return NotFound(new { message = "Workspace not found." });
+            var planSetting = AdminSettings.GetPlanSetting(workspace.PackageTier);
+            if (!planSetting.HasAdvancedAnalytics)
+            {
+                return StatusCode(403, new { message = "Advanced KPI target analytics is not supported on your workspace plan." });
+            }
+
             var targets = await _taskService.GetWorkspaceTargetsAsync(workspaceId);
             return Ok(targets);
         }
@@ -137,6 +146,14 @@ namespace unigrid.Controllers
 
             var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
             if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
+
+            var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
+            if (workspace == null) return NotFound(new { message = "Workspace not found." });
+            var planSetting = AdminSettings.GetPlanSetting(workspace.PackageTier);
+            if (!planSetting.HasAdvancedAnalytics)
+            {
+                return StatusCode(403, new { message = "Advanced KPI target analytics is not supported on your workspace plan." });
+            }
 
             var error = await _taskService.CreateKpiTargetAsync(
                 workspaceId, user.Id, request.UserId, request.CategoryId, request.PeriodType, request.StartDate, request.EndDate, request.TargetValue);
@@ -160,6 +177,14 @@ namespace unigrid.Controllers
             var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
             if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
 
+            var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
+            if (workspace == null) return NotFound(new { message = "Workspace not found." });
+            var planSetting = AdminSettings.GetPlanSetting(workspace.PackageTier);
+            if (!planSetting.HasAdvancedAnalytics)
+            {
+                return StatusCode(403, new { message = "Advanced KPI target analytics is not supported on your workspace plan." });
+            }
+
             var error = await _taskService.DeleteKpiTargetAsync(workspaceId, user.Id, targetId);
             if (error != null)
             {
@@ -182,6 +207,14 @@ namespace unigrid.Controllers
 
             var hasAccess = await IsUserInWorkspaceAsync(workspaceId, user.Id);
             if (!hasAccess) return StatusCode(403, new { message = "Access denied to this workspace." });
+
+            var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
+            if (workspace == null) return NotFound(new { message = "Workspace not found." });
+            var planSetting = AdminSettings.GetPlanSetting(workspace.PackageTier);
+            if (!planSetting.HasAdvancedAnalytics)
+            {
+                return StatusCode(403, new { message = "Advanced KPI target analytics is not supported on your workspace plan." });
+            }
 
             var report = await _taskService.GetKpiReportAsync(workspaceId, periodType, targetDate);
             return Ok(report);
