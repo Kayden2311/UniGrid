@@ -174,9 +174,7 @@ function scheduleComponent() {
                 let startDate = new Date(e.startTime);
                 let endDate = new Date(e.endTime);
                 let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
-                let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
-                let duration = Math.max(0.5, endSlot - startSlot);
+                let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
 
                 let isTask = !!e.taskId;
                 let workspaceName = '';
@@ -589,6 +587,16 @@ function scheduleComponent() {
                 startTime: startDate.toISOString(),
                 endTime: endDate.toISOString()
             };
+        },
+
+        getSlotDetails(startDate, endDate) {
+            let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
+            let duration = (endDate.getTime() - startDate.getTime()) / (30 * 60000);
+            if (startSlot + duration > 48) {
+                duration = 48 - startSlot;
+            }
+            duration = Math.max(0.5, duration);
+            return { startSlot, duration };
         },
 
         showAlert(title, message) {
@@ -1096,9 +1104,7 @@ function scheduleComponent() {
                         let startDate = new Date(e.startTime);
                         let endDate = new Date(e.endTime);
                         let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                        let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
-                        let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
-                        let duration = Math.max(0.5, endSlot - startSlot);
+                        let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
 
                         targetEv.startDate = startDate;
                         targetEv.endDate = endDate;
@@ -1138,9 +1144,7 @@ function scheduleComponent() {
                     let startDate = new Date(e.startTime);
                     let endDate = new Date(e.endTime);
                     let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                    let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
-                    let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
-                    let duration = Math.max(0.5, endSlot - startSlot);
+                    let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
 
                     let rawTask = this.tasks.find(x => x.id === taskId);
                     let wName = rawTask ? rawTask.workspaceName : 'Workspace';
@@ -1241,9 +1245,7 @@ function scheduleComponent() {
                             let startDate = new Date(e.startTime);
                             let endDate = new Date(e.endTime);
                             let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                            let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
-                            let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
-                            let duration = Math.max(0.5, endSlot - startSlot);
+                            let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
 
                             let descText = e.description || '';
                             let priority = 'medium';
@@ -1290,9 +1292,7 @@ function scheduleComponent() {
                         let startDate = new Date(e.startTime);
                         let endDate = new Date(e.endTime);
                         let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                        let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
-                        let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
-                        let duration = Math.max(0.5, endSlot - startSlot);
+                        let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
 
                         let descText = e.description || '';
                         let priority = 'medium';
@@ -1391,9 +1391,7 @@ function scheduleComponent() {
                     let startDate = new Date(e.startTime);
                     let endDate = new Date(e.endTime);
                     let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
-                    let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
-                    let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
-                    let duration = Math.max(0.5, endSlot - startSlot);
+                    let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
 
                     let descText = e.description || '';
                     let priority = 'medium';
