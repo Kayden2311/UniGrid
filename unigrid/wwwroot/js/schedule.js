@@ -733,7 +733,7 @@ function scheduleComponent() {
                 day = Math.max(0, Math.min(day, 6));
                 
                 let slotIdx = Math.floor(relY / 36);
-                slotIdx = Math.max(0, Math.min(slotIdx, 33));
+                slotIdx = Math.max(0, Math.min(slotIdx, 47));
                 
                 this.dragCreate.endSlot = slotIdx;
             };
