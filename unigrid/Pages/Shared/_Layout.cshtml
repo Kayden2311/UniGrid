@@ -777,10 +777,10 @@
     @{
         // Only show the assistant widget when:
         // - the user is authenticated (isAuthenticated)
-        // - the request matches exactly: https://localhost:7158/Schedule
+        // - the request path matches /Schedule (ignoring case and trailing slash)
         var showAssistant = isAuthenticated
-            && string.Equals(Context.Request.Scheme, "https", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(Context.Request.Path.Value, "/Schedule", StringComparison.OrdinalIgnoreCase);
+            && (string.Equals(Context.Request.Path.Value, "/Schedule", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Context.Request.Path.Value, "/Schedule/", StringComparison.OrdinalIgnoreCase));
     }
 
     @if (showAssistant)
