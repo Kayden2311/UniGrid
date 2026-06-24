@@ -32,7 +32,7 @@
             description = t.Description ?? "",
             workspaceName = t.Workspace?.Name ?? "Workspace",
             workspaceJoinCode = t.Workspace?.JoinCode ?? "",
-            dueDate = finalDueDate?.ToString("yyyy-MM-ddTHH:mm:ss"),
+            dueDate = finalDueDate?.ToString("yyyy-MM-ddTHH:mm:ssZ"),
             priority = t.Priority == 3 ? "high" : (t.Priority == 2 ? "medium" : "low")
         };
     }), serializerSettings);
