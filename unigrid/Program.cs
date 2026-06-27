@@ -73,16 +73,16 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
 });
 
-// Register DB Context with automatic retry policies for SQL Server cold-starts
+// Register DB Context with automatic retry policies for PostgreSQL cold-starts
 builder.Services.AddDbContext<unigrid.Data.UniGridDbContext>(options =>
-    options.UseSqlServer(
+    options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlServerOptionsAction: sqlOptions =>
+        npgsqlOptionsAction: sqlOptions =>
         {
             sqlOptions.EnableRetryOnFailure(
                 maxRetryCount: 5,
                 maxRetryDelay: TimeSpan.FromSeconds(10),
-                errorNumbersToAdd: null);
+                errorCodesToAdd: null);
         }));
 
 // JWT Authentication

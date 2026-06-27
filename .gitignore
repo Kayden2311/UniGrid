@@ -34,6 +34,7 @@ App_Data/
 
 # --- Sensitive Environment / Secrets Configuration ---
 # Do not commit real passwords or local environment database files
+appsettings.json
 appsettings.local.json
 secrets.json
 .env
