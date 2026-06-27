@@ -59,8 +59,12 @@ public partial class UniGridDbContext : DbContext
     public virtual DbSet<SystemSetting> SystemSettings { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Server=localhost;Database=UniGridDb;User ID=sa;Password=123;TrustServerCertificate=True;");
+    {
+        if (!optionsBuilder.IsConfigured)
+        {
+            optionsBuilder.UseNpgsql("Host=localhost;Database=UniGridDb;Username=postgres;Password=123;");
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -70,8 +74,8 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasIndex(e => e.Email, "UQ__Accounts__A9D105341445A5EF").IsUnique();
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.Email).HasMaxLength(256);
             entity.Property(e => e.IsLocked).HasDefaultValue(false);
         });
@@ -80,7 +84,7 @@ public partial class UniGridDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Admins__3214EC07819031DD");
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.FullName).HasMaxLength(256);
             entity.Property(e => e.SuperAdmin).HasDefaultValue(false);
 
@@ -93,10 +97,10 @@ public partial class UniGridDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__AuditLog__3214EC073CF0EA63");
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.Action).HasMaxLength(100);
             entity.Property(e => e.TargetType).HasMaxLength(100);
-            entity.Property(e => e.Timestamp).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Timestamp).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.Property(e => e.WorkspaceId).IsRequired(false);
 
@@ -120,7 +124,7 @@ public partial class UniGridDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Billings__3214EC072FFC9B7A");
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.PackageId).HasMaxLength(100);
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
@@ -139,9 +143,9 @@ public partial class UniGridDbContext : DbContext
             entity.HasIndex(e => e.SentAt, "IX_ChatMessages_SentAt");
             entity.HasIndex(e => e.RoomId, "IX_ChatMessages_RoomId");
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-            entity.Property(e => e.SentAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.SentAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.HasOne(d => d.Room).WithMany(p => p.ChatMessages)
                 .HasForeignKey(d => d.RoomId)
@@ -160,9 +164,9 @@ public partial class UniGridDbContext : DbContext
             entity.HasIndex(e => e.WorkspaceId, "UQ__ChatRoom__C84765D0B210A582").IsUnique();
             entity.HasIndex(e => e.FederationId).IsUnique();
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.WorkspaceId).IsRequired(false);
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.HasOne(d => d.Workspace).WithOne(p => p.ChatRoom)
                 .HasForeignKey<ChatRoom>(d => d.WorkspaceId)
@@ -179,7 +183,7 @@ public partial class UniGridDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Moderato__3214EC0795EBEFC1");
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.FullName).HasMaxLength(256);
             entity.Property(e => e.Region).HasMaxLength(100);
 
@@ -198,8 +202,8 @@ public partial class UniGridDbContext : DbContext
             entity.HasIndex(e => e.AssigneeId, "IX_Tasks_AssigneeId");
             entity.HasIndex(e => e.CategoryId, "IX_Tasks_CategoryId");
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.Priority).HasDefaultValue(1);
             entity.Property(e => e.Status).HasDefaultValue(0);
             entity.Property(e => e.Title).HasMaxLength(512);
@@ -235,8 +239,8 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasIndex(e => e.TaskId, "IX_TaskComments_TaskId");
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.HasOne(d => d.Task).WithMany(p => p.TaskComments)
                 .HasForeignKey(d => d.TaskId)
@@ -255,7 +259,7 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasIndex(e => e.AccountId, "IX_Users_AccountId");
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.FullName).HasMaxLength(256);
             entity.Property(e => e.BusinessAttribute)
                 .HasMaxLength(50)
@@ -273,10 +277,10 @@ public partial class UniGridDbContext : DbContext
             entity.HasIndex(e => e.JoinCode, "UQ__Workspac__FF7C6BA0DA037DCA").IsUnique();
             entity.HasIndex(e => e.InviteCode).IsUnique();
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.JoinCode).HasMaxLength(20);
-            entity.Property(e => e.InviteCode).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.InviteCode).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.Name).HasMaxLength(256);
             entity.Property(e => e.PackageTier)
                 .HasMaxLength(50)
@@ -307,8 +311,8 @@ public partial class UniGridDbContext : DbContext
             entity.HasIndex(e => e.WorkspaceId, "IX_WorkspaceFiles_WorkspaceId");
             entity.HasIndex(e => e.TaskId, "IX_WorkspaceFiles_TaskId");
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.FileName).HasMaxLength(512);
             entity.Property(e => e.FileType).HasMaxLength(100);
 
@@ -340,7 +344,7 @@ public partial class UniGridDbContext : DbContext
         {
             entity.HasKey(e => new { e.WorkspaceId, e.UserId }).HasName("PK__Workspac__193FE915758A3E39");
 
-            entity.Property(e => e.JoinedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.JoinedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.Role)
                 .HasMaxLength(50)
                 .HasDefaultValue("Member");
@@ -366,8 +370,8 @@ public partial class UniGridDbContext : DbContext
 
             entity.HasIndex(e => e.JoinCode, "UQ_WorkspaceFederations_JoinCode").IsUnique();
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.JoinCode).HasMaxLength(20);
             entity.Property(e => e.Name).HasMaxLength(256);
 
@@ -381,7 +385,7 @@ public partial class UniGridDbContext : DbContext
         {
             entity.HasKey(e => new { e.FederationId, e.UserId }).HasName("PK_WorkspaceFederationMembers");
 
-            entity.Property(e => e.JoinedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.JoinedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.PersonalWorkspaceId).IsRequired(false);
             entity.Property(e => e.Role).HasMaxLength(50).HasDefaultValue("Member");
             entity.Property(e => e.Status).HasMaxLength(50).HasDefaultValue("Active");
@@ -406,8 +410,8 @@ public partial class UniGridDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.ToTable(tb => tb.HasTrigger("TR_PersonalSchedules_NoOverlap"));
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.Title).HasMaxLength(256);
             entity.Property(e => e.TimeZone).HasMaxLength(100).HasDefaultValue("UTC");
 
@@ -426,8 +430,8 @@ public partial class UniGridDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK_Notifications");
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.IsRead).HasDefaultValue(false);
             entity.Property(e => e.Message).HasMaxLength(1000);
             entity.Property(e => e.Type).HasMaxLength(100);
@@ -443,8 +447,8 @@ public partial class UniGridDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK_WorkspaceInvitations");
 
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.InviteeEmail).HasMaxLength(256);
             entity.Property(e => e.Role).HasMaxLength(50).HasDefaultValue("Member");
             entity.Property(e => e.DisplayRole).HasMaxLength(100);
@@ -471,10 +475,10 @@ public partial class UniGridDbContext : DbContext
         modelBuilder.Entity<TaskCategory>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.Name).HasMaxLength(256).IsRequired();
             entity.Property(e => e.ColorHex).HasMaxLength(7).HasDefaultValue("#3B82F6");
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.HasOne(d => d.Workspace)
                 .WithMany(p => p.TaskCategories)
@@ -486,9 +490,9 @@ public partial class UniGridDbContext : DbContext
         modelBuilder.Entity<KpiTarget>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.PeriodType).HasMaxLength(20).IsRequired();
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.HasOne(d => d.Workspace)
                 .WithMany()

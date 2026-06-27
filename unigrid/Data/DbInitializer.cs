@@ -38,8 +38,11 @@ namespace unigrid.Data
                 await context.Database.EnsureCreatedAsync();
             }
 
-            // 1b. Ensure columns RefreshToken and RefreshTokenExpiry exist in Accounts table (Defense-in-Depth schema migration)
-            try
+            // Skip legacy raw SQL Server migrations if we are running on PostgreSQL (Supabase)
+            if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer")
+            {
+                // 1b. Ensure columns RefreshToken and RefreshTokenExpiry exist in Accounts table (Defense-in-Depth schema migration)
+                try
             {
                 logger.LogInformation("DbInitializer: Ensuring RefreshToken columns exist in Accounts table...");
                 await context.Database.ExecuteSqlRawAsync(@"
@@ -464,6 +467,7 @@ namespace unigrid.Data
             catch (Exception ex)
             {
                 logger.LogError(ex, "DbInitializer: Failed to add/verify billing transaction columns in Billings table.");
+            }
             }
 
             // 2. Check if Alice Nguyen and her User profile exist
