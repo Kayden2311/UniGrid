@@ -273,14 +273,25 @@ namespace unigrid.Controllers
                     CreatedAt = DateTime.UtcNow
                 };
                 await _context.Accounts.AddAsync(account);
+
+                // Create corresponding User profile to prevent missing profile crashes
+                var newUser = new User
+                {
+                    Id = Guid.NewGuid(),
+                    AccountId = account.Id,
+                    FullName = request.Name ?? "New Google User",
+                    SubscriptionTier = "Free",
+                    SubscriptionExpires = DateTime.UtcNow.AddYears(1)
+                };
+                await _context.Users.AddAsync(newUser);
                 await _context.SaveChangesAsync();
 
-                // Load relationships (Users will be empty)
+                // Load relationships
                 account = await _context.Accounts
                     .Include(a => a.Users)
                     .FirstOrDefaultAsync(a => a.Id == account.Id);
 
-                fullName = "New Google User";
+                fullName = newUser.FullName;
             }
             else
             {
@@ -378,14 +389,25 @@ namespace unigrid.Controllers
                     CreatedAt = DateTime.UtcNow
                 };
                 await _context.Accounts.AddAsync(account);
+
+                // Create corresponding User profile to prevent missing profile crashes
+                var newUser = new User
+                {
+                    Id = Guid.NewGuid(),
+                    AccountId = account.Id,
+                    FullName = name ?? "New Google User",
+                    SubscriptionTier = "Free",
+                    SubscriptionExpires = DateTime.UtcNow.AddYears(1)
+                };
+                await _context.Users.AddAsync(newUser);
                 await _context.SaveChangesAsync();
 
-                // Load relationships (Users will be empty)
+                // Load relationships
                 account = await _context.Accounts
                     .Include(a => a.Users)
                     .FirstOrDefaultAsync(a => a.Id == account.Id);
 
-                fullName = "New Google User";
+                fullName = newUser.FullName;
             }
             else
             {
