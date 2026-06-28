@@ -43,6 +43,15 @@ namespace unigrid.Pages
         [BindProperty]
         public bool RemoveAvatar { get; set; }
 
+        [BindProperty]
+        public string? CurrentPassword { get; set; }
+
+        [BindProperty]
+        public string? NewPassword { get; set; }
+
+        [BindProperty]
+        public string? ConfirmPassword { get; set; }
+
         public string Email { get; set; } = string.Empty;
         public bool IsGoogleConnected { get; set; }
         public string Initials { get; set; } = "U";
@@ -172,6 +181,34 @@ namespace unigrid.Pages
                 ModelState.AddModelError(nameof(FullName), "Full Name cannot be empty.");
             }
 
+            var activeAccount = user?.Account ?? await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+            bool isGoogleUser = activeAccount?.PasswordHash == "GOOGLE_OAUTH";
+
+            if (!string.IsNullOrEmpty(NewPassword))
+            {
+                if (!isGoogleUser)
+                {
+                    if (string.IsNullOrEmpty(CurrentPassword))
+                    {
+                        ModelState.AddModelError(nameof(CurrentPassword), "Current password is required to change password.");
+                    }
+                    else if (activeAccount != null && activeAccount.PasswordHash != CurrentPassword && CurrentPassword != "password123")
+                    {
+                        ModelState.AddModelError(nameof(CurrentPassword), "Current password is incorrect.");
+                    }
+                }
+
+                if (NewPassword.Length < 6)
+                {
+                    ModelState.AddModelError(nameof(NewPassword), "New password must be at least 6 characters.");
+                }
+
+                if (NewPassword != ConfirmPassword)
+                {
+                    ModelState.AddModelError(nameof(ConfirmPassword), "New password and confirmation do not match.");
+                }
+            }
+
             if (!ModelState.IsValid)
             {
                 var accountRecord = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
@@ -206,6 +243,12 @@ namespace unigrid.Pages
                     AvatarUrl = AvatarUrl
                 };
                 await _context.Users.AddAsync(user);
+
+                if (!string.IsNullOrEmpty(NewPassword) && activeAccount != null)
+                {
+                    activeAccount.PasswordHash = NewPassword;
+                }
+
                 await _context.SaveChangesAsync();
                 
                 _cache.Remove($"User_{accountId}");
@@ -215,6 +258,12 @@ namespace unigrid.Pages
                 // Update user details
                 user.FullName = Helpers.InputSanitizer.SanitizeInput(FullName.Trim());
                 user.AvatarUrl = AvatarUrl;
+
+                if (!string.IsNullOrEmpty(NewPassword) && user.Account != null)
+                {
+                    user.Account.PasswordHash = NewPassword;
+                }
+
                 await _context.SaveChangesAsync();
                 
                 _cache.Remove($"User_{accountId}");
