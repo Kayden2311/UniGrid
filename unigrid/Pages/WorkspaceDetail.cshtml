@@ -84,7 +84,7 @@
     // Storage Calculations
     string packageTier = Model.Workspace.PackageTier ?? "Free";
     bool isIndividualStorage = (packageTier == "Personal");
-    bool isGroupTier = packageTier == "Pro" || packageTier == "ProPlus" || packageTier == "Business";
+    bool isGroupTier = packageTier != "Personal";
     bool isPersonalWs = (Model.Workspace.WorkspaceType == "Personal" || packageTier == "Personal") && !isGroupTier;
     long totalStorageUsed = isIndividualStorage 
         ? Model.Files.Where(f => f.UserId == Model.CurrentUser.Id).Sum(f => f.FileSize) 
