@@ -59,6 +59,40 @@ namespace unigrid.Data
                 logger.LogWarning(ex, "DbInitializer: Failed to run self-healing migration for upgraded workspaces.");
             }
 
+            // 1d. Self-healing migration to ensure every workspace owner is also a member of that workspace
+            try
+            {
+                var workspaces = await context.Workspaces.ToListAsync();
+                var members = await context.WorkspaceMembers.ToListAsync();
+                var missingMembers = new List<WorkspaceMember>();
+
+                foreach (var ws in workspaces)
+                {
+                    var hasOwner = members.Any(m => m.WorkspaceId == ws.Id && m.UserId == ws.OwnerId);
+                    if (!hasOwner)
+                    {
+                        missingMembers.Add(new WorkspaceMember
+                        {
+                            WorkspaceId = ws.Id,
+                            UserId = ws.OwnerId,
+                            Role = "Manager",
+                            JoinedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+
+                if (missingMembers.Any())
+                {
+                    await context.WorkspaceMembers.AddRangeAsync(missingMembers);
+                    await context.SaveChangesAsync();
+                    logger.LogInformation("DbInitializer: Successfully added {Count} missing workspace owner memberships.", missingMembers.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "DbInitializer: Failed to run self-healing migration for missing owner memberships.");
+            }
+
             // Skip legacy raw SQL Server migrations if we are running on PostgreSQL (Supabase)
             if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer")
             {
