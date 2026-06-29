@@ -38,6 +38,27 @@ namespace unigrid.Data
                 await context.Database.EnsureCreatedAsync();
             }
 
+            // 1c. Self-healing migration for upgraded workspaces (from Personal to Group)
+            try
+            {
+                var upgradedWorkspaces = await context.Workspaces
+                    .Where(w => w.WorkspaceType == "Personal" && (w.PackageTier == "Pro" || w.PackageTier == "ProPlus" || w.PackageTier == "Business"))
+                    .ToListAsync();
+                if (upgradedWorkspaces.Any())
+                {
+                    foreach (var ws in upgradedWorkspaces)
+                    {
+                        ws.WorkspaceType = "Group";
+                    }
+                    await context.SaveChangesAsync();
+                    logger.LogInformation("DbInitializer: Successfully migrated {Count} upgraded personal workspaces to Group type.", upgradedWorkspaces.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "DbInitializer: Failed to run self-healing migration for upgraded workspaces.");
+            }
+
             // Skip legacy raw SQL Server migrations if we are running on PostgreSQL (Supabase)
             if (context.Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer")
             {
