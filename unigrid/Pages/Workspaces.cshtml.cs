@@ -313,7 +313,10 @@ public class WorkspacesModel : PageModel
             return RedirectToPage($"/WorkspaceDetail/{workspace.JoinCode}");
         }
 
-        if (workspace.WorkspaceType == "Personal" || workspace.PackageTier == "Personal")
+        bool isGroupTier = workspace.PackageTier == "Pro" || workspace.PackageTier == "ProPlus" || workspace.PackageTier == "Business";
+        bool isPersonal = (workspace.WorkspaceType == "Personal" || workspace.PackageTier == "Personal") && !isGroupTier;
+
+        if (isPersonal)
         {
             TempData["ErrorMessage"] = "You cannot join a Personal Workspace. Personal Workspaces are restricted to a single user.";
             return RedirectToPage("/Workspaces");
