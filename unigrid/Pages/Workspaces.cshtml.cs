@@ -135,6 +135,7 @@ public class WorkspacesModel : PageModel
                 JoinCode = joinCode,
                 OwnerId = profile.Id,
                 PackageTier = "Free",
+                WorkspaceType = "Group",
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -313,7 +314,7 @@ public class WorkspacesModel : PageModel
             return RedirectToPage($"/WorkspaceDetail/{workspace.JoinCode}");
         }
 
-        bool isGroupTier = workspace.PackageTier == "Pro" || workspace.PackageTier == "ProPlus" || workspace.PackageTier == "Business";
+        bool isGroupTier = workspace.PackageTier != "Personal";
         bool isPersonal = (workspace.WorkspaceType == "Personal" || workspace.PackageTier == "Personal") && !isGroupTier;
 
         if (isPersonal)
