@@ -71,9 +71,20 @@ public class TaskService : ITaskService
         string sanitizedDescription = Helpers.InputSanitizer.SanitizeInput(description);
 
         DateTime? finalDueDate = dueDate;
-        if (finalDueDate.HasValue && finalDueDate.Value.Hour == 0 && finalDueDate.Value.Minute == 0 && finalDueDate.Value.Second == 0)
+        if (finalDueDate.HasValue)
         {
-            finalDueDate = finalDueDate.Value.Date.AddHours(23).AddMinutes(50);
+            if (finalDueDate.Value.Hour == 0 && finalDueDate.Value.Minute == 0 && finalDueDate.Value.Second == 0)
+            {
+                finalDueDate = finalDueDate.Value.Date.AddHours(23).AddMinutes(50);
+            }
+            if (finalDueDate.Value.Kind == DateTimeKind.Unspecified)
+            {
+                finalDueDate = DateTime.SpecifyKind(finalDueDate.Value, DateTimeKind.Utc);
+            }
+            else if (finalDueDate.Value.Kind == DateTimeKind.Local)
+            {
+                finalDueDate = finalDueDate.Value.ToUniversalTime();
+            }
         }
 
         var task = new unigrid.Models.Task
@@ -277,9 +288,20 @@ public class TaskService : ITaskService
             task.AssigneeId = editTaskAssigneeId;
 
             DateTime? finalDueDate = editTaskDueDate;
-            if (finalDueDate.HasValue && finalDueDate.Value.Hour == 0 && finalDueDate.Value.Minute == 0 && finalDueDate.Value.Second == 0)
+            if (finalDueDate.HasValue)
             {
-                finalDueDate = finalDueDate.Value.Date.AddHours(23).AddMinutes(50);
+                if (finalDueDate.Value.Hour == 0 && finalDueDate.Value.Minute == 0 && finalDueDate.Value.Second == 0)
+                {
+                    finalDueDate = finalDueDate.Value.Date.AddHours(23).AddMinutes(50);
+                }
+                if (finalDueDate.Value.Kind == DateTimeKind.Unspecified)
+                {
+                    finalDueDate = DateTime.SpecifyKind(finalDueDate.Value, DateTimeKind.Utc);
+                }
+                else if (finalDueDate.Value.Kind == DateTimeKind.Local)
+                {
+                    finalDueDate = finalDueDate.Value.ToUniversalTime();
+                }
             }
             task.DueDate = finalDueDate;
             task.CategoryId = editCategoryId;
@@ -706,6 +728,25 @@ public class TaskService : ITaskService
 
         if (targetValue <= 0) return "KPI target value must be greater than zero.";
 
+        DateTime finalStartDate = startDate;
+        DateTime finalEndDate = endDate;
+        if (finalStartDate.Kind == DateTimeKind.Unspecified)
+        {
+            finalStartDate = DateTime.SpecifyKind(finalStartDate, DateTimeKind.Utc);
+        }
+        else if (finalStartDate.Kind == DateTimeKind.Local)
+        {
+            finalStartDate = finalStartDate.ToUniversalTime();
+        }
+        if (finalEndDate.Kind == DateTimeKind.Unspecified)
+        {
+            finalEndDate = DateTime.SpecifyKind(finalEndDate, DateTimeKind.Utc);
+        }
+        else if (finalEndDate.Kind == DateTimeKind.Local)
+        {
+            finalEndDate = finalEndDate.ToUniversalTime();
+        }
+
         var target = new KpiTarget
         {
             Id = Guid.NewGuid(),
@@ -713,8 +754,8 @@ public class TaskService : ITaskService
             UserId = userId,
             CategoryId = categoryId,
             PeriodType = periodType,
-            StartDate = startDate,
-            EndDate = endDate,
+            StartDate = finalStartDate,
+            EndDate = finalEndDate,
             TargetValue = targetValue,
             CreatedAt = DateTime.UtcNow
         };
