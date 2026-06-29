@@ -115,6 +115,10 @@ public class PricingModel : PageModel
                         }
                     }
                     workspace.PackageTier = tier;
+                    if (tier == "Pro" || tier == "ProPlus" || tier == "Business")
+                    {
+                        workspace.WorkspaceType = "Group";
+                    }
 
                     if (workspace.WorkspaceType == "Personal" || tier == "Personal")
                     {
