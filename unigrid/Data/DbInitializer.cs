@@ -42,7 +42,7 @@ namespace unigrid.Data
             try
             {
                 var upgradedWorkspaces = await context.Workspaces
-                    .Where(w => w.WorkspaceType == "Personal" && (w.PackageTier == "Pro" || w.PackageTier == "ProPlus" || w.PackageTier == "Business"))
+                    .Where(w => w.WorkspaceType == "Personal" && w.PackageTier != "Personal")
                     .ToListAsync();
                 if (upgradedWorkspaces.Any())
                 {
