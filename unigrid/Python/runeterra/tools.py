@@ -132,12 +132,12 @@ def get_schedule_for_week(week_offset: int = 0) -> str:
     week = get_week_range(week_offset=week_offset)
 
     sql = """
-        SELECT Id, Title, StartTime, EndTime, TimeZone, TaskId
-        FROM PersonalSchedules
-        WHERE UserId = ?
-          AND StartTime >= ?
-          AND EndTime < DATEADD(day, 1, ?)
-        ORDER BY StartTime ASC
+        SELECT "Id", "Title", "StartTime", "EndTime", "TimeZone", "TaskId"
+        FROM "PersonalSchedules"
+        WHERE "UserId" = %s
+          AND "StartTime" >= %s
+          AND "EndTime" < %s::date + INTERVAL '1 day'
+        ORDER BY "StartTime" ASC
     """
     columns, rows = run_query(sql, (user_id, week.start.isoformat(), week.end.isoformat()))
     events = rows_to_dicts(columns, rows)
@@ -176,9 +176,9 @@ def get_event_details(event_id: str) -> str:
         belong to the current user.
     """
     sql = """
-        SELECT Id, Title, StartTime, EndTime, TimeZone, TaskId
-        FROM PersonalSchedules
-        WHERE Id = ? AND UserId = ?
+        SELECT "Id", "Title", "StartTime", "EndTime", "TimeZone", "TaskId"
+        FROM "PersonalSchedules"
+        WHERE "Id" = %s AND "UserId" = %s
     """
 
     user_id = current_user_id.get()
