@@ -65,7 +65,10 @@ yarn-error.log*
 Thumbs.db
 desktop.ini
 
-# --- Python Cache ---
+# --- Publish Profiles (local machine specific) ---
+unigrid/Properties/PublishProfiles/
+
+
 **/__pycache__/
 *.pyc
 
