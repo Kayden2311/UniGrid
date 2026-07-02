@@ -2,12 +2,12 @@
 SQL Server data access layer.
 
 Reads are plain parameterized SELECTs (run_query / with_sql_cursor).
-There is also exactly one write path now: reschedule_personal_schedule_event()
-below, which moves a PersonalSchedules row via a parameterized UPDATE.
-Mutations no longer go through a backend REST API -- the bot owns this
-directly -- so the "no double-booking" conflict check that used to live
-only in that API is re-implemented here too, inside the same transaction
-as the write.
+Write paths are narrow helpers below: reschedule_personal_schedule_event()
+moves a PersonalSchedules row, and schedule_unscheduled_task() creates a
+PersonalSchedules row from one assigned Tasks row. Mutations no longer go
+through a backend REST API -- the bot owns this directly -- so ownership,
+unscheduled-task, and no-overlap checks are enforced here inside the same
+transaction as the write.
 
 All queries here are parameterized (pyodbc `?` placeholders). Never build a
 query string by interpolating user or LLM-provided values directly --
@@ -17,7 +17,7 @@ rewrite is fixing.
 
 import pyodbc
 from contextlib import contextmanager
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 from typing import Any, Iterable, List, Optional, Sequence
 
 from runeterra.config import Config
@@ -30,6 +30,18 @@ class EventNotFoundError(Exception):
 
 class ScheduleConflictError(Exception):
     """Another event already occupies the requested date/time slot."""
+
+
+class TaskNotFoundError(Exception):
+    """No active unscheduled Tasks row belongs to this user."""
+
+
+class TaskAlreadyScheduledError(Exception):
+    """The requested task already has an active PersonalSchedules row."""
+
+
+class TaskDueDateViolationError(Exception):
+    """The requested schedule is after the task's due date."""
 
 pyodbc.pooling = True
 
@@ -101,6 +113,18 @@ def run_query(sql: str, params: Sequence[Any] = ()) -> List[tuple]:
 def rows_to_dicts(columns: List[str], rows: Iterable[tuple]) -> List[dict]:
     return [dict(zip(columns, row)) for row in rows]
 
+
+def _parse_datetime2(value: str, name: str) -> datetime:
+    try:
+        dt = datetime.fromisoformat(str(value).strip())
+    except Exception:
+        raise ValueError(f"{name} is not a valid datetime.")
+
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 from uuid import UUID
 def validate_guid(value, name):
     try:
@@ -118,11 +142,8 @@ def reschedule_personal_schedule_event(
     Moves one PersonalSchedules row owned by `user_id` to a new
     date/time via a plain parameterized UPDATE, enforcing the same
     "no double-booking" rule that used to live only in the backend API:
-    a user can't have two events sitting at the exact same StartTime, EndTime
-    timestamp. (Schema note: PersonalSchedules has no duration/end-time
-    column, so "conflict" here means an exact timestamp collision for
-    this user -- if your actual business rule is closer to an overlap
-    window, narrow/widen the comparison in the second query below.)
+    a user can't have two enabled events whose StartTime/EndTime windows
+    overlap.
 
     Runs as a single transaction:
       1. Lock + fetch the target event (must belong to `user_id`).
@@ -147,13 +168,17 @@ def reschedule_personal_schedule_event(
 
     validate_guid(user_id, "user_id")
     validate_guid(event_id, "event_id")
+    parsed_start = _parse_datetime2(new_start_time, "new_start_time")
+    parsed_end = _parse_datetime2(new_end_time, "new_end_time")
+    if parsed_end <= parsed_start:
+        raise ValueError("new_end_time must be later than new_start_time.")
 
     with with_sql_transaction() as cur:
         cur.execute(
             """
             SELECT StartTime, EndTime
             FROM PersonalSchedules WITH (UPDLOCK, HOLDLOCK)
-            WHERE Id = ? AND UserId = ?
+            WHERE Id = ? AND UserId = ? AND IsDisabled = 0
             """,
             (event_id, user_id),
         )
@@ -167,11 +192,12 @@ def reschedule_personal_schedule_event(
             SELECT Id, Title
             FROM PersonalSchedules WITH (UPDLOCK, HOLDLOCK)
             WHERE UserId = ?
-              AND StartTime = ?
-              AND EndTime = ?
+              AND IsDisabled = 0
+              AND StartTime < ?
+              AND EndTime > ?
               AND Id <> ?
             """,
-            (user_id, new_start_time, new_end_time, event_id),
+            (user_id, parsed_end, parsed_start, event_id),
         )
         conflict = cur.fetchone()
         if conflict is not None:
@@ -183,14 +209,131 @@ def reschedule_personal_schedule_event(
             """
             UPDATE PersonalSchedules
             SET StartTime = ?, EndTime = ?
-            WHERE Id = ? AND UserId = ?
+            WHERE Id = ? AND UserId = ? AND IsDisabled = 0
             """,
-            (new_start_time, new_end_time, event_id, user_id),
+            (parsed_start, parsed_end, event_id, user_id),
         )
         if cur.rowcount == 0:
             # Shouldn't happen given the locked fetch above, but never
             # report success without confirming a row actually changed.
             raise EventNotFoundError("No event found with that id on your schedule.")
 
-    log(f"[SQL] Rescheduled event {event_id} for user_id={user_id} -> {str(new_start_time)} to {str(new_end_time)}")
-    return {"event_id": event_id, "new_event_date": f"{str(new_start_time)} to {str(new_end_time)}"}
+    log(f"[SQL] Rescheduled event {event_id} for user_id={user_id} -> {str(parsed_start)} to {str(parsed_end)}")
+    return {"event_id": event_id, "new_event_date": f"{str(parsed_start)} to {str(parsed_end)}"}
+
+
+def schedule_unscheduled_task(
+    user_id: str,
+    task_id: str,
+    start_time: str,
+    end_time: str,
+    time_zone: str = "UTC",
+) -> dict:
+    """
+    Creates a PersonalSchedules row for one active, unscheduled Tasks row
+    assigned to `user_id`.
+
+    Constraint checks enforced here:
+      1. `task_id` and `user_id` must be valid GUIDs.
+      2. The task must exist, be enabled, and be assigned to this user.
+      3. The task must not already have an enabled PersonalSchedules row.
+      4. EndTime must be later than StartTime.
+      5. The schedule must not end after the task's DueDate calendar day.
+      6. The user cannot have another enabled event overlapping the slot.
+      7. Inserted PersonalSchedules fields satisfy NOT NULL and FK columns.
+    """
+
+    validate_guid(user_id, "user_id")
+    validate_guid(task_id, "task_id")
+
+    parsed_start = _parse_datetime2(start_time, "start_time")
+    parsed_end = _parse_datetime2(end_time, "end_time")
+    if parsed_end <= parsed_start:
+        raise ValueError("end_time must be later than start_time.")
+
+    clean_time_zone = (time_zone or "UTC").strip()[:100] or "UTC"
+
+    with with_sql_transaction() as cur:
+        cur.execute(
+            """
+            SELECT Id, Title, Description, DueDate
+            FROM Tasks WITH (UPDLOCK, HOLDLOCK)
+            WHERE Id = ?
+              AND AssigneeId = ?
+              AND IsDisabled = 0
+            """,
+            (task_id, user_id),
+        )
+        task = cur.fetchone()
+        if task is None:
+            raise TaskNotFoundError("No active unscheduled task found for your account.")
+
+        due_date = task[3]
+        if due_date is not None:
+            due_dt = _parse_datetime2(due_date, "due_date")
+            if parsed_start.date() > due_dt.date() or parsed_end.date() > due_dt.date():
+                raise TaskDueDateViolationError(
+                    "That task cannot be scheduled after its due date."
+                )
+
+        cur.execute(
+            """
+            SELECT Id
+            FROM PersonalSchedules WITH (UPDLOCK, HOLDLOCK)
+            WHERE TaskId = ?
+              AND IsDisabled = 0
+            """,
+            (task_id,),
+        )
+        if cur.fetchone() is not None:
+            raise TaskAlreadyScheduledError("That task is already on a schedule.")
+
+        cur.execute(
+            """
+            SELECT Id, Title
+            FROM PersonalSchedules WITH (UPDLOCK, HOLDLOCK)
+            WHERE UserId = ?
+              AND IsDisabled = 0
+              AND StartTime < ?
+              AND EndTime > ?
+            """,
+            (user_id, parsed_end, parsed_start),
+        )
+        conflict = cur.fetchone()
+        if conflict is not None:
+            raise ScheduleConflictError(
+                f"That slot overlaps another event on your schedule ('{conflict[1]}')."
+            )
+
+        title = str(task[1])[:256]
+        description = task[2]
+
+        cur.execute(
+            """
+            INSERT INTO PersonalSchedules
+                (UserId, Title, Description, StartTime, EndTime, TaskId, TimeZone)
+            OUTPUT INSERTED.Id
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                title,
+                description,
+                parsed_start,
+                parsed_end,
+                task_id,
+                clean_time_zone,
+            ),
+        )
+        schedule_id = cur.fetchone()[0]
+
+    log(f"[SQL] Scheduled task {task_id} for user_id={user_id} -> {str(parsed_start)} to {str(parsed_end)}")
+    return {
+        "schedule_id": str(schedule_id),
+        "task_id": task_id,
+        "title": title,
+        "start_time": str(parsed_start),
+        "end_time": str(parsed_end),
+        "time_zone": clean_time_zone,
+        "due_date": str(due_date) if due_date is not None else None,
+    }

@@ -34,9 +34,10 @@ class Config:
         single UPDATE is gated by UserId and an in-transaction conflict
         check, same as before.
 
-        NOTE: the SQL login below now needs UPDATE permission on
-        PersonalSchedules, not just SELECT, now that reschedules write
-        here directly instead of going through a backend API.
+        NOTE: the SQL login below needs SELECT on Tasks and
+        PersonalSchedules, plus UPDATE and INSERT on PersonalSchedules,
+        because schedule mutations write here directly instead of going
+        through a backend API.
         """
         HOST = os.getenv("SQLSERVER_HOST", "localhost")
         PORT = int(os.getenv("SQLSERVER_PORT", 1433))
