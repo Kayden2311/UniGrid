@@ -81,7 +81,7 @@
         <div class="flex-1 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm" style="max-height: calc(100vh - 220px);">
             <div style="min-width: 800px;">
                 <!-- Day Headers -->
-                <div class="sticky top-0 z-[60] border-b border-slate-200 bg-white"
+                <div class="sticky top-0 z-10 border-b border-slate-200 bg-white"
                      style="display: grid; grid-template-columns: 80px repeat(7, 1fr);">
                     <div class="border-r border-slate-200"></div>
                     @for (int idx = 0; idx < 7; idx++)
@@ -447,7 +447,7 @@
 
     <!-- Confirm Schedule Change Dialog Modal -->
     <div x-show="confirmDialogOpen" 
-         class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+         class="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
          x-transition x-cloak>
         
         <div @@click.away="cancelPendingChange()" 
@@ -523,7 +523,7 @@
 
     <!-- Create/Edit Task Dialog Modal -->
     <div x-show="dialogOpen" 
-         class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+         class="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
          x-transition x-cloak>
         
         <div @@click.away="dialogOpen = false" 
