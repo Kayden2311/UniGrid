@@ -37,6 +37,8 @@ App_Data/
 appsettings.json
 appsettings.local.json
 appsettings.local
+appsettings.Development.json
+appsettings.*.json
 secrets.json
 .env
 .env.local
