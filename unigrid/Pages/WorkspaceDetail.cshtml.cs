@@ -339,6 +339,11 @@ public class WorkspaceDetailModel : PageModel
                 {
                     TempData["UploadError"] = uploadResult.error;
                 }
+                else
+                {
+                    _cache.Remove($"WorkspaceTasks_{Workspace.Id}");
+                    _cache.Remove($"WorkspaceFiles_{Workspace.Id}");
+                }
             }
         }
 
@@ -378,6 +383,11 @@ public class WorkspaceDetailModel : PageModel
             if (uploadResult.error != null)
             {
                 TempData["UploadError"] = uploadResult.error;
+            }
+            else
+            {
+                _cache.Remove($"WorkspaceTasks_{Workspace.Id}");
+                _cache.Remove($"WorkspaceFiles_{Workspace.Id}");
             }
         }
 
@@ -785,6 +795,13 @@ public class WorkspaceDetailModel : PageModel
                 content = tc.Content,
                 createdAt = tc.CreatedAt,
                 user = new { fullName = tc.User.FullName }
+            }).ToList(),
+            files = task.WorkspaceFiles?.Select(f => new {
+                id = f.Id,
+                fileName = f.FileName,
+                fileUrl = f.FileUrl,
+                fileType = f.FileType,
+                fileSize = f.FileSize
             }).ToList()
         };
         return System.Text.Json.JsonSerializer.Serialize(cleanTask, new System.Text.Json.JsonSerializerOptions {
