@@ -174,9 +174,13 @@ function scheduleComponent() {
                 let startDate = new Date(e.startTime);
                 let endDate = new Date(e.endTime);
                 let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+<<<<<<< HEAD
                 let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
                 let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
                 let duration = Math.max(0.5, endSlot - startSlot);
+=======
+                let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 
                 let isTask = !!e.taskId;
                 let workspaceName = '';
@@ -591,6 +595,19 @@ function scheduleComponent() {
             };
         },
 
+<<<<<<< HEAD
+=======
+        getSlotDetails(startDate, endDate) {
+            let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
+            let duration = (endDate.getTime() - startDate.getTime()) / (30 * 60000);
+            if (startSlot + duration > 48) {
+                duration = 48 - startSlot;
+            }
+            duration = Math.max(0.5, duration);
+            return { startSlot, duration };
+        },
+
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
         showAlert(title, message) {
             this.alertModalTitle = title;
             this.alertModalMessage = message;
@@ -733,7 +750,11 @@ function scheduleComponent() {
                 day = Math.max(0, Math.min(day, 6));
                 
                 let slotIdx = Math.floor(relY / 36);
+<<<<<<< HEAD
                 slotIdx = Math.max(0, Math.min(slotIdx, 33));
+=======
+                slotIdx = Math.max(0, Math.min(slotIdx, 47));
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
                 
                 this.dragCreate.endSlot = slotIdx;
             };
@@ -1096,9 +1117,13 @@ function scheduleComponent() {
                         let startDate = new Date(e.startTime);
                         let endDate = new Date(e.endTime);
                         let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+<<<<<<< HEAD
                         let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
                         let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
                         let duration = Math.max(0.5, endSlot - startSlot);
+=======
+                        let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 
                         targetEv.startDate = startDate;
                         targetEv.endDate = endDate;
@@ -1138,9 +1163,13 @@ function scheduleComponent() {
                     let startDate = new Date(e.startTime);
                     let endDate = new Date(e.endTime);
                     let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+<<<<<<< HEAD
                     let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
                     let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
                     let duration = Math.max(0.5, endSlot - startSlot);
+=======
+                    let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 
                     let rawTask = this.tasks.find(x => x.id === taskId);
                     let wName = rawTask ? rawTask.workspaceName : 'Workspace';
@@ -1241,9 +1270,13 @@ function scheduleComponent() {
                             let startDate = new Date(e.startTime);
                             let endDate = new Date(e.endTime);
                             let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+<<<<<<< HEAD
                             let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
                             let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
                             let duration = Math.max(0.5, endSlot - startSlot);
+=======
+                            let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 
                             let descText = e.description || '';
                             let priority = 'medium';
@@ -1290,9 +1323,13 @@ function scheduleComponent() {
                         let startDate = new Date(e.startTime);
                         let endDate = new Date(e.endTime);
                         let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+<<<<<<< HEAD
                         let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
                         let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
                         let duration = Math.max(0.5, endSlot - startSlot);
+=======
+                        let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 
                         let descText = e.description || '';
                         let priority = 'medium';
@@ -1391,9 +1428,13 @@ function scheduleComponent() {
                     let startDate = new Date(e.startTime);
                     let endDate = new Date(e.endTime);
                     let dayIdx = startDate.getDay() === 0 ? 6 : startDate.getDay() - 1;
+<<<<<<< HEAD
                     let startSlot = Math.max(0, startDate.getHours() * 2 + (startDate.getMinutes() / 30));
                     let endSlot = Math.min(48, endDate.getHours() * 2 + (endDate.getMinutes() / 30));
                     let duration = Math.max(0.5, endSlot - startSlot);
+=======
+                    let { startSlot, duration } = this.getSlotDetails(startDate, endDate);
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 
                     let descText = e.description || '';
                     let priority = 'medium';

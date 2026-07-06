@@ -17,7 +17,13 @@ public partial class ChatMessage
 
     public bool? IsDeleted { get; set; }
 
+    public Guid? ParentId { get; set; }
+
     public virtual ChatRoom Room { get; set; } = null!;
 
     public virtual User Sender { get; set; } = null!;
+
+    public virtual ChatMessage? Parent { get; set; }
+
+    public virtual ICollection<ChatMessage> Replies { get; set; } = new List<ChatMessage>();
 }

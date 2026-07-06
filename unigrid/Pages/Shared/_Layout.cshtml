@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-[#fafafa]">
 <head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1JW9TXZ0CD"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-1JW9TXZ0CD');
+</script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - UniGrid</title>
@@ -391,7 +400,7 @@
                 <div class="flex items-center px-3 py-1.5 bg-slate-100 rounded-full text-slate-500 border border-slate-200">
                     <i data-lucide="search" class="w-4 h-4 mr-2"></i>
                     <input type="text" x-model="globalSearchQuery" placeholder="Search tasks..." class="bg-transparent border-none outline-none text-xs w-28 sm:w-48 placeholder:text-slate-400">
-                </div>
+            </div>
             </div>
 
             <div class="flex items-center gap-3">
@@ -506,6 +515,10 @@
                                         else if (n.Type == "TaskApproved") { iconName = "check-circle"; iconColor = "text-green-500 bg-green-50"; }
                                         else if (n.Type == "TaskRework") { iconName = "rotate-ccw"; iconColor = "text-amber-500 bg-amber-50"; }
                                         else if (n.Type == "InvitationAccepted") { iconName = "user-plus"; iconColor = "text-purple-500 bg-purple-50"; }
+                                        else if (n.Type == "TaskComment") { iconName = "message-square"; iconColor = "text-sky-500 bg-sky-50"; }
+                                        else if (n.Type == "TaskReviewRequest") { iconName = "eye"; iconColor = "text-orange-500 bg-orange-50"; }
+                                        else if (n.Type == "SubscriptionNotification" || n.Type == "SubscriptionExpiring") { iconName = "credit-card"; iconColor = "text-emerald-500 bg-emerald-50"; }
+                                        else if (n.Type == "ChatMention" || n.Type == "TaskCommentMention") { iconName = "at-sign"; iconColor = "text-pink-500 bg-pink-50"; }
                                         
                                         <div id="@uniqueId" class="p-3.5 rounded-2xl border transition-all flex gap-3 items-start relative group @(n.IsRead ? "bg-slate-50/50 border-slate-100" : "bg-indigo-50/10 border-indigo-100/50 hover:bg-indigo-50/20")">
                                             <div class="h-8 w-8 rounded-xl flex items-center justify-center shrink-0 @iconColor">
@@ -606,7 +619,7 @@
         </main>
     </div>
 
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
     <script>
         lucide.createIcons();
@@ -676,6 +689,9 @@
                         } else if (payload.type === "SubscriptionNotification" || payload.type === "SubscriptionExpiring") {
                             iconName = "credit-card";
                             iconColor = "text-emerald-500 bg-emerald-50";
+                        } else if (payload.type === "ChatMention" || payload.type === "TaskCommentMention") {
+                            iconName = "at-sign";
+                            iconColor = "text-pink-500 bg-pink-50";
                         }
 
                         const notifHtml = `
@@ -777,105 +793,17 @@
     @{
         // Only show the assistant widget when:
         // - the user is authenticated (isAuthenticated)
-        // - the request matches exactly: https://localhost:7158/Schedule
+        // - the request path matches /Schedule (ignoring case and trailing slash)
         var showAssistant = isAuthenticated
-            && string.Equals(Context.Request.Scheme, "https", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(Context.Request.Path.Value, "/Schedule", StringComparison.OrdinalIgnoreCase);
+            && (string.Equals(Context.Request.Path.Value, "/Schedule", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Context.Request.Path.Value, "/Schedule/", StringComparison.OrdinalIgnoreCase));
     }
 
     @if (showAssistant)
     {
         <partial name="_AssistantWidget" />
-
-        <link rel="stylesheet"
-              href="~/css/assistant.css" />
-
-        <script src="~/js/assistant.js"></script>
-
-        <!-- Chatbot widget -->
-        <div x-data="chatBox()" x-cloak class="fixed bottom-6 right-6 z-50">
-          <div x-show="!open" class="flex">
-            <button @@click="open=true" title="Open assistant"
-                    class="h-12 w-12 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8s-9-3.582-9-8 4.03-8 9-8 9 3.582 9 8z"/>
-              </svg>
-            </button>
-          </div>
-
-          <div x-show="open" class="w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div class="flex items-center justify-between px-3 py-2 border-b">
-              <div class="font-semibold text-sm">Assistant</div>
-              <div class="flex items-center gap-2">
-                <button @@click="open=false" class="text-slate-500 hover:text-slate-700">
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div class="p-3 h-64 overflow-auto bg-slate-50" x-ref="messages">
-              <template x-for="m in messages" :key="m.timestamp">
-                <div class="mb-3">
-                  <div x-text="m.role === 'user' ? 'You' : 'Assistant'" class="text-xs text-slate-400 mb-1"></div>
-                  <div x-text="m.content" :class="m.role === 'user' ? 'text-right' : ''" class="bg-white px-3 py-2 rounded-lg shadow-sm"></div>
-                </div>
-              </template>
-              <div x-show="messages.length === 0" class="text-xs text-slate-400 italic">Ask the assistant anything...</div>
-            </div>
-
-            <div class="p-3 border-t">
-              <div class="flex gap-2">
-                <input x-model="input" @@keydown.enter.prevent="send" type="text" placeholder="Type a question..." class="flex-1 px-3 py-2 border rounded-lg focus:outline-none" />
-                <button @@click="send" :disabled="sending" class="px-3 py-2 rounded-lg bg-indigo-600 text-white">
-                  <span x-show="!sending">Send</span>
-                  <span x-show="sending">...</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <script>
-          function chatBox(){
-            return {
-              open: false,
-              input: '',
-              sending: false,
-              messages: [],
-              async send(){
-                if(!this.input) return;
-                const text = this.input;
-                this.messages.push({ role: 'user', content: text, timestamp: Date.now() });
-                this.input = '';
-                this.sending = true;
-                try {
-                  const resp = await fetch('/api/assistant/ask', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      message: text,
-                      history: this.messages.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }))
-                    })
-                  });
-                  if (!resp.ok) {
-                    this.messages.push({ role: 'assistant', content: '(assistant error)', timestamp: Date.now() });
-                    return;
-                  }
-                  const data = await resp.json();
-                  this.messages.push({ role: 'assistant', content: data.reply ?? '(no reply)', timestamp: Date.now() });
-                  this.$nextTick(() => {
-                    const el = this.$refs.messages;
-                    el.scrollTop = el.scrollHeight;
-                  });
-                } catch (e) {
-                  this.messages.push({ role: 'assistant', content: '(network error)', timestamp: Date.now() });
-                } finally {
-                  this.sending = false;
-                }
-              }
-            };
-          }
-        </script>
+        <link rel="stylesheet" href="~/css/assistant.css" asp-append-version="true" />
+        <script src="~/js/assistant.js" asp-append-version="true"></script>
     }
 
 </body>

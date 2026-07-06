@@ -9,9 +9,18 @@ Design rules baked into every tool below:
    schedule."
 2. Reads use parameterized SQL Server queries only. No string interpolation
    of values into SQL text.
+<<<<<<< HEAD
 3. Mutations write directly to SQL Server through narrow, parameterized
    db helpers wrapped in transactions. The helpers enforce ownership,
    "not disabled", unscheduled-task, and no-overlap checks before writing.
+=======
+3. The only mutation is `reschedule_event`. It now writes directly to
+   SQL Server with a parameterized UPDATE (see
+   db.reschedule_personal_schedule_event), wrapped in a transaction that
+   also re-implements the "no double-booking" conflict check -- that
+   check used to live only in the backend API, and now that mutations
+   no longer go through the backend, this tool is the one enforcing it.
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 4. Week/date math is resolved in Python (week_utils.py) before the LLM
    ever sees it, so "this week" / "next week" always map to the correct
    calendar dates.
@@ -30,12 +39,17 @@ from runeterra.db import (
     run_query,
     rows_to_dicts,
     reschedule_personal_schedule_event,
+<<<<<<< HEAD
     schedule_unscheduled_task,
     EventNotFoundError,
     ScheduleConflictError,
     TaskAlreadyScheduledError,
     TaskDueDateViolationError,
     TaskNotFoundError,
+=======
+    EventNotFoundError,
+    ScheduleConflictError,
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 )
 from runeterra.week_utils import get_week_range, resolve_relative_week
 from runeterra.logging import log, log_panel
@@ -76,10 +90,15 @@ def _format_for_user(dt_value) -> str:
 def get_available_tools() -> List[BaseTool]:
     return [
         get_schedule_for_week,
+<<<<<<< HEAD
         get_unscheduled_tasks,
         get_event_details,
         reschedule_event,
         schedule_task,
+=======
+        get_event_details,
+        reschedule_event,
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
     ]
 
 
@@ -135,6 +154,7 @@ def get_schedule_for_week(week_offset: int = 0) -> str:
     week = get_week_range(week_offset=week_offset)
 
     sql = """
+<<<<<<< HEAD
         SELECT Id, Title, StartTime, EndTime, TimeZone, TaskId
         FROM PersonalSchedules
         WHERE UserId = ?
@@ -142,6 +162,14 @@ def get_schedule_for_week(week_offset: int = 0) -> str:
           AND StartTime >= ?
           AND EndTime < DATEADD(day, 1, ?)
         ORDER BY StartTime ASC
+=======
+        SELECT "Id", "Title", "StartTime", "EndTime", "TimeZone", "TaskId"
+        FROM "PersonalSchedules"
+        WHERE "UserId" = %s
+          AND "StartTime" >= %s
+          AND "EndTime" < %s::date + INTERVAL '1 day'
+        ORDER BY "StartTime" ASC
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
     """
     columns, rows = run_query(sql, (user_id, week.start.isoformat(), week.end.isoformat()))
     events = rows_to_dicts(columns, rows)
@@ -167,6 +195,7 @@ def get_schedule_for_week(week_offset: int = 0) -> str:
 
 
 @tool(parse_docstring=False)
+<<<<<<< HEAD
 def get_unscheduled_tasks(search_text: Optional[str] = None, limit: int = 20) -> str:
     """
     Retrieves active Tasks assigned to the current user that do not already
@@ -248,6 +277,8 @@ def get_unscheduled_tasks(search_text: Optional[str] = None, limit: int = 20) ->
 
 
 @tool(parse_docstring=False)
+=======
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 def get_event_details(event_id: str) -> str:
     """
     Retrieves full details for a single personal schedule event, only if
@@ -261,9 +292,15 @@ def get_event_details(event_id: str) -> str:
         belong to the current user.
     """
     sql = """
+<<<<<<< HEAD
         SELECT Id, Title, StartTime, EndTime, TimeZone, TaskId
         FROM PersonalSchedules
         WHERE Id = ? AND UserId = ? AND IsDisabled = 0
+=======
+        SELECT "Id", "Title", "StartTime", "EndTime", "TimeZone", "TaskId"
+        FROM "PersonalSchedules"
+        WHERE "Id" = %s AND "UserId" = %s
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
     """
 
     user_id = current_user_id.get()
@@ -273,6 +310,12 @@ def get_event_details(event_id: str) -> str:
             "Authenticated user ID was not injected."
         )
 
+<<<<<<< HEAD
+=======
+    print("event_id =", repr(event_id))
+    print("user_id =", repr(user_id))
+
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
     columns, rows = run_query(sql, (event_id, user_id))
     events = rows_to_dicts(columns, rows)
 
@@ -340,6 +383,7 @@ def reschedule_event(
         log(f"[red]Reschedule conflict: {e}[/red]")
         return f"Could not reschedule that event: {e}"
     except ValueError:
+<<<<<<< HEAD
         return "That date or time wasn't in a valid format -- please use YYYY-MM-DD and HH:MM (24h)."
 
 
@@ -399,3 +443,6 @@ def schedule_task(
         return f"Could not schedule that task: {e}"
     except ValueError:
         return "That date or time wasn't in a valid format -- please use YYYY-MM-DD and HH:MM (24h)."
+=======
+        return "That date or time wasn't in a valid format -- please use YYYY-MM-DD and HH:MM (24h)."
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49

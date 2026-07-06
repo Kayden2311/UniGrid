@@ -34,7 +34,11 @@ App_Data/
 
 # --- Sensitive Environment / Secrets Configuration ---
 # Do not commit real passwords or local environment database files
+appsettings.json
 appsettings.local.json
+appsettings.local
+appsettings.Development.json
+appsettings.*.json
 secrets.json
 .env
 .env.local
@@ -62,3 +66,13 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# --- Publish Profiles (local machine specific) ---
+unigrid/Properties/PublishProfiles/
+
+
+**/__pycache__/
+*.pyc
+
+# --- Generated Mock Emails ---
+unigrid/wwwroot/mock-emails/*.html

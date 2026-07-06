@@ -115,6 +115,10 @@ public class PricingModel : PageModel
                         }
                     }
                     workspace.PackageTier = tier;
+                    if (tier == "Pro" || tier == "ProPlus" || tier == "Business")
+                    {
+                        workspace.WorkspaceType = "Group";
+                    }
 
                     if (workspace.WorkspaceType == "Personal" || tier == "Personal")
                     {
@@ -144,6 +148,15 @@ public class PricingModel : PageModel
                         CreatedAt = DateTime.UtcNow
                     };
                     await _context.Workspaces.AddAsync(workspace);
+                    
+                    var member = new WorkspaceMember
+                    {
+                        WorkspaceId = workspace.Id,
+                        UserId = userProfile.Id,
+                        Role = "Manager",
+                        JoinedAt = DateTime.UtcNow
+                    };
+                    await _context.WorkspaceMembers.AddAsync(member);
                     await _context.SaveChangesAsync();
                 }
                 else

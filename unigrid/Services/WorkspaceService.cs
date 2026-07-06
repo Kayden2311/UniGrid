@@ -271,6 +271,7 @@ public class WorkspaceService : IWorkspaceService
         var validRoles = new List<string> { "Vice Manager", "Member", "Viewer" };
         if (!validRoles.Contains(newRole)) return "Invalid role specified.";
 
+<<<<<<< HEAD
         var planSetting = AdminSettings.GetPlanSetting(workspace.PackageTier);
         if (!planSetting.HasRolePermissions)
         {
@@ -281,6 +282,10 @@ public class WorkspaceService : IWorkspaceService
             canCreateChannel = !isViewer;
             canDeleteTask = !isViewer;
         }
+=======
+        // Allow customization of permissions in production regardless of plan tier
+        var planSetting = AdminSettings.GetPlanSetting(workspace.PackageTier);
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 
         memberToUpdate.Role = newRole;
         memberToUpdate.DisplayRole = Helpers.InputSanitizer.SanitizeInput(newDisplayRole);

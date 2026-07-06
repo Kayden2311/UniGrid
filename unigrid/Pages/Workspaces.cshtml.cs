@@ -135,6 +135,7 @@ public class WorkspacesModel : PageModel
                 JoinCode = joinCode,
                 OwnerId = profile.Id,
                 PackageTier = "Free",
+                WorkspaceType = "Group",
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -272,17 +273,29 @@ public class WorkspacesModel : PageModel
 
         if (string.IsNullOrWhiteSpace(WorkspaceInviteCodeInput))
         {
-            TempData["ErrorMessage"] = "Please enter a valid invite code.";
+            TempData["ErrorMessage"] = "Please enter a valid code.";
             return RedirectToPage("/Workspaces");
         }
 
-        if (!Guid.TryParse(WorkspaceInviteCodeInput.Trim(), out var inviteGuid))
+        string cleanCode = WorkspaceInviteCodeInput.Trim().ToUpper();
+        if (cleanCode.StartsWith("#"))
         {
-            TempData["ErrorMessage"] = "Invalid invite code format.";
+            cleanCode = cleanCode.Substring(1).Trim().ToUpper();
+        }
+
+        Workspace? workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == cleanCode);
+        if (workspace == null && Guid.TryParse(cleanCode, out var inviteGuid))
+        {
+            workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.InviteCode == inviteGuid);
+        }
+
+        if (workspace == null)
+        {
+            TempData["ErrorMessage"] = "The invite code or join code does not exist.";
             return RedirectToPage("/Workspaces");
         }
 
-        return await JoinWorkspaceByGuidAsync(inviteGuid, profile.Id);
+        return await JoinWorkspaceInternalAsync(workspace, profile.Id);
     }
 
     public async System.Threading.Tasks.Task<IActionResult> OnGetJoinByInviteCodeAsync(Guid inviteCode)
@@ -306,38 +319,58 @@ public class WorkspacesModel : PageModel
             return RedirectToPage("/Workspaces");
         }
 
+        return await JoinWorkspaceInternalAsync(workspace, profile.Id);
+    }
+
+    private async System.Threading.Tasks.Task<IActionResult> JoinWorkspaceInternalAsync(Workspace workspace, Guid userId)
+    {
         // Check if user is already owner or member
         if (workspace.OwnerId == userId)
         {
             TempData["SuccessMessage"] = $"You are the owner of Workspace '{workspace.Name}'.";
-            return RedirectToPage($"/WorkspaceDetail/{workspace.JoinCode}");
+            return RedirectToPage("/WorkspaceDetail", new { joinCode = workspace.JoinCode });
         }
 
-        if (workspace.WorkspaceType == "Personal" || workspace.PackageTier == "Personal")
+        bool isGroupTier = workspace.PackageTier != "Personal";
+        bool isPersonal = (workspace.WorkspaceType == "Personal" || workspace.PackageTier == "Personal") && !isGroupTier;
+
+        if (isPersonal)
         {
             TempData["ErrorMessage"] = "You cannot join a Personal Workspace. Personal Workspaces are restricted to a single user.";
             return RedirectToPage("/Workspaces");
         }
 
-        var alreadyMember = await _context.WorkspaceMembers
-            .AnyAsync(m => m.WorkspaceId == workspace.Id && m.UserId == userId);
+        var existingMember = await _context.WorkspaceMembers
+            .FirstOrDefaultAsync(m => m.WorkspaceId == workspace.Id && m.UserId == userId);
 
-        if (alreadyMember)
+        if (existingMember != null)
         {
-            TempData["SuccessMessage"] = $"You have already joined Workspace '{workspace.Name}'.";
-            return RedirectToPage($"/WorkspaceDetail/{workspace.JoinCode}");
+            if (existingMember.IsDisabled)
+            {
+                existingMember.IsDisabled = false;
+                existingMember.Role = "Member";
+                existingMember.JoinedAt = DateTime.UtcNow;
+                _context.WorkspaceMembers.Update(existingMember);
+            }
+            else
+            {
+                TempData["SuccessMessage"] = $"You have already joined Workspace '{workspace.Name}'.";
+                return RedirectToPage("/WorkspaceDetail", new { joinCode = workspace.JoinCode });
+            }
         }
-
-        // Add user as a Member
-        var newMember = new WorkspaceMember
+        else
         {
-            WorkspaceId = workspace.Id,
-            UserId = userId,
-            Role = "Member",
-            JoinedAt = DateTime.UtcNow
-        };
+            // Add user as a Member
+            var newMember = new WorkspaceMember
+            {
+                WorkspaceId = workspace.Id,
+                UserId = userId,
+                Role = "Member",
+                JoinedAt = DateTime.UtcNow
+            };
 
-        await _context.WorkspaceMembers.AddAsync(newMember);
+            await _context.WorkspaceMembers.AddAsync(newMember);
+        }
 
         // Add a default ChatRoom if it does not exist
         var hasChatRoom = await _context.ChatRooms.AnyAsync(r => r.WorkspaceId == workspace.Id);
@@ -358,7 +391,7 @@ public class WorkspacesModel : PageModel
         _cache.Remove($"WorkspaceMembers_{workspace.Id}");
 
         TempData["SuccessMessage"] = $"Successfully joined Workspace '{workspace.Name}'!";
-        return RedirectToPage($"/WorkspaceDetail/{workspace.JoinCode}");
+        return RedirectToPage("/WorkspaceDetail", new { joinCode = workspace.JoinCode });
     }
 
     private async System.Threading.Tasks.Task<User?> GetOrCreateUserProfileAsync(Guid accountId)
