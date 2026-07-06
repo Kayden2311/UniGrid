@@ -273,17 +273,29 @@ public class WorkspacesModel : PageModel
 
         if (string.IsNullOrWhiteSpace(WorkspaceInviteCodeInput))
         {
-            TempData["ErrorMessage"] = "Please enter a valid invite code.";
+            TempData["ErrorMessage"] = "Please enter a valid code.";
             return RedirectToPage("/Workspaces");
         }
 
-        if (!Guid.TryParse(WorkspaceInviteCodeInput.Trim(), out var inviteGuid))
+        string cleanCode = WorkspaceInviteCodeInput.Trim();
+        if (cleanCode.StartsWith("#"))
         {
-            TempData["ErrorMessage"] = "Invalid invite code format.";
+            cleanCode = cleanCode.Substring(1).Trim();
+        }
+
+        Workspace? workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.JoinCode == cleanCode);
+        if (workspace == null && Guid.TryParse(cleanCode, out var inviteGuid))
+        {
+            workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.InviteCode == inviteGuid);
+        }
+
+        if (workspace == null)
+        {
+            TempData["ErrorMessage"] = "The invite code or join code does not exist.";
             return RedirectToPage("/Workspaces");
         }
 
-        return await JoinWorkspaceByGuidAsync(inviteGuid, profile.Id);
+        return await JoinWorkspaceInternalAsync(workspace, profile.Id);
     }
 
     public async System.Threading.Tasks.Task<IActionResult> OnGetJoinByInviteCodeAsync(Guid inviteCode)
@@ -295,11 +307,6 @@ public class WorkspacesModel : PageModel
         var profile = await GetOrCreateUserProfileAsync(accountId);
         if (profile == null) return RedirectToPage("/Login");
 
-        return await JoinWorkspaceByGuidAsync(inviteCode, profile.Id);
-    }
-
-    private async System.Threading.Tasks.Task<IActionResult> JoinWorkspaceByGuidAsync(Guid inviteCode, Guid userId)
-    {
         var workspace = await _context.Workspaces.FirstOrDefaultAsync(w => w.InviteCode == inviteCode);
         if (workspace == null)
         {
@@ -307,6 +314,11 @@ public class WorkspacesModel : PageModel
             return RedirectToPage("/Workspaces");
         }
 
+        return await JoinWorkspaceInternalAsync(workspace, profile.Id);
+    }
+
+    private async System.Threading.Tasks.Task<IActionResult> JoinWorkspaceInternalAsync(Workspace workspace, Guid userId)
+    {
         // Check if user is already owner or member
         if (workspace.OwnerId == userId)
         {
