@@ -73,16 +73,28 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
 });
 
+<<<<<<< HEAD
 // Register DB Context with automatic retry policies for SQL Server cold-starts
 builder.Services.AddDbContext<unigrid.Data.UniGridDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
         sqlServerOptionsAction: sqlOptions =>
+=======
+// Register DB Context with automatic retry policies for PostgreSQL cold-starts
+builder.Services.AddDbContext<unigrid.Data.UniGridDbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        npgsqlOptionsAction: sqlOptions =>
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
         {
             sqlOptions.EnableRetryOnFailure(
                 maxRetryCount: 5,
                 maxRetryDelay: TimeSpan.FromSeconds(10),
+<<<<<<< HEAD
                 errorNumbersToAdd: null);
+=======
+                errorCodesToAdd: null);
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
         }));
 
 // JWT Authentication
@@ -294,6 +306,11 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+<<<<<<< HEAD
+=======
+app.UseWebSockets();
+
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 app.UseAuthentication();
 app.UseAuthorization();
 

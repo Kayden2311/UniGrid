@@ -84,6 +84,8 @@
     // Storage Calculations
     string packageTier = Model.Workspace.PackageTier ?? "Free";
     bool isIndividualStorage = (packageTier == "Personal");
+    bool isGroupTier = packageTier != "Personal";
+    bool isPersonalWs = (Model.Workspace.WorkspaceType == "Personal" || packageTier == "Personal") && !isGroupTier;
     long totalStorageUsed = isIndividualStorage 
         ? Model.Files.Where(f => f.UserId == Model.CurrentUser.Id).Sum(f => f.FileSize) 
         : Model.Files.Sum(f => f.FileSize);
@@ -183,7 +185,7 @@
             <a href="/Pricing?joinCode=@Model.Workspace.JoinCode" class="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-orange-100 hover:shadow-orange-200 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2">
                 <i data-lucide="crown" class="w-4 h-4"></i> Upgrade Package
             </a>
-            @if (packageTier != "Personal" && Model.Workspace.WorkspaceType != "Personal")
+            @if (!isPersonalWs)
             {
                 <button @@click="inviteOpen = true" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2">
                     <i data-lucide="user-plus" class="w-4 h-4"></i> Invite Member
@@ -210,7 +212,7 @@
                 class="flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all">
             <i data-lucide="kanban-square" class="w-4 h-4"></i> Tasks
         </button>
-        @if (packageTier != "Personal" && Model.Workspace.WorkspaceType != "Personal")
+        @if (!isPersonalWs)
         {
             <button @@click="activeTab = 'chat'"
                     :class="activeTab === 'chat' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
@@ -219,7 +221,7 @@
                 <span class="absolute top-2.5 right-1 w-2 h-2 bg-indigo-600 rounded-full"></span>
             </button>
         }
-        @if (packageTier != "Personal" && Model.Workspace.WorkspaceType != "Personal")
+        @if (!isPersonalWs)
         {
             <button @@click="activeTab = 'members'"
                     :class="activeTab === 'members' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'"
@@ -530,7 +532,7 @@
                             }
                             
                             double lastX = fullStartX + (fullMemberCount - 1) * fullSpacing;
-                            fullRateAreaPoints.Add($"{lastX.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)},200");
+                            fullRateAreaPoints.Add($"L {lastX.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)},200");
                         }
                         
                         var fullPathStr = string.Join(" ", fullRatePoints);
@@ -871,9 +873,17 @@
                         </div>
                     </div>
  
-                    <button x-show="currentUserCanCreateTask" @@click="openCreateModal(0)" class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2">
-                        <i data-lucide="plus" class="w-4 h-4"></i> Create Task
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button type="button" 
+                                x-show="currentUserRole === 'Owner' || currentUserRole === 'Manager' || currentUserRole === 'Vice Manager'" 
+                                @@click="manageCategoriesOpen = true" 
+                                class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-bold border border-slate-200 transition-all flex items-center gap-1.5 cursor-pointer">
+                            <i data-lucide="tag" class="w-4 h-4 text-slate-500"></i> Categories
+                        </button>
+                        <button x-show="currentUserCanCreateTask" @@click="openCreateModal(0)" class="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2">
+                            <i data-lucide="plus" class="w-4 h-4"></i> Create Task
+                        </button>
+                    </div>
                 </div>
  
                 <!-- Flex Container for Kanban & Activity Log -->
@@ -1127,7 +1137,7 @@
     <!-- ════════════════════════════════════════ -->
     <!-- ─── TAB 3: CHAT ROOM (DISCORD STYLE) ─── -->
     <!-- ════════════════════════════════════════ -->
-    @if (packageTier != "Personal" && Model.Workspace.WorkspaceType != "Personal")
+    @if (!isPersonalWs)
     {
         <div x-show="activeTab === 'chat'" class="h-[calc(100vh-22rem)] min-h-[500px] border border-slate-200 rounded-[2.5rem] bg-white flex overflow-hidden shadow-sm" x-transition>
             <!-- Left panel - Channels (Discord Style) -->
@@ -1225,11 +1235,22 @@
                     </div>
 
                     <template x-for="msg in filteredMessages" :key="msg.id">
-                        <div class="group flex gap-3 max-w-[80%] transition-all" :class="msg.senderId === currentUserId ? 'ml-auto flex-row-reverse' : ''">
+                        <div :id="'chat-msg-' + msg.id" class="group flex gap-3 max-w-[80%] transition-all" :class="msg.senderId === currentUserId ? 'ml-auto flex-row-reverse' : ''">
                             <div class="h-8 w-8 rounded-full bg-slate-100 border flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0 select-none" 
                                  x-text="msg.senderName.split(' ').map(n => n[0]).join('')">
                             </div>
                             <div class="space-y-1 min-w-0">
+                                 <!-- Reply Quote Block -->
+                                 <template x-if="msg.parentId">
+                                     <div class="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold bg-slate-50/60 p-1.5 rounded-lg border-l-2 border-indigo-500 max-w-sm mb-1 cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                                          @@click="const el = document.getElementById('chat-msg-' + msg.parentId); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('bg-indigo-50'); setTimeout(() => el.classList.remove('bg-indigo-50'), 2000); }">
+                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-slate-400 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                         <span class="truncate">
+                                             <span x-text="chatMessages.find(m => m.id === msg.parentId)?.senderId === currentUserId ? 'Me' : (chatMessages.find(m => m.id === msg.parentId)?.senderName || 'Someone')"></span>:
+                                             <span class="italic font-normal text-[9px]" x-text="chatMessages.find(m => m.id === msg.parentId)?.content || 'Deleted message'"></span>
+                                         </span>
+                                     </div>
+                                 </template>
                                 <template x-if="msg.senderId !== currentUserId">
                                     <p class="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
                                         <span x-text="msg.senderName"></span>
@@ -1297,6 +1318,15 @@
                                         </template>
                                     </div>
                                     
+                                    <!-- Hover Reply Button -->
+                                    <template x-if="!msg.rawContent.startsWith('[deleted_message]')">
+                                        <button type="button" @@click="replyingToMessage = { id: msg.id, senderName: msg.senderId === currentUserId ? 'Me' : msg.senderName, content: msg.content }; $nextTick(() => document.getElementById('chat-input-field')?.focus())" 
+                                                class="opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg hover:bg-slate-100 hover:text-indigo-600 flex items-center justify-center text-slate-400 transition-all shrink-0 cursor-pointer select-none"
+                                                title="Reply Message">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                        </button>
+                                    </template>
+
                                     <!-- Hover Trash/Revoke Button -->
                                     <template x-if="!msg.rawContent.startsWith('[deleted_message]') && msg.senderId === currentUserId">
                                         <button type="button" @@click="deleteMessage(msg.id)" 
@@ -1405,6 +1435,16 @@
 
                 <!-- Message Input Area -->
                 <div class="p-4 border-t border-slate-100">
+                    <!-- Reply Preview Bar -->
+                    <div x-show="replyingToMessage" class="mb-2.5 p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-xs font-bold text-indigo-700 transition-all" x-transition x-cloak>
+                        <div class="flex items-center gap-2 truncate">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-indigo-500 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                            <span class="truncate">Replying to <span class="text-indigo-900" x-text="replyingToMessage?.senderName"></span>: <span class="italic font-normal text-slate-500" x-text="replyingToMessage?.content"></span></span>
+                        </div>
+                        <button type="button" @@click="replyingToMessage = null" class="text-indigo-400 hover:text-indigo-650 transition-colors cursor-pointer flex items-center justify-center border-0 bg-transparent">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
                     <template x-if="currentUserRole !== 'Viewer'">
                         <form @@submit.prevent="sendChatMessageViaAjax()" class="flex gap-2">
                             <input type="hidden" name="activeChannel" :value="activeChannel">
@@ -1441,7 +1481,7 @@
     <!-- ════════════════════════════════════════ -->
     <!-- ─── TAB 4: MEMBERS LIST ─── -->
     <!-- ════════════════════════════════════════ -->
-    @if (packageTier != "Personal" && Model.Workspace.WorkspaceType != "Personal")
+    @if (!isPersonalWs)
     {
         <div x-show="activeTab === 'members'" class="space-y-4" x-transition>
         <div class="flex items-center justify-between mb-2">
@@ -1449,6 +1489,10 @@
                 <h3 class="text-lg font-black text-slate-800">Workspace Members</h3>
                 <p class="text-xs text-slate-500 mt-0.5">Manage access, roles, and review contribution details.</p>
             </div>
+            <button @@click="leaveDialogOpen = true" 
+                    class="bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="log-out" class="w-4 h-4"></i> Leave Workspace
+            </button>
         </div>
 
         <div class="glass rounded-[2.5rem] overflow-visible border border-slate-200 shadow-sm">
@@ -1521,60 +1565,39 @@
                                                     
                                                     <div class="space-y-1 pt-1">
                                                         <!-- Vice Manager -->
-                                                        <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
-                                                            @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="memberId" value="@member.UserId" />
-                                                            <input type="hidden" name="newRole" value="Vice Manager" />
-                                                            <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
-                                                            <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
-                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                            <input type="hidden" name="canEditTask" :value="canEditTask" />
-                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                            <input type="hidden" name="canDeleteTask" :value="canDeleteTask" />
-                                                            <button type="submit" :class="selectedRole === 'Vice Manager' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
-                                                                <span>Vice Manager</span>
-                                                                @if (member.Role == "Vice Manager") {
-                                                                    <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
-                                                                }
-                                                            </button>
+                                                        <button type="button" 
+                                                                @@click="selectedRole = 'Vice Manager'"
+                                                                :class="selectedRole === 'Vice Manager' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" 
+                                                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer">
+                                                            <span>Vice Manager</span>
+                                                            <span x-show="selectedRole === 'Vice Manager'">
+                                                                <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                            </span>
+                                                        </button>
                                                         </form>
 
                                                         <!-- Member -->
-                                                        <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
-                                                            @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="memberId" value="@member.UserId" />
-                                                            <input type="hidden" name="newRole" value="Member" />
-                                                            <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
-                                                            <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
-                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                            <input type="hidden" name="canEditTask" :value="canEditTask" />
-                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                            <input type="hidden" name="canDeleteTask" :value="canDeleteTask" />
-                                                            <button type="submit" :class="selectedRole === 'Member' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
-                                                                <span>Member</span>
-                                                                @if (member.Role == "Member") {
-                                                                    <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
-                                                                }
-                                                            </button>
+                                                        <button type="button" 
+                                                                @@click="selectedRole = 'Member'"
+                                                                :class="selectedRole === 'Member' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" 
+                                                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer">
+                                                            <span>Member</span>
+                                                            <span x-show="selectedRole === 'Member'">
+                                                                <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                            </span>
+                                                        </button>
                                                         </form>
 
                                                         <!-- Viewer -->
-                                                        <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
-                                                            @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="memberId" value="@member.UserId" />
-                                                            <input type="hidden" name="newRole" value="Viewer" />
-                                                            <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
-                                                            <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
-                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                            <input type="hidden" name="canEditTask" :value="canEditTask" />
-                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                            <input type="hidden" name="canDeleteTask" :value="canDeleteTask" />
-                                                            <button type="submit" :class="selectedRole === 'Viewer' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
-                                                                <span>Viewer</span>
-                                                                @if (member.Role == "Viewer") {
-                                                                    <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
-                                                                }
-                                                            </button>
+                                                        <button type="button" 
+                                                                @@click="selectedRole = 'Viewer'"
+                                                                :class="selectedRole === 'Viewer' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" 
+                                                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer">
+                                                            <span>Viewer</span>
+                                                            <span x-show="selectedRole === 'Viewer'">
+                                                                <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                            </span>
+                                                        </button>
                                                         </form>
                                                     </div>
                                                 </div>
@@ -1620,7 +1643,7 @@
                                                     <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode" class="space-y-2">
                                                         @Html.AntiForgeryToken()
                                                         <input type="hidden" name="memberId" value="@member.UserId" />
-                                                        <input type="hidden" name="newRole" value="@member.Role" />
+                                                        <input type="hidden" name="newRole" :value="selectedRole" />
                                                         <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
                                                         <input type="hidden" name="canCreateTask" :value="canCreateTask" />
                                                         <input type="hidden" name="canEditTask" :value="canEditTask" />
@@ -1954,6 +1977,27 @@
                     </div>
                 </div>
 
+                <!-- Task Attachments - hidden until file display is fixed
+                <div x-show="selectedTask?.files && selectedTask.files.length > 0" class="space-y-2">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Attachments</h4>
+                    <div class="space-y-1.5">
+                        <template x-for="file in selectedTask?.files || []" :key="file.id">
+                            <a :href="'/' + file.fileUrl" target="_blank" download
+                               class="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl hover:bg-indigo-50 hover:border-indigo-100 transition-all group">
+                                <div class="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 group-hover:border-indigo-200">
+                                    <i data-lucide="file-text" class="w-4 h-4 text-slate-400 group-hover:text-indigo-500"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-xs font-bold text-slate-700 truncate group-hover:text-indigo-600" x-text="file.fileName"></p>
+                                    <p class="text-[10px] text-slate-400 font-medium" x-text="(file.fileSize / 1024).toFixed(1) + ' KB'"></p>
+                                </div>
+                                <i data-lucide="download" class="w-4 h-4 text-slate-300 group-hover:text-indigo-400 shrink-0"></i>
+                            </a>
+                        </template>
+                    </div>
+                </div>
+                -->
+
                 <!-- Review Actions (Available only for tasks in status = 2) -->
                 <div x-show="selectedTask?.status === 2">
                     <template x-if="currentUserRole === 'Owner' || currentUserRole === 'Manager'">
@@ -2010,6 +2054,7 @@
                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"></textarea>
                 </div>
 
+                <!--
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Attachment</label>
                     <div class="relative group">
@@ -2017,6 +2062,7 @@
                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-indigo-50 file:text-indigo-600 file:hover:bg-indigo-100 cursor-pointer">
                     </div>
                 </div>
+                -->
 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-1">
@@ -2083,15 +2129,10 @@
                                         </div>
                                     </div>
 
-                                    <!-- Shortcuts panel -->
-                                    <div class="grid grid-cols-2 gap-1 border-t border-slate-100 pt-2 text-[8px] font-bold text-slate-400">
-                                        <button type="button" @@click="selectedTask.dueDateTime = '09:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">09:00 AM</button>
-                                        <button type="button" @@click="selectedTask.dueDateTime = '12:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">12:00 PM</button>
-                                        <button type="button" @@click="selectedTask.dueDateTime = '14:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">02:00 PM</button>
-                                        <button type="button" @@click="selectedTask.dueDateTime = '17:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">05:00 PM</button>
-                                    </div>
+                                    <!-- Shortcuts removed -->
                                 </div>
                             </div>
+                        </div>
                         </div>
                         <input type="hidden" name="editTaskDueDate" :value="selectedTask.dueDateDate ? (selectedTask.dueDateTime ? (selectedTask.dueDateDate + 'T' + selectedTask.dueDateTime) : selectedTask.dueDateDate) : ''">
                     </div>
@@ -2129,12 +2170,49 @@
                         <p class="text-xs font-bold text-slate-400 italic">No comments yet. Start the conversation!</p>
                     </template>
                     <template x-for="comment in selectedTask?.taskComments" :key="comment.id">
-                        <div class="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex gap-3 text-xs leading-relaxed">
+                        <div :id="'comment-' + comment.id" class="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex gap-3 text-xs leading-relaxed group">
                             <div class="h-6 w-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[9px] uppercase text-slate-500 shrink-0" 
                                  x-text="comment.user?.fullName ? comment.user.fullName.split(' ').map(n => n[0]).join('') : 'U'"></div>
-                            <div>
-                                <p class="font-bold text-slate-700" x-text="comment.user?.fullName"></p>
-                                <p class="text-slate-500 mt-0.5" x-text="comment.content"></p>
+                            <div class="min-w-0 flex-1">
+                                <!-- Reply Quote Block -->
+                                <template x-if="comment.parentId">
+                                    <div class="flex items-center gap-1.5 text-[9px] text-slate-400 font-bold bg-slate-100/80 p-1.5 rounded-lg border-l-2 border-indigo-500 max-w-sm mb-1 cursor-pointer select-none hover:bg-slate-200 transition-colors"
+                                         @@click="const el = document.getElementById('comment-' + comment.parentId); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('bg-indigo-50/50'); setTimeout(() => el.classList.remove('bg-indigo-50/50'), 2000); }">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-slate-400 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                        <span class="truncate">
+                                            <span x-text="selectedTask.taskComments.find(c => c.id === comment.parentId)?.user?.fullName === comment.user?.fullName ? 'Himself/Herself' : (selectedTask.taskComments.find(c => c.id === comment.parentId)?.user?.fullName || 'Someone')"></span>:
+                                             <span class="italic font-normal text-slate-500" x-text="selectedTask.taskComments.find(c => c.id === comment.parentId)?.content || 'Deleted comment'"></span>
+                                        </span>
+                                    </div>
+                                </template>
+
+                                <div class="flex items-center justify-between gap-2">
+                                    <p class="font-bold text-slate-700" x-text="comment.user?.fullName"></p>
+                                    <button type="button" @@click="replyingToComment = { id: comment.id, userName: comment.user?.fullName, content: comment.content }; $nextTick(() => document.getElementById('task-comment-field')?.focus())" 
+                                            class="opacity-0 group-hover:opacity-100 h-6 w-6 rounded-lg hover:bg-slate-200/60 text-slate-400 hover:text-indigo-650 flex items-center justify-center transition-all shrink-0 cursor-pointer select-none"
+                                            title="Reply to comment">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                    </button>
+                                </div>
+                                <div class="text-slate-500 mt-0.5 break-words" x-html="parseCommentContent(comment.content)"></div>
+                                
+                                <!-- Render Comment Attachment Box if comment has an attachment -->
+                                <template x-if="getCommentAttachment(comment.content)">
+                                    <div class="mt-2.5 p-2.5 border border-slate-200 bg-white rounded-xl flex items-center justify-between gap-4 max-w-sm text-slate-700 shadow-sm">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <p class="text-[11px] font-bold truncate text-slate-800" x-text="getCommentAttachment(comment.content).fileName"></p>
+                                                <p class="text-[9px] font-bold text-slate-400 uppercase" x-text="Math.round(getCommentAttachment(comment.content).fileSize / 1024) + ' KB'"></p>
+                                            </div>
+                                        </div>
+                                        <a :href="'/' + getCommentAttachment(comment.content).fileUrl" class="h-7 w-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-650 flex items-center justify-center shrink-0 transition-colors cursor-pointer" download>
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                        </a>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </template>
@@ -2186,16 +2264,52 @@
                         </div>
                     </div>
 
+                    <!-- Selected Comment Attachment Status Indicator Box -->
+                    <div x-show="selectedCommentFileName" 
+                         class="mb-2 p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-[10px] font-bold text-indigo-700 transition-all"
+                         x-transition x-cloak>
+                        <span class="flex items-center gap-1.5 truncate">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-indigo-600"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></svg>
+                            <span>Attachment: </span>
+                            <strong class="truncate" x-text="selectedCommentFileName"></strong>
+                        </span>
+                        <button type="button" @@click="clearCommentFile()" class="text-indigo-400 hover:text-indigo-600 transition-colors cursor-pointer flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+
                     <template x-if="currentUserRole !== 'Viewer'">
-                        <form @@submit.prevent="sendTaskCommentViaAjax()" class="flex gap-2 pt-2">
-                            <input type="hidden" name="commentTaskId" :value="selectedTask?.id">
-                            <input type="text" id="task-comment-field" asp-for="CommentContent" x-model="newCommentContent" placeholder="Post a comment..." required autocomplete="off"
+                        <div class="space-y-2 pt-2">
+                            <!-- Comment Reply Preview Bar -->
+                            <div x-show="replyingToComment" class="p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-[10px] font-bold text-indigo-700 transition-all" x-transition x-cloak>
+                                <div class="flex items-center gap-1.5 truncate">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-indigo-500 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                    <span class="truncate">Replying to <span class="text-indigo-900" x-text="replyingToComment?.userName"></span>: <span class="italic font-normal text-slate-500" x-text="replyingToComment?.content"></span></span>
+                                </div>
+                                <button type="button" @@click="replyingToComment = null" class="text-indigo-400 hover:text-indigo-650 transition-colors cursor-pointer flex items-center justify-center border-0 bg-transparent">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
+                            <form @@submit.prevent="sendTaskCommentViaAjax()" class="flex gap-2" enctype="multipart/form-data">
+                                <input type="hidden" name="commentTaskId" :value="selectedTask?.id">
+                            
+                            <!-- Paperclip Button -->
+                            <button type="button" 
+                                    @@click="document.getElementById('task-comment-file-input').click()" 
+                                    :class="selectedCommentFileName ? 'bg-indigo-50 text-indigo-600 border border-indigo-250' : 'bg-slate-50 text-slate-400 hover:text-slate-600 border border-slate-200'"
+                                    class="p-2.5 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                            </button>
+                            <input type="file" id="task-comment-file-input" class="hidden" @@change="handleCommentFileChange($event)">
+
+                            <input type="text" id="task-comment-field" asp-for="CommentContent" x-model="newCommentContent" placeholder="Post a comment..." :required="!selectedCommentFileName" autocomplete="off"
                                    class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                             <button type="submit" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                             </button>
                         </form>
-                    </template>
+                    </div>
+                </template>
                     <template x-if="currentUserRole === 'Viewer'">
                         <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-400 font-bold italic">
                             You are viewing as a Viewer. Cannot add comments.
@@ -2218,7 +2332,7 @@
                 <h2 class="text-lg font-black text-slate-800">Workspace KPI Performance</h2>
                 <p class="text-xs font-semibold text-slate-400">Monitor and compare member contributions by category.</p>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
                 <template x-if="currentUserRole === 'Owner' || currentUserRole === 'Manager'">
                     <div class="flex gap-2">
                         <button type="button" @@click="assignKpiOpen = true"
@@ -2232,9 +2346,19 @@
                     </div>
                 </template>
                 <div class="h-6 w-px bg-slate-200"></div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Category:</span>
+                <select x-model="selectedKpiCategoryFilter" 
+                        class="bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/50 text-xs font-bold px-3 py-1.5 rounded-lg outline-none transition-all cursor-pointer">
+                    <option value="all">All Categories</option>
+                    <template x-for="cat in demoCategories" :key="cat.id">
+                        <option :value="cat.id" x-text="cat.name"></option>
+                    </template>
+                </select>
+
+                <div class="h-6 w-px bg-slate-200"></div>
                 <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Period:</span>
                 <div class="flex gap-1.5">
-                    <template x-for="period in ['Weekly', 'Monthly']" :key="period">
+                    <template x-for="period in ['Daily', 'Weekly', 'Monthly']" :key="period">
                         <button type="button" @@click="selectedKpiPeriodFilter = period"
                                 :class="selectedKpiPeriodFilter === period ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
                                 class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all" x-text="period"></button>
@@ -2247,11 +2371,11 @@
                     <button type="button" @@click="selectedKpiTimeframe = 'current'"
                             :class="selectedKpiTimeframe === 'current' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
                             class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
-                            x-text="selectedKpiPeriodFilter === 'Weekly' ? 'This Week' : 'This Month'"></button>
+                            x-text="selectedKpiPeriodFilter === 'Daily' ? 'Today' : selectedKpiPeriodFilter === 'Weekly' ? 'This Week' : 'This Month'"></button>
                     <button type="button" @@click="selectedKpiTimeframe = 'previous'"
                             :class="selectedKpiTimeframe === 'previous' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
                             class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all"
-                            x-text="selectedKpiPeriodFilter === 'Weekly' ? 'Last Week' : 'Last Month'"></button>
+                            x-text="selectedKpiPeriodFilter === 'Daily' ? 'Yesterday' : selectedKpiPeriodFilter === 'Weekly' ? 'Last Week' : 'Last Month'"></button>
                 </div>
             </div>
         </div>
@@ -2277,7 +2401,7 @@
                         <template x-if="workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner').length > 0">
                             <div class="grid sm:grid-cols-2 gap-4">
                                 <template x-for="m in workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner')" :key="m.id">
-                                    <div class="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4" x-data="{ get metrics() { return getMemberKpiMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe); } }">
+                                    <div class="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4" x-data="{ get metrics() { return getMemberKpiMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe, selectedKpiCategoryFilter); } }">
                                         <div class="flex items-center gap-2.5">
                                             <div class="h-7 w-7 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] font-black text-indigo-600"
                                                  x-text="m.fullName.split(' ').map(n => n[0]).join('')"></div>
@@ -2338,7 +2462,7 @@
                                 
                                 <div class="grid sm:grid-cols-2 gap-4">
                                     <!-- List member targets -->
-                                    <template x-for="target in kpiTargets.filter(t => t.userId === m.id).sort((a, b) => {
+                                    <template x-for="target in kpiTargets.filter(t => t.userId === m.id && (selectedKpiCategoryFilter === 'all' || t.categoryId === selectedKpiCategoryFilter)).sort((a, b) => {
                                         const order = { 'Daily': 1, 'Weekly': 2, 'Monthly': 3 };
                                         return (order[a.periodType] || 99) - (order[b.periodType] || 99);
                                     })" :key="target.id">
@@ -2389,7 +2513,7 @@
                                         </div>
                                     </template>
                                     
-                                    <template x-if="kpiTargets.filter(t => t.userId === m.id).length === 0">
+                                    <template x-if="kpiTargets.filter(t => t.userId === m.id && (selectedKpiCategoryFilter === 'all' || t.categoryId === selectedKpiCategoryFilter)).length === 0">
                                         <div class="col-span-2 text-xs text-slate-400 italic py-2">No KPIs assigned.</div>
                                     </template>
                                 </div>
@@ -2448,7 +2572,7 @@
                     
                     <div class="space-y-3">
                         <template x-for="(m, idx) in workspaceMembers.filter(m => m.role !== 'Owner').map(m => {
-                            const metrics = getMemberKpiMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe);
+                            const metrics = getMemberKpiMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe, selectedKpiCategoryFilter);
                             return { id: m.id, fullName: m.fullName, targetSum: metrics.targetSum, actualSum: metrics.achievedSum, rate: metrics.rate };
                         }).sort((a, b) => b.rate - a.rate)" :key="m.id">
                             <div class="flex items-center gap-3 p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50">
@@ -2477,7 +2601,120 @@
                 </div>
             </div>
         </div>
+
+        <!-- Task-to-KPI Conversion & Productivity Analysis Panel -->
+        <div class="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
+                <div>
+                    <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+                        <i data-lucide="shuffle" class="w-5 h-5 text-indigo-600 animate-pulse"></i>
+                        Task-to-KPI Conversion & Productivity Analysis
+                    </h3>
+                    <p class="text-xs font-semibold text-slate-400">Evaluate conversion rates from task completions (Công việc) into KPI achievements (Thành quả).</p>
+                </div>
+                <div class="text-[10px] font-black uppercase bg-indigo-50 border border-indigo-100/50 text-indigo-600 px-3 py-1.5 rounded-xl self-start">
+                    Active Filters applied
+                </div>
+            </div>
+
+            <template x-if="workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner').length === 0">
+                <p class="text-xs text-slate-400 text-center py-10 font-bold italic">No member conversion data available.</p>
+            </template>
+
+            <template x-if="workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner').length > 0">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <template x-for="m in workspaceMembers.filter(m => m.id.toLowerCase() !== workspaceOwnerId.toLowerCase() && m.role !== 'Owner')" :key="m.id">
+                        <div class="p-6 rounded-[2rem] border border-slate-150/70 bg-slate-50/20 shadow-sm flex flex-col justify-between" 
+                             x-data="{ get conv() { return getMemberConversionMetrics(m.id, selectedKpiPeriodFilter, selectedKpiTimeframe, selectedKpiCategoryFilter); } }">
+                            
+                            <!-- Member Header -->
+                            <div class="flex items-center justify-between pb-4 border-b border-slate-100/50 mb-4">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="h-8 w-8 rounded-full bg-indigo-50 border border-indigo-100/30 flex items-center justify-center text-xs font-black text-indigo-600"
+                                         x-text="m.fullName.split(' ').map(n => n[0]).join('')"></div>
+                                    <div>
+                                        <span class="text-xs font-black text-slate-700 block leading-tight" x-text="m.fullName"></span>
+                                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest" x-text="m.role"></span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100/55" 
+                                          x-text="conv.efficiency + ' KPI/Task'"></span>
+                                    <span class="block text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Efficiency Ratio</span>
+                                </div>
+                            </div>
+
+                            <!-- Conversion Metrics Comparison -->
+                            <div class="space-y-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <!-- Task completion widget -->
+                                    <div class="p-4 bg-white border border-slate-150/55 rounded-2xl space-y-2 relative overflow-hidden shadow-sm">
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Task Completion (Công việc)</span>
+                                        <div class="flex items-baseline gap-1.5">
+                                            <span class="text-xl font-black text-slate-800" x-text="conv.completedTasks"></span>
+                                            <span class="text-xs font-semibold text-slate-400" x-text="'/ ' + conv.totalTasks + ' assigned'"></span>
+                                        </div>
+                                        <div class="flex items-center justify-between pt-1">
+                                            <span class="text-[10px] font-black text-indigo-600" x-text="conv.taskCompletionRate + '%'"></span>
+                                            <div class="h-1.5 w-16 bg-slate-100 rounded-full overflow-hidden">
+                                                <div class="h-full bg-indigo-600 rounded-full" :style="'width: ' + conv.taskCompletionRate + '%'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- KPI achievement widget -->
+                                    <div class="p-4 bg-white border border-slate-150/55 rounded-2xl space-y-2 relative overflow-hidden shadow-sm">
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">KPI Achievement (Thành quả)</span>
+                                        <div class="flex items-baseline gap-1.5">
+                                            <span class="text-xl font-black text-slate-800" x-text="conv.kpiAchieved"></span>
+                                            <span class="text-xs font-semibold text-slate-400" x-text="'/ ' + conv.kpiTarget + ' target'"></span>
+                                        </div>
+                                        <div class="flex items-center justify-between pt-1">
+                                            <span class="text-[10px] font-black text-emerald-600" x-text="conv.kpiAchievementRate + '%'"></span>
+                                            <div class="h-1.5 w-16 bg-slate-100 rounded-full overflow-hidden">
+                                                <div class="h-full bg-emerald-500 rounded-full" :style="'width: ' + Math.min(100, conv.kpiAchievementRate) + '%'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Conversion Rate visual bar -->
+                                <div class="bg-white border border-slate-150/60 p-4 rounded-2xl space-y-2.5 shadow-sm">
+                                    <div class="flex items-center justify-between text-[10px] font-black uppercase tracking-wider">
+                                        <span class="text-slate-400">Task-to-KPI Conversion Progress</span>
+                                        <span class="text-indigo-600" x-text="conv.totalTasks > 0 ? Math.round((conv.kpiAchieved * 100) / (conv.totalTasks + conv.kpiTarget)) + '%' : '0%'"></span>
+                                    </div>
+                                    <div class="h-3 w-full bg-slate-100 rounded-full p-0.5 overflow-hidden flex">
+                                        <!-- Completed Tasks block -->
+                                        <div class="h-full bg-indigo-600 rounded-l-full transition-all duration-300" 
+                                             :style="'width: ' + (conv.totalTasks > 0 ? (conv.completedTasks * 100 / (conv.totalTasks + conv.kpiTarget)) + '%' : '0%')"></div>
+                                        <!-- Achieved KPI block -->
+                                        <div class="h-full bg-emerald-500 rounded-r-full transition-all duration-300 border-l border-white" 
+                                             :style="'width: ' + (conv.totalTasks > 0 ? (conv.kpiAchieved * 100 / (conv.totalTasks + conv.kpiTarget)) + '%' : '0%')"></div>
+                                    </div>
+                                    <div class="flex justify-between text-[8px] font-bold text-slate-400 uppercase tracking-widest pt-0.5">
+                                        <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 bg-indigo-600 rounded-full inline-block"></span> Tasks Completed</span>
+                                        <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 bg-emerald-500 rounded-full inline-block"></span> KPI Achieved</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Conversion Advice & Insights -->
+                            <div class="mt-4 p-3.5 bg-indigo-50/30 border border-indigo-100/50 rounded-2xl flex items-start gap-2.5">
+                                <i data-lucide="lightbulb" class="w-4 h-4 text-indigo-500 shrink-0 mt-0.5"></i>
+                                <div>
+                                    <span class="text-[9px] font-black text-indigo-650 uppercase tracking-widest block mb-0.5">Productivity Alignment Advice</span>
+                                    <p class="text-[10px] font-semibold text-slate-500 leading-normal" x-text="conv.advice"></p>
+                                </div>
+                            </div>
+
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
     </div>
+    }
 
     <!-- ════════════════════════════════════════ -->
     <!-- ─── CREATE TASK DIALOG MODAL ─── -->
@@ -2511,6 +2748,7 @@
                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"></textarea>
                 </div>
 
+                <!--
                 <div class="space-y-1">
                     <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Attachment</label>
                     <div class="relative group">
@@ -2518,6 +2756,7 @@
                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-indigo-50 file:text-indigo-600 file:hover:bg-indigo-100 cursor-pointer">
                     </div>
                 </div>
+                -->
 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-1">
@@ -2570,7 +2809,7 @@
                                         </div>
                                         
                                         <!-- AM / PM Toggle strictly AM/PM -->
-                                        <div class="flex flex-col justify-center ml-2 border border-slate-100 rounded-lg overflow-hidden bg-slate-50">
+                                        <div class="flex flex-col justify-center ml-2 border border-slate-100 rounded-hidden overflow-hidden bg-slate-50">
                                             <button type="button" @@click="setAM(true)" 
                                                     :class="isAM(createTaskTime) ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-600'"
                                                     class="px-2 py-1 text-[9px] font-black tracking-wide uppercase transition-all">AM</button>
@@ -2580,18 +2819,24 @@
                                         </div>
                                     </div>
 
-                                    <!-- Shortcuts -->
-                                    <div class="grid grid-cols-2 gap-1 border-t border-slate-100 pt-2 text-[8px] font-bold text-slate-400">
-                                        <button type="button" @@click="createTaskTime = '09:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">09:00 AM</button>
-                                        <button type="button" @@click="createTaskTime = '12:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">12:00 PM</button>
-                                        <button type="button" @@click="createTaskTime = '14:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">02:00 PM</button>
-                                        <button type="button" @@click="createTaskTime = '17:00'" class="p-1 bg-slate-50 hover:bg-slate-100 rounded text-center">05:00 PM</button>
-                                    </div>
+                                    <!-- Shortcuts removed -->
                                 </div>
                             </div>
                         </div>
+                        </div>
                         <input type="hidden" name="NewTaskDueDate" :value="createTaskDate ? (createTaskTime ? (createTaskDate + 'T' + createTaskTime) : createTaskDate) : ''">
                     </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Category</label>
+                    <select asp-for="NewTaskCategoryId" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                        <option value="">No Category</option>
+                        @foreach (var cat in Model.WorkspaceCategories)
+                        {
+                            <option value="@cat.Id">@cat.Name</option>
+                        }
+                    </select>
                 </div>
 
                 <div class="space-y-1">
@@ -2789,6 +3034,10 @@
         </div>
     </div>
 
+    <form id="leave-workspace-form" method="post" asp-page-handler="LeaveWorkspace" asp-route-joinCode="@Model.Workspace.JoinCode">
+        @Html.AntiForgeryToken()
+    </form>
+
     <!-- ════════════════════════════════════════ -->
     <!-- ─── CREATE VIRTUAL CHANNEL MODAL DIALOG ─── -->
     <!-- ════════════════════════════════════════ -->
@@ -2984,7 +3233,7 @@
          class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
          style="display: none;"
          x-transition x-cloak>
-        
+         
         <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-md p-8 relative flex flex-col gap-6"
              @@click.away="manageCategoriesOpen = false">
             
@@ -2996,47 +3245,47 @@
                 <div class="h-10 w-10 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-700">
                     <i data-lucide="settings" class="w-5 h-5"></i>
                 </div>
-                <h3 class="text-lg font-black text-slate-800">Manage KPI Categories</h3>
+                <h3 class="text-lg font-black text-slate-800">Manage Task Categories</h3>
             </div>
 
             <!-- List Categories -->
             <div class="space-y-3">
                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block pb-1 border-b border-slate-100/50">Current Categories</label>
                 <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    <template x-for="cat in demoCategories" :key="cat.id">
+                    @if (!Model.WorkspaceCategories.Any())
+                    {
+                        <div class="text-xs text-slate-400 italic p-3">No categories created yet.</div>
+                    }
+                    @foreach (var cat in Model.WorkspaceCategories)
+                    {
                         <div class="flex items-center justify-between p-3 bg-slate-50/50 border border-slate-100 rounded-xl hover:bg-white hover:border-slate-250 transition-all">
                             <div class="flex items-center gap-2">
-                                <span :style="'background-color: ' + cat.color" class="h-3 w-3 rounded-full border border-slate-200/55"></span>
-                                <span class="text-xs font-black text-slate-700" x-text="cat.name"></span>
+                                <span style="background-color: @cat.ColorHex" class="h-3 w-3 rounded-full border border-slate-200/55"></span>
+                                <span class="text-xs font-black text-slate-700">@cat.Name</span>
                             </div>
-                            <button type="button" 
-                                    @@click="
-                                        if (demoCategories.length <= 1) {
-                                            alert('You must keep at least one category!');
-                                            return;
-                                        }
-                                        demoCategories = demoCategories.filter(c => c.id !== cat.id);
-                                        kpiTargets = kpiTargets.filter(t => t.categoryId !== cat.id);
-                                        kpiRequests = kpiRequests.filter(r => r.categoryId !== cat.id);
-                                        saveKpiState();
-                                    "
-                                    class="text-rose-500 hover:text-rose-655 p-1 rounded-lg hover:bg-rose-50/50 transition-all">
-                                <i data-lucide="trash" class="w-4 h-4"></i>
-                            </button>
+                            <form method="post" asp-page-handler="DeleteCategory" asp-route-joinCode="@Model.Workspace.JoinCode" class="inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="categoryId" value="@cat.Id" />
+                                <button type="submit" class="text-rose-500 hover:text-rose-650 p-1 rounded-lg hover:bg-rose-50/50 transition-all cursor-pointer">
+                                    <i data-lucide="trash" class="w-4 h-4"></i>
+                                </button>
+                            </form>
                         </div>
-                    </template>
+                    }
                 </div>
             </div>
 
             <!-- Add New Category Form -->
-            <div class="space-y-3 pt-2 border-t border-slate-100" x-data="{ newCatName: '', newCatColor: '#3B82F6', colors: ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#14B8A6'] }">
+            <form method="post" asp-page-handler="CreateCategory" asp-route-joinCode="@Model.Workspace.JoinCode" class="space-y-3 pt-2 border-t border-slate-100" x-data="{ newCatName: '', newCatColor: '#3B82F6', colors: ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#14B8A6'] }">
+                @Html.AntiForgeryToken()
                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Add New Category</label>
                 <div class="space-y-3">
                     <div class="space-y-1">
-                        <input type="text" x-model="newCatName" placeholder="e.g., Code Review, Documentation" 
+                        <input type="text" name="NewCategoryName" x-model="newCatName" placeholder="e.g., Code Review, Documentation" required
                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                     </div>
                     <div class="space-y-1">
+                        <input type="hidden" name="NewCategoryColorHex" :value="newCatColor" />
                         <label class="text-[10px] font-bold text-slate-400">Select Color Theme</label>
                         <div class="flex gap-2.5 pt-1">
                             <template x-for="color in colors" :key="color">
@@ -3047,28 +3296,13 @@
                             </template>
                         </div>
                     </div>
-                    <button type="button" 
-                            @@click="
-                                const cleanName = newCatName.trim();
-                                if (!cleanName) return;
-                                if (demoCategories.some(c => c.name.toLowerCase() === cleanName.toLowerCase())) {
-                                    alert('A category with this name already exists!');
-                                    return;
-                                }
-                                demoCategories.push({
-                                    id: 'cat-' + Date.now(),
-                                    name: cleanName,
-                                    color: newCatColor
-                                });
-                                saveKpiState();
-                                newCatName = '';
-                            "
+                    <button type="submit" 
                             :disabled="!newCatName.trim()"
                             class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer">
                         <i data-lucide="plus" class="w-4 h-4"></i> Add Category
                     </button>
                 </div>
-            </div>
+            </form>
 
             <div class="flex justify-end pt-2 border-t border-slate-100">
                 <button type="button" @@click="manageCategoriesOpen = false" 
@@ -3086,7 +3320,7 @@
             Alpine.data('workspaceDetail', () => ({
                 activeTab: (() => {
                     const savedTab = localStorage.getItem('unigrid_workspace_tab_' + '@Model.Workspace.JoinCode') || 'dashboard';
-                    const isPersonal = '@(Model.Workspace.WorkspaceType == "Personal" || packageTier == "Personal")' === 'True';
+                    const isPersonal = '@(isPersonalWs)' === 'True';
                     if (isPersonal && (savedTab === 'chat' || savedTab === 'members')) {
                         return 'dashboard';
                     }
@@ -3104,9 +3338,9 @@
                 hoveredRateIndex: null,
                 hoveredRateName: '',
                 hoveredRatePercent: 0,
-                searchQuery: '',
-                filterPriority: '',
-                filterAssignee: '',
+                searchQuery: sessionStorage.getItem('unigrid_kanban_searchQuery_' + '@Model.Workspace.JoinCode') || '',
+                filterPriority: sessionStorage.getItem('unigrid_kanban_filterPriority_' + '@Model.Workspace.JoinCode') || '',
+                filterAssignee: sessionStorage.getItem('unigrid_kanban_filterAssignee_' + '@Model.Workspace.JoinCode') || '',
                 filterDate: '@Model.DateFilter',
                 calendarOpen: false,
                 calendarYear: new Date().getFullYear(),
@@ -3173,7 +3407,8 @@
                 renameOpen: false,
                 renameFileId: null,
                 renameFileName: '',
-                selectedTask: null,
+                selectedCommentFileName: '',
+                selectedTask: { taskComments: [] },
                 createTaskDate: '',
                 createTaskTime: '09:00',
                 timeSlots: [],
@@ -3226,11 +3461,23 @@
                 selectedChannelMods: [],
                 tempChannelOwner: '',
                 inviteChannelOpen: false,
+                replyingToMessage: null,
+                replyingToComment: null,
 
                 // Bootstrap data sets serialized from C# models
                 chatMessages: JSON.parse(atob('@Model.SerializeChatMessagesBase64()')),
                 workspaceMembers: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Members.Select(m => new { id = m.UserId.ToString(), fullName = m.User.FullName, role = m.Role }).ToList())),
-                workspaceTasks: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceTasks.Select(t => new { id = t.Id.ToString(), title = t.Title, status = t.Status }).ToList())),
+                workspaceTasks: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceTasks.Select(t => new { 
+                    id = t.Id.ToString(), 
+                    title = t.Title, 
+                    status = t.Status,
+                    assigneeId = t.AssigneeId.HasValue ? t.AssigneeId.Value.ToString().ToLower() : null,
+                    categoryId = t.CategoryId.HasValue ? t.CategoryId.Value.ToString() : null,
+                    dueDate = t.DueDate.HasValue ? t.DueDate.Value.ToString("yyyy-MM-dd") : null,
+                    isCounterTask = t.IsCounterTask,
+                    targetCount = t.TargetCount,
+                    currentCount = t.CurrentCount
+                }).ToList())),
                 workspaceFiles: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Files.Select(f => new { id = f.Id.ToString(), fileName = f.FileName, fileUrl = f.FileUrl, fileSize = f.FileSize, fileType = f.FileType }).ToList())),
 
                 // KPI States & Handlers
@@ -3244,6 +3491,7 @@
                 kpiFormMembers: [],
                 selectedKpiPeriodFilter: 'Weekly',
                 selectedKpiTimeframe: 'current',
+                selectedKpiCategoryFilter: 'all',
                 demoCategories: [
                     { id: 'cat-1', name: 'Development', color: '#3B82F6' },
                     { id: 'cat-2', name: 'Design', color: '#EC4899' },
@@ -3256,14 +3504,19 @@
                     localStorage.setItem('unigrid_kpi_requests_' + wsCode, JSON.stringify(this.kpiRequests));
                     localStorage.setItem('unigrid_kpi_categories_' + wsCode, JSON.stringify(this.demoCategories));
                 },
-                getMemberKpiMetrics(memberId, periodFilter, timeframe) {
-                    const targets = this.kpiTargets.filter(t => t.userId === memberId);
+                getMemberKpiMetrics(memberId, periodFilter, timeframe, categoryFilter = 'all') {
+                    const targets = this.kpiTargets.filter(t => t.userId === memberId && (categoryFilter === 'all' || t.categoryId === categoryFilter));
                     let targetSum = 0;
                     let achievedSum = 0;
 
                     targets.forEach(t => {
                         const val = (timeframe === 'previous') ? (t.prevAchievedValue !== undefined ? t.prevAchievedValue : Math.round(t.targetValue * 0.7)) : t.achievedValue;
-                        if (periodFilter === 'Weekly') {
+                        if (periodFilter === 'Daily') {
+                            if (t.periodType === 'Daily') {
+                                targetSum += t.targetValue;
+                                achievedSum += val;
+                            }
+                        } else if (periodFilter === 'Weekly') {
                             if (t.periodType === 'Weekly' || t.periodType === 'Daily') {
                                 targetSum += t.targetValue;
                                 achievedSum += val;
@@ -3278,6 +3531,96 @@
 
                     const rate = targetSum > 0 ? Math.round((achievedSum * 100) / targetSum) : 0;
                     return { targetSum, achievedSum, rate };
+                },
+                getMemberConversionMetrics(memberId, periodFilter, timeframe, categoryFilter = 'all') {
+                    const tasks = this.workspaceTasks.filter(t => {
+                        const matchesAssignee = t.assigneeId === memberId.toLowerCase();
+                        let matchesCategory = true;
+                        
+                        // Map local storage demoCategories (cat-1, cat-2 etc) to task category names/indices if possible
+                        // Or if categoryFilter is 'all', matches is true.
+                        // Let's do a smart match: if categoryFilter !== 'all', let's see if the category matches.
+                        if (categoryFilter !== 'all') {
+                            const catObj = this.demoCategories.find(c => c.id === categoryFilter);
+                            if (catObj && t.categoryId) {
+                                // Real task categories in workspace models are GUIDs. But we can map by Name!
+                                // Let's check: if there is a category in Model.WorkspaceCategories that has the same name as the demo category name,
+                                // we can match by that C# Category's Id.
+                                // Let's find the matching GUID category from C#
+                                const dbCats = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WorkspaceCategories.Select(c => new { id = c.Id.ToString(), name = c.Name }).ToList()));
+                                const dbCat = dbCats.find(c => c.name.toLowerCase() === catObj.name.toLowerCase());
+                                if (dbCat) {
+                                    matchesCategory = t.categoryId.toLowerCase() === dbCat.id.toLowerCase();
+                                } else {
+                                    // Fallback: match by prefix/suffix or index
+                                    matchesCategory = false;
+                                }
+                            } else {
+                                matchesCategory = false;
+                            }
+                        }
+                        
+                        let matchesPeriod = true;
+                        if (t.dueDate) {
+                            const taskDate = new Date(t.dueDate);
+                            let startDate, endDate;
+                            if (periodFilter === 'Daily') {
+                                const target = new Date();
+                                if (timeframe === 'previous') target.setDate(target.getDate() - 1);
+                                startDate = new Date(target.setHours(0,0,0,0));
+                                endDate = new Date(target.setHours(23,59,59,999));
+                            } else if (periodFilter === 'Weekly') {
+                                const target = new Date();
+                                if (timeframe === 'previous') target.setDate(target.getDate() - 7);
+                                const diff = (7 + (target.getDay() - 1)) % 7;
+                                startDate = new Date(target.setDate(target.getDate() - diff));
+                                startDate.setHours(0,0,0,0);
+                                endDate = new Date(startDate.getTime());
+                                endDate.setDate(endDate.getDate() + 7);
+                                endDate.setHours(23,59,59,999);
+                            } else { // Monthly
+                                const target = new Date();
+                                if (timeframe === 'previous') target.setMonth(target.getMonth() - 1);
+                                startDate = new Date(target.getFullYear(), target.getMonth(), 1);
+                                endDate = new Date(target.getFullYear(), target.getMonth() + 1, 0, 23, 59, 59, 999);
+                            }
+                            matchesPeriod = (taskDate >= startDate && taskDate <= endDate);
+                        }
+                        
+                        return matchesAssignee && matchesCategory && matchesPeriod;
+                    });
+
+                    const totalTasks = tasks.length;
+                    const completedTasks = tasks.filter(t => t.status === 3).length;
+                    const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks * 100) / totalTasks) : 0;
+
+                    const kpi = this.getMemberKpiMetrics(memberId, periodFilter, timeframe, categoryFilter);
+                    
+                    const efficiency = completedTasks > 0 ? Math.round((kpi.achievedSum * 10) / completedTasks) / 10 : 0.0;
+
+                    let advice = "No tasks assigned in this timeframe.";
+                    if (totalTasks > 0) {
+                        if (taskCompletionRate >= 70 && kpi.rate >= 70) {
+                            advice = "Excellent alignment! Tasks completed directly converted to KPI success.";
+                        } else if (taskCompletionRate >= 70 && kpi.rate < 40) {
+                            advice = "High completion rate, but low KPI contribution. Focus on higher-impact tasks.";
+                        } else if (taskCompletionRate < 45 && kpi.rate >= 70) {
+                            advice = "High efficiency! Achieved targets despite low task volume.";
+                        } else {
+                            advice = "Productivity gap. Align task execution with defined KPI metrics.";
+                        }
+                    }
+
+                    return {
+                        totalTasks,
+                        completedTasks,
+                        taskCompletionRate,
+                        kpiTarget: kpi.targetSum,
+                        kpiAchieved: kpi.achievedSum,
+                        kpiAchievementRate: kpi.rate,
+                        efficiency,
+                        advice
+                    };
                 },
                 initKpiData() {
                     const wsCode = '@Model.Workspace.JoinCode';
@@ -3854,6 +4197,48 @@
                     });
                 },
 
+                handleCommentFileChange(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    const maxSize = 10 * 1024 * 1024;
+                    if (file.size > maxSize) {
+                        alert("File size exceeds the 10 MB limit. Please select a smaller file.");
+                        event.target.value = '';
+                        this.selectedCommentFileName = '';
+                        return;
+                    }
+
+                    this.selectedCommentFileName = file.name;
+                },
+                clearCommentFile() {
+                    const input = document.getElementById('task-comment-file-input');
+                    if (input) input.value = '';
+                    this.selectedCommentFileName = '';
+                },
+                getCommentAttachment(content) {
+                    if (!content) return null;
+                    const fileRegex = /\[file:([a-f0-9-]{36})\]/i;
+                    const match = content.match(fileRegex);
+                    if (match) {
+                        const fileId = match[1];
+                        return this.workspaceFiles.find(f => f.id === fileId);
+                    }
+                    return null;
+                },
+                parseCommentContent(content) {
+                    if (!content) return '';
+                    let text = content.replace(/\[file:[a-f0-9-]{36}\]/gi, '').trim();
+                    if (!text) return '<span class="italic text-slate-400 text-xs inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg> Shared document</span>';
+                    
+                    let html = text
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
+                    
+                    return html;
+                },
+
                 parseMessageContent(content) {
                     if (content && content.startsWith('[deleted_message]')) {
                         return '<span class="italic text-slate-400 text-xs inline-flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Message revoked</span>';
@@ -3872,14 +4257,14 @@
                     this.workspaceMembers.forEach(m => {
                         const escapeName = m.fullName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
                         const regex = new RegExp('@@' + escapeName, 'g');
-                        html = html.replace(regex, `<span class="px-1.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-extrabold text-[10px] inline-flex items-center gap-0.5 select-all"><i data-lucide="at-sign" class="w-3 h-3"></i>\${m.fullName}</span>`);
+                        html = html.replace(regex, `<span class="px-1.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-extrabold text-[10px] inline-flex items-center gap-0.5 select-all"><i data-lucide="at-sign" class="w-3 h-3"></i>` + m.fullName + `</span>`);
                     });
 
                     // 2. Parse #Task Title mentions
                     this.workspaceTasks.forEach(t => {
                         const escapeTitle = t.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
                         const regex = new RegExp('#' + escapeTitle, 'g');
-                        html = html.replace(regex, `<span class="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 font-extrabold text-[10px] inline-flex items-center gap-0.5 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/20 transition-all select-all" onclick="window.dispatchEvent(new CustomEvent('open-task-detail', {detail: '\${t.id}'}))"><i data-lucide="hash" class="w-3 h-3"></i>\${t.title}</span>`);
+                        html = html.replace(regex, `<span class="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 font-extrabold text-[10px] inline-flex items-center gap-0.5 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/20 transition-all select-all" onclick="window.dispatchEvent(new CustomEvent('open-task-detail', {detail: '` + t.id + `'}))"><i data-lucide="hash" class="w-3 h-3"></i>` + t.title + `</span>`);
                     });
 
                     setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50);
@@ -4083,6 +4468,9 @@
                 },
 
                 selectTask(taskJsonBase64) {
+                    this.selectedCommentFileName = '';
+                    const commentInput = document.getElementById('task-comment-file-input');
+                    if (commentInput) commentInput.value = '';
                     let task = JSON.parse(atob(taskJsonBase64));
                     this.selectedTask = task;
                     if (task) {
@@ -4146,6 +4534,9 @@
                     if (this.selectedAttachmentId) {
                         formData.append('selectedFileId', this.selectedAttachmentId);
                     }
+                    if (this.replyingToMessage) {
+                        formData.append('parentId', this.replyingToMessage.id);
+                    }
 
                     const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
                     if (tokenInput) {
@@ -4166,6 +4557,7 @@
                             this.chatInput = '';
                             this.selectedAttachmentId = null;
                             this.selectedAttachmentName = '';
+                            this.replyingToMessage = null;
                         } else {
                             console.error('Failed to send chat message.');
                         }
@@ -4176,11 +4568,19 @@
                 },
 
                 sendTaskCommentViaAjax() {
-                    if (!this.newCommentContent.trim()) return;
+                    const fileInput = document.getElementById('task-comment-file-input');
+                    const hasFile = fileInput && fileInput.files.length > 0;
+                    if (!this.newCommentContent.trim() && !hasFile) return;
 
                     const formData = new FormData();
                     formData.append('CommentContent', this.newCommentContent);
                     formData.append('commentTaskId', this.selectedTask.id);
+                    if (hasFile) {
+                        formData.append('CommentFile', fileInput.files[0]);
+                    }
+                    if (this.replyingToComment) {
+                        formData.append('CommentParentId', this.replyingToComment.id);
+                    }
 
                     const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
                     if (tokenInput) {
@@ -4188,6 +4588,9 @@
                     }
 
                     const joinCode = '@Model.Workspace.JoinCode';
+                    const content = this.newCommentContent;
+                    this.newCommentContent = '';
+                    this.clearCommentFile();
 
                     fetch(`/WorkspaceDetail/${joinCode}?handler=AddTaskComment`, {
                         method: 'POST',
@@ -4198,13 +4601,40 @@
                     })
                     .then(async res => {
                         if (res.ok) {
-                            this.newCommentContent = '';
+                            const data = await res.json();
+                            if (data && data.id) {
+                                if (data.uploadedFile) {
+                                    if (!this.workspaceFiles.some(f => f.id === data.uploadedFile.id)) {
+                                        this.workspaceFiles.unshift(data.uploadedFile);
+                                    }
+                                }
+                                if (!this.selectedTask.taskComments) this.selectedTask.taskComments = [];
+                                if (!this.selectedTask.taskComments.some(c => c.id === data.id)) {
+                                    this.selectedTask.taskComments.push({
+                                        id: data.id,
+                                        content: data.content,
+                                        createdAt: data.createdAt,
+                                        user: { fullName: data.userName },
+                                        parentId: data.parentId
+                                    });
+                                    this.replyingToComment = null;
+                                    this.$nextTick(() => {
+                                        const commentsContainer = document.querySelector('.max-h-\\[220px\\].overflow-y-auto');
+                                        if (commentsContainer) {
+                                            commentsContainer.scrollTop = commentsContainer.scrollHeight;
+                                        }
+                                    });
+                                }
+                            }
                         } else {
-                            console.error('Failed to post task comment.');
+                            const errData = await res.json().catch(() => ({}));
+                            alert(errData.message || 'Failed to post task comment.');
+                            this.newCommentContent = content; // restore on error
                         }
                     })
                     .catch(err => {
                         console.error('Error posting task comment:', err);
+                        this.newCommentContent = content;
                     });
                 },
 
@@ -4215,6 +4645,15 @@
                     this.initKpiData();
                     this.initCalendar();
                     this.$watch('globalSearchQuery', value => this.searchQuery = value);
+                    this.$watch('searchQuery', value => {
+                        sessionStorage.setItem('unigrid_kanban_searchQuery_' + '@Model.Workspace.JoinCode', value);
+                    });
+                    this.$watch('filterPriority', value => {
+                        sessionStorage.setItem('unigrid_kanban_filterPriority_' + '@Model.Workspace.JoinCode', value);
+                    });
+                    this.$watch('filterAssignee', value => {
+                        sessionStorage.setItem('unigrid_kanban_filterAssignee_' + '@Model.Workspace.JoinCode', value);
+                    });
                     this.$watch('filterDate', value => {
                         if (value !== '@Model.DateFilter') {
                             const joinCode = '@Model.Workspace.JoinCode';
@@ -4286,11 +4725,17 @@
                         if (this.selectedTask && this.selectedTask.id === payload.taskId) {
                             if (!this.selectedTask.taskComments) this.selectedTask.taskComments = [];
                             if (!this.selectedTask.taskComments.some(c => c.id === payload.id)) {
+                                if (payload.uploadedFile) {
+                                    if (!this.workspaceFiles.some(f => f.id === payload.uploadedFile.id)) {
+                                        this.workspaceFiles.unshift(payload.uploadedFile);
+                                    }
+                                }
                                 this.selectedTask.taskComments.push({
                                     id: payload.id,
                                     content: payload.content,
                                     createdAt: payload.createdAt,
-                                    user: { fullName: payload.userName }
+                                    user: { fullName: payload.userName },
+                                    parentId: payload.parentId
                                 });
                                 
                                 this.$nextTick(() => {

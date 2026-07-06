@@ -169,6 +169,10 @@ namespace unigrid.Pages.Admin
                 .FirstOrDefaultAsync(w => w.Id == workspaceId);
 
             workspace.PackageTier = tier;
+            if (tier == "Pro" || tier == "ProPlus" || tier == "Business")
+            {
+                workspace.WorkspaceType = "Group";
+            }
 
             if (workspace.WorkspaceType == "Personal" || tier == "Personal")
             {
@@ -256,6 +260,10 @@ namespace unigrid.Pages.Admin
                 else if (pkgId.Contains("personal")) tier = "Personal";
 
                 workspace.PackageTier = tier;
+                if (tier == "Pro" || tier == "ProPlus" || tier == "Business")
+                {
+                    workspace.WorkspaceType = "Group";
+                }
 
                 // For the workspace owner
                 var owner = workspace.Owner;
@@ -386,6 +394,10 @@ namespace unigrid.Pages.Admin
             else if (packageId.Contains("personal")) tier = "Personal";
 
             workspace.PackageTier = tier;
+            if (tier == "Pro" || tier == "ProPlus" || tier == "Business")
+            {
+                workspace.WorkspaceType = "Group";
+            }
 
             if (workspace.WorkspaceType == "Personal" || tier == "Personal")
             {
@@ -493,6 +505,10 @@ namespace unigrid.Pages.Admin
                     else if (receipt.Plan.Contains("personal")) tier = "Personal";
 
                     targetWorkspace.PackageTier = tier;
+                    if (tier == "Pro" || tier == "ProPlus" || tier == "Business")
+                    {
+                        targetWorkspace.WorkspaceType = "Group";
+                    }
                     if (targetWorkspace.WorkspaceType == "Personal" || tier == "Personal")
                     {
                         targetWorkspace.Owner.SubscriptionTier = tier;
@@ -559,6 +575,10 @@ namespace unigrid.Pages.Admin
                     };
 
                     ws.PackageTier = tier;
+                    if (tier == "Pro" || tier == "ProPlus" || tier == "Business")
+                    {
+                        ws.WorkspaceType = "Group";
+                    }
                     if (ws.WorkspaceType == "Personal" || tier == "Personal")
                     {
                         ws.Owner.SubscriptionTier = tier;

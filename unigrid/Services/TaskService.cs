@@ -71,9 +71,26 @@ public class TaskService : ITaskService
         string sanitizedDescription = Helpers.InputSanitizer.SanitizeInput(description);
 
         DateTime? finalDueDate = dueDate;
+<<<<<<< HEAD
         if (finalDueDate.HasValue && finalDueDate.Value.Hour == 0 && finalDueDate.Value.Minute == 0 && finalDueDate.Value.Second == 0)
         {
             finalDueDate = finalDueDate.Value.Date.AddHours(23).AddMinutes(50);
+=======
+        if (finalDueDate.HasValue)
+        {
+            if (finalDueDate.Value.Hour == 0 && finalDueDate.Value.Minute == 0 && finalDueDate.Value.Second == 0)
+            {
+                finalDueDate = finalDueDate.Value.Date.AddHours(23).AddMinutes(50);
+            }
+            if (finalDueDate.Value.Kind == DateTimeKind.Unspecified)
+            {
+                finalDueDate = DateTime.SpecifyKind(finalDueDate.Value, DateTimeKind.Utc);
+            }
+            else if (finalDueDate.Value.Kind == DateTimeKind.Local)
+            {
+                finalDueDate = finalDueDate.Value.ToUniversalTime();
+            }
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
         }
 
         var task = new unigrid.Models.Task
@@ -277,9 +294,26 @@ public class TaskService : ITaskService
             task.AssigneeId = editTaskAssigneeId;
 
             DateTime? finalDueDate = editTaskDueDate;
+<<<<<<< HEAD
             if (finalDueDate.HasValue && finalDueDate.Value.Hour == 0 && finalDueDate.Value.Minute == 0 && finalDueDate.Value.Second == 0)
             {
                 finalDueDate = finalDueDate.Value.Date.AddHours(23).AddMinutes(50);
+=======
+            if (finalDueDate.HasValue)
+            {
+                if (finalDueDate.Value.Hour == 0 && finalDueDate.Value.Minute == 0 && finalDueDate.Value.Second == 0)
+                {
+                    finalDueDate = finalDueDate.Value.Date.AddHours(23).AddMinutes(50);
+                }
+                if (finalDueDate.Value.Kind == DateTimeKind.Unspecified)
+                {
+                    finalDueDate = DateTime.SpecifyKind(finalDueDate.Value, DateTimeKind.Utc);
+                }
+                else if (finalDueDate.Value.Kind == DateTimeKind.Local)
+                {
+                    finalDueDate = finalDueDate.Value.ToUniversalTime();
+                }
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
             }
             task.DueDate = finalDueDate;
             task.CategoryId = editCategoryId;
@@ -365,7 +399,11 @@ public class TaskService : ITaskService
         return null; // Success
     }
 
+<<<<<<< HEAD
     public async Task<string?> AddTaskCommentAsync(Guid workspaceId, Guid userId, Guid taskId, string content)
+=======
+    public async Task<string?> AddTaskCommentAsync(Guid workspaceId, Guid userId, Guid taskId, string content, Guid? parentId = null)
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
     {
         var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
         if (workspace == null) return "Workspace not found.";
@@ -392,7 +430,12 @@ public class TaskService : ITaskService
             TaskId = taskId,
             UserId = userId,
             Content = sanitizedContent,
+<<<<<<< HEAD
             CreatedAt = DateTime.UtcNow
+=======
+            CreatedAt = DateTime.UtcNow,
+            ParentId = parentId
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
         };
 
         await _taskRepo.AddCommentAsync(comment);
@@ -416,6 +459,58 @@ public class TaskService : ITaskService
                 task.Id
             );
         }
+<<<<<<< HEAD
+=======
+
+        // Scan for mentions and send notifications
+        if (!string.IsNullOrEmpty(content))
+        {
+            var senderName = user?.FullName ?? "Someone";
+            foreach (var m in members)
+            {
+                if (m.UserId == userId) continue;
+                if (task.AssigneeId.HasValue && m.UserId == task.AssigneeId.Value) continue; // Already notified as assignee
+
+                string mentionTag = $"@{m.User.FullName}";
+                if (content.Contains(mentionTag, StringComparison.OrdinalIgnoreCase))
+                {
+                    var truncatedContent = content.Length > 60 ? content.Substring(0, 57) + "..." : content;
+                    
+                    // Clean up any [file:...] tag
+                    var displayContent = truncatedContent;
+                    var fileRegexForMention = new System.Text.RegularExpressions.Regex(@"\[file:[a-f0-9-]{36}\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    displayContent = fileRegexForMention.Replace(displayContent, "").Trim();
+
+                    var notificationMessage = $"{senderName} mentioned you in comments on task '{task.Title}': \"{displayContent}\"";
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        m.UserId,
+                        notificationMessage,
+                        "TaskCommentMention",
+                        $"/WorkspaceDetail/{workspace.JoinCode}",
+                        task.Id
+                    );
+                }
+            }
+        }
+        object? filePayload = null;
+        var fileRegex = new System.Text.RegularExpressions.Regex(@"\[file:([a-f0-9-]{36})\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var match = fileRegex.Match(content);
+        if (match.Success && Guid.TryParse(match.Groups[1].Value, out var fileId))
+        {
+            var dbFile = await _context.WorkspaceFiles.FindAsync(fileId);
+            if (dbFile != null)
+            {
+                filePayload = new {
+                    id = dbFile.Id.ToString(),
+                    fileName = dbFile.FileName,
+                    fileUrl = dbFile.FileUrl,
+                    fileSize = dbFile.FileSize,
+                    fileType = dbFile.FileType
+                };
+            }
+        }
+
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
         var payload = new
         {
             id = comment.Id,
@@ -423,7 +518,13 @@ public class TaskService : ITaskService
             userId = comment.UserId,
             userName = user?.FullName ?? "Someone",
             content = comment.Content,
+<<<<<<< HEAD
             createdAt = comment.CreatedAt
+=======
+            createdAt = comment.CreatedAt,
+            uploadedFile = filePayload,
+            parentId = comment.ParentId
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
         };
 
         await _hubContext.Clients.Group(workspaceId.ToString()).SendAsync("ReceiveTaskComment", payload);
@@ -706,6 +807,28 @@ public class TaskService : ITaskService
 
         if (targetValue <= 0) return "KPI target value must be greater than zero.";
 
+<<<<<<< HEAD
+=======
+        DateTime finalStartDate = startDate;
+        DateTime finalEndDate = endDate;
+        if (finalStartDate.Kind == DateTimeKind.Unspecified)
+        {
+            finalStartDate = DateTime.SpecifyKind(finalStartDate, DateTimeKind.Utc);
+        }
+        else if (finalStartDate.Kind == DateTimeKind.Local)
+        {
+            finalStartDate = finalStartDate.ToUniversalTime();
+        }
+        if (finalEndDate.Kind == DateTimeKind.Unspecified)
+        {
+            finalEndDate = DateTime.SpecifyKind(finalEndDate, DateTimeKind.Utc);
+        }
+        else if (finalEndDate.Kind == DateTimeKind.Local)
+        {
+            finalEndDate = finalEndDate.ToUniversalTime();
+        }
+
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
         var target = new KpiTarget
         {
             Id = Guid.NewGuid(),
@@ -713,8 +836,13 @@ public class TaskService : ITaskService
             UserId = userId,
             CategoryId = categoryId,
             PeriodType = periodType,
+<<<<<<< HEAD
             StartDate = startDate,
             EndDate = endDate,
+=======
+            StartDate = finalStartDate,
+            EndDate = finalEndDate,
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
             TargetValue = targetValue,
             CreatedAt = DateTime.UtcNow
         };

@@ -1,20 +1,48 @@
-﻿<div id="ai-button">
-    🤖
+﻿<div id="ai-button" title="AI Assistant">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4z"/>
+        <circle cx="9" cy="13" r="1" fill="currentColor" stroke="none"/>
+        <circle cx="15" cy="13" r="1" fill="currentColor" stroke="none"/>
+        <path d="M9 17c.83.5 1.67.75 3 .75s2.17-.25 3-.75"/>
+    </svg>
 </div>
 
 <div id="ai-chat-window">
 
     <div id="ai-header">
-        UniGrid AI
+        <div id="ai-header-info">
+            <div id="ai-avatar">AI</div>
+            <div>
+                <div id="ai-title">UniGrid Assistant</div>
+                <div id="ai-status">
+                    <span id="ai-status-dot"></span>
+                    <span id="ai-status-text">Online</span>
+                </div>
+            </div>
+        </div>
+        <button id="ai-close" title="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        </button>
     </div>
 
-    <div id="ai-messages"></div>
+    <div id="ai-messages">
+        <div class="ai-msg ai-msg--bot">
+            <div class="ai-bubble">Hi! I'm your scheduling assistant. Ask me about your schedule or to reschedule an event.</div>
+        </div>
+    </div>
 
     <div id="ai-footer">
-        <input id="ai-input" />
-
-        <button id="ai-send">
-            Send
+        <textarea id="ai-input" placeholder="Ask about your schedule..." rows="1"></textarea>
+        <button id="ai-send" title="Send">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
         </button>
     </div>
 

@@ -9,5 +9,9 @@ watchdog>=6.0.0
 fastapi>=0.116.0
 uvicorn[standard]>=0.35.0
 sqlalchemy>=2.0.42
+<<<<<<< HEAD
 pyodbc>=5.2.0
+=======
+psycopg2-binary>=2.9.10
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 pytest>=8.4.1

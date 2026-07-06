@@ -15,7 +15,13 @@ public partial class TaskComment
 
     public DateTime? CreatedAt { get; set; }
 
+    public Guid? ParentId { get; set; }
+
     public virtual Task Task { get; set; } = null!;
 
     public virtual User User { get; set; } = null!;
+
+    public virtual TaskComment? Parent { get; set; }
+
+    public virtual ICollection<TaskComment> Replies { get; set; } = new List<TaskComment>();
 }

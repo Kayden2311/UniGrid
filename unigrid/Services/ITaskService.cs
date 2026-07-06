@@ -11,7 +11,11 @@ public interface ITaskService
     Task<string?> UpdateTaskStatusAsync(Guid? workspaceId, Guid userId, Guid taskId, int status);
     Task<string?> EditTaskAsync(Guid workspaceId, Guid userId, Guid editTaskId, string editTaskTitle, string editTaskDescription, int editTaskPriority, Guid? editTaskAssigneeId, DateTime? editTaskDueDate, Guid? editCategoryId = null, bool editIsCounterTask = false, int editTargetCount = 1);
     Task<string?> DeleteTaskAsync(Guid workspaceId, Guid userId, Guid taskId);
+<<<<<<< HEAD
     Task<string?> AddTaskCommentAsync(Guid workspaceId, Guid userId, Guid taskId, string content);
+=======
+    Task<string?> AddTaskCommentAsync(Guid workspaceId, Guid userId, Guid taskId, string content, Guid? parentId = null);
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 
     // Counter task counter update
     Task<string?> UpdateTaskCounterAsync(Guid? workspaceId, Guid userId, Guid taskId, int currentCount);

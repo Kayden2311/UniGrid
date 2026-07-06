@@ -1,4 +1,5 @@
 """
+<<<<<<< HEAD
 SQL Server data access layer.
 
 Reads are plain parameterized SELECTs (run_query / with_sql_cursor).
@@ -19,6 +20,24 @@ import pyodbc
 from contextlib import contextmanager
 from datetime import date, datetime, time, timezone
 from typing import Any, Iterable, List, Optional, Sequence
+=======
+PostgreSQL (Supabase) data access layer.
+
+Reads are plain parameterized SELECTs (run_query / with_pg_cursor).
+The one write path is reschedule_personal_schedule_event(), which moves
+a PersonalSchedules row via a parameterized UPDATE inside a transaction,
+with a conflict check using SELECT ... FOR UPDATE to prevent double-booking.
+
+All queries use %s placeholders (psycopg2 style). Never interpolate
+user or LLM-provided values directly into SQL strings.
+"""
+
+import psycopg2
+import psycopg2.extras
+from contextlib import contextmanager
+from typing import Any, Iterable, List, Optional, Sequence
+from uuid import UUID
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 
 from runeterra.config import Config
 from runeterra.logging import log
@@ -32,6 +51,7 @@ class ScheduleConflictError(Exception):
     """Another event already occupies the requested date/time slot."""
 
 
+<<<<<<< HEAD
 class TaskNotFoundError(Exception):
     """No active unscheduled Tasks row belongs to this user."""
 
@@ -47,11 +67,16 @@ pyodbc.pooling = True
 
 def _create_connection(autocommit: bool = True) -> pyodbc.Connection:
     conn = pyodbc.connect(Config.SqlServer.connection_string(), timeout=10)
+=======
+def _create_connection(autocommit: bool = True) -> psycopg2.extensions.connection:
+    conn = psycopg2.connect(**Config.Postgres.connection_kwargs())
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
     conn.autocommit = autocommit
     return conn
 
 
 @contextmanager
+<<<<<<< HEAD
 def with_sql_cursor():
     """
     Read path -- autocommit connection, since plain SELECTs never need a
@@ -63,6 +88,10 @@ def with_sql_cursor():
     becomes a bottleneck, swap in a proper pool (e.g. `pyodbc` + a small
     queue, or sqlalchemy's pool with pyodbc as the DBAPI).
     """
+=======
+def with_pg_cursor():
+    """Read path -- autocommit connection for plain SELECTs."""
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
     conn = _create_connection(autocommit=True)
     cur = conn.cursor()
     try:
@@ -73,6 +102,7 @@ def with_sql_cursor():
 
 
 @contextmanager
+<<<<<<< HEAD
 def with_sql_transaction():
     """
     Write path -- autocommit OFF. Everything the caller does with this
@@ -82,6 +112,10 @@ def with_sql_transaction():
     write" as a single atomic unit instead of two separate round trips
     that a concurrent request could land in between.
     """
+=======
+def with_pg_transaction():
+    """Write path -- autocommit OFF, commit on success, rollback on error."""
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
     conn = _create_connection(autocommit=False)
     cur = conn.cursor()
     try:
@@ -95,6 +129,7 @@ def with_sql_transaction():
         conn.close()
 
 
+<<<<<<< HEAD
 def run_query(sql: str, params: Sequence[Any] = ()) -> List[tuple]:
     """
     Executes a parameterized SELECT and returns rows as a list of tuples.
@@ -106,6 +141,22 @@ def run_query(sql: str, params: Sequence[Any] = ()) -> List[tuple]:
     with with_sql_cursor() as cursor:
         cursor.execute(sql, params)
         columns = [col[0] for col in cursor.description] if cursor.description else []
+=======
+# Keep old names as aliases so tools.py needs no changes
+with_sql_cursor = with_pg_cursor
+with_sql_transaction = with_pg_transaction
+
+
+def run_query(sql: str, params: Sequence[Any] = ()):
+    """
+    Executes a parameterized SELECT and returns (columns, rows).
+    Uses %s placeholders (psycopg2 style).
+    """
+    log(f"[SQL] {sql} | params={params}")
+    with with_pg_cursor() as cursor:
+        cursor.execute(sql, params)
+        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
         rows = cursor.fetchall()
         return columns, [tuple(row) for row in rows]
 
@@ -114,6 +165,7 @@ def rows_to_dicts(columns: List[str], rows: Iterable[tuple]) -> List[dict]:
     return [dict(zip(columns, row)) for row in rows]
 
 
+<<<<<<< HEAD
 def _parse_datetime2(value: str, name: str) -> datetime:
     try:
         dt = datetime.fromisoformat(str(value).strip())
@@ -126,16 +178,23 @@ def _parse_datetime2(value: str, name: str) -> datetime:
 
 
 from uuid import UUID
+=======
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 def validate_guid(value, name):
     try:
         UUID(str(value))
     except Exception:
         raise ValueError(f"{name} is not a valid GUID: {value}")
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 def reschedule_personal_schedule_event(
     user_id: str,
     event_id: str,
     new_start_time: Optional[str] = None,
+<<<<<<< HEAD
     new_end_time: Optional[str] = None
 ) -> dict:
     """
@@ -159,10 +218,21 @@ def reschedule_personal_schedule_event(
     index on PersonalSchedules(UserId, StartTime, EndTime) is recommended -- this
     lookup used to be the backend's problem, it's this query's problem
     now.)
+=======
+    new_end_time: Optional[str] = None,
+) -> dict:
+    """
+    Moves one PersonalSchedules row owned by `user_id` to a new date/time.
+    Runs as a single transaction:
+      1. Lock + fetch the target event (must belong to user_id).
+      2. Check for any other event at the same slot (FOR UPDATE lock).
+      3. UPDATE if clear.
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
 
     Raises:
         EventNotFoundError: no such event for this user.
         ScheduleConflictError: another event already occupies that slot.
+<<<<<<< HEAD
         ValueError: new_date / new_start_time / new_end_time isn't a valid date/time string.
     """
 
@@ -179,6 +249,21 @@ def reschedule_personal_schedule_event(
             SELECT StartTime, EndTime
             FROM PersonalSchedules WITH (UPDLOCK, HOLDLOCK)
             WHERE Id = ? AND UserId = ? AND IsDisabled = 0
+=======
+        ValueError: invalid GUID or datetime string.
+    """
+    validate_guid(user_id, "user_id")
+    validate_guid(event_id, "event_id")
+
+    with with_pg_transaction() as cur:
+        # Step 1: lock and fetch the target event
+        cur.execute(
+            """
+            SELECT "StartTime", "EndTime"
+            FROM "PersonalSchedules"
+            WHERE "Id" = %s AND "UserId" = %s
+            FOR UPDATE
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
             """,
             (event_id, user_id),
         )
@@ -186,6 +271,7 @@ def reschedule_personal_schedule_event(
         if row is None:
             raise EventNotFoundError("No event found with that id on your schedule.")
 
+<<<<<<< HEAD
 
         cur.execute(
             """
@@ -198,6 +284,20 @@ def reschedule_personal_schedule_event(
               AND Id <> ?
             """,
             (user_id, parsed_end, parsed_start, event_id),
+=======
+        # Step 2: conflict check
+        cur.execute(
+            """
+            SELECT "Id", "Title"
+            FROM "PersonalSchedules"
+            WHERE "UserId" = %s
+              AND "StartTime" = %s
+              AND "EndTime" = %s
+              AND "Id" <> %s
+            FOR UPDATE
+            """,
+            (user_id, new_start_time, new_end_time, event_id),
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
         )
         conflict = cur.fetchone()
         if conflict is not None:
@@ -205,6 +305,7 @@ def reschedule_personal_schedule_event(
                 f"That slot is already taken by another event on your schedule ('{conflict[1]}')."
             )
 
+<<<<<<< HEAD
         cur.execute(
             """
             UPDATE PersonalSchedules
@@ -337,3 +438,19 @@ def schedule_unscheduled_task(
         "time_zone": clean_time_zone,
         "due_date": str(due_date) if due_date is not None else None,
     }
+=======
+        # Step 3: update
+        cur.execute(
+            """
+            UPDATE "PersonalSchedules"
+            SET "StartTime" = %s, "EndTime" = %s
+            WHERE "Id" = %s AND "UserId" = %s
+            """,
+            (new_start_time, new_end_time, event_id, user_id),
+        )
+        if cur.rowcount == 0:
+            raise EventNotFoundError("No event found with that id on your schedule.")
+
+    log(f"[SQL] Rescheduled event {event_id} for user_id={user_id} -> {new_start_time} to {new_end_time}")
+    return {"event_id": event_id, "new_event_date": f"{new_start_time} to {new_end_time}"}
+>>>>>>> da388596d2baad13bd7723b6a42b2048d2b19e49
