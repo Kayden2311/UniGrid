@@ -438,6 +438,55 @@ public class TaskService : ITaskService
                 task.Id
             );
         }
+
+        // Scan for mentions and send notifications
+        if (!string.IsNullOrEmpty(content))
+        {
+            var senderName = user?.FullName ?? "Someone";
+            foreach (var m in members)
+            {
+                if (m.UserId == userId) continue;
+                if (task.AssigneeId.HasValue && m.UserId == task.AssigneeId.Value) continue; // Already notified as assignee
+
+                string mentionTag = $"@{m.User.FullName}";
+                if (content.Contains(mentionTag, StringComparison.OrdinalIgnoreCase))
+                {
+                    var truncatedContent = content.Length > 60 ? content.Substring(0, 57) + "..." : content;
+                    
+                    // Clean up any [file:...] tag
+                    var displayContent = truncatedContent;
+                    var fileRegexForMention = new System.Text.RegularExpressions.Regex(@"\[file:[a-f0-9-]{36}\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    displayContent = fileRegexForMention.Replace(displayContent, "").Trim();
+
+                    var notificationMessage = $"{senderName} mentioned you in comments on task '{task.Title}': \"{displayContent}\"";
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        m.UserId,
+                        notificationMessage,
+                        "TaskCommentMention",
+                        $"/WorkspaceDetail/{workspace.JoinCode}",
+                        task.Id
+                    );
+                }
+            }
+        }
+        object? filePayload = null;
+        var fileRegex = new System.Text.RegularExpressions.Regex(@"\[file:([a-f0-9-]{36})\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var match = fileRegex.Match(content);
+        if (match.Success && Guid.TryParse(match.Groups[1].Value, out var fileId))
+        {
+            var dbFile = await _context.WorkspaceFiles.FindAsync(fileId);
+            if (dbFile != null)
+            {
+                filePayload = new {
+                    id = dbFile.Id.ToString(),
+                    fileName = dbFile.FileName,
+                    fileUrl = dbFile.FileUrl,
+                    fileSize = dbFile.FileSize,
+                    fileType = dbFile.FileType
+                };
+            }
+        }
+
         var payload = new
         {
             id = comment.Id,
@@ -445,7 +494,8 @@ public class TaskService : ITaskService
             userId = comment.UserId,
             userName = user?.FullName ?? "Someone",
             content = comment.Content,
-            createdAt = comment.CreatedAt
+            createdAt = comment.CreatedAt,
+            uploadedFile = filePayload
         };
 
         await _hubContext.Clients.Group(workspaceId.ToString()).SendAsync("ReceiveTaskComment", payload);
