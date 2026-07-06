@@ -1453,6 +1453,10 @@
                 <h3 class="text-lg font-black text-slate-800">Workspace Members</h3>
                 <p class="text-xs text-slate-500 mt-0.5">Manage access, roles, and review contribution details.</p>
             </div>
+            <button @@click="leaveDialogOpen = true" 
+                    class="bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="log-out" class="w-4 h-4"></i> Leave Workspace
+            </button>
         </div>
 
         <div class="glass rounded-[2.5rem] overflow-visible border border-slate-200 shadow-sm">
@@ -2993,6 +2997,10 @@
             </div>
         </div>
     </div>
+
+    <form id="leave-workspace-form" method="post" asp-page-handler="LeaveWorkspace" asp-route-joinCode="@Model.Workspace.JoinCode">
+        @Html.AntiForgeryToken()
+    </form>
 
     <!-- ════════════════════════════════════════ -->
     <!-- ─── CREATE VIRTUAL CHANNEL MODAL DIALOG ─── -->
