@@ -52,6 +52,17 @@ public class FileService : IFileService
 
         if (uploadedFile == null || uploadedFile.Length == 0) return (null, "No file was selected for upload.");
 
+        // 10MB per-file limit for task attachments (specification files only)
+        // Workspace storage uploads are not subject to this limit
+        if (taskId != null)
+        {
+            const long maxTaskFileSize = 10L * 1024 * 1024;
+            if (uploadedFile.Length > maxTaskFileSize)
+            {
+                return (null, "Task attachment size exceeds the 10 MB limit. Task files should be specification documents, not large project folders.");
+            }
+        }
+
         string originalFileName = uploadedFile.FileName;
         string baseName = Path.GetFileNameWithoutExtension(originalFileName);
         string extension = Path.GetExtension(originalFileName).TrimStart('.').ToLower();

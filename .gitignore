@@ -36,6 +36,9 @@ App_Data/
 # Do not commit real passwords or local environment database files
 appsettings.json
 appsettings.local.json
+appsettings.local
+appsettings.Development.json
+appsettings.*.json
 secrets.json
 .env
 .env.local
@@ -64,7 +67,10 @@ yarn-error.log*
 Thumbs.db
 desktop.ini
 
-# --- Python Cache ---
+# --- Publish Profiles (local machine specific) ---
+unigrid/Properties/PublishProfiles/
+
+
 **/__pycache__/
 *.pyc
 

@@ -118,6 +118,8 @@ public class WorkspaceDetailModel : PageModel
     public Guid CommentTaskId { get; set; }
     [BindProperty]
     public string CommentContent { get; set; } = string.Empty;
+    [BindProperty]
+    public Microsoft.AspNetCore.Http.IFormFile? CommentFile { get; set; }
 
     // Direct binding for chat
     [BindProperty]
@@ -339,6 +341,11 @@ public class WorkspaceDetailModel : PageModel
                 {
                     TempData["UploadError"] = uploadResult.error;
                 }
+                else
+                {
+                    _cache.Remove($"WorkspaceTasks_{Workspace.Id}");
+                    _cache.Remove($"WorkspaceFiles_{Workspace.Id}");
+                }
             }
         }
 
@@ -379,6 +386,11 @@ public class WorkspaceDetailModel : PageModel
             {
                 TempData["UploadError"] = uploadResult.error;
             }
+            else
+            {
+                _cache.Remove($"WorkspaceTasks_{Workspace.Id}");
+                _cache.Remove($"WorkspaceFiles_{Workspace.Id}");
+            }
         }
 
         return RedirectToPage(new { joinCode });
@@ -395,7 +407,48 @@ public class WorkspaceDetailModel : PageModel
             return RedirectToPage("/Dashboard");
         }
 
-        var error = await _taskService.AddTaskCommentAsync(Workspace.Id, CurrentUser.Id, CommentTaskId, CommentContent);
+        string finalContent = CommentContent ?? string.Empty;
+        object? uploadedFilePayload = null;
+
+        if (CommentFile != null && CommentFile.Length > 0)
+        {
+            const long maxFileSize = 10L * 1024 * 1024;
+            if (CommentFile.Length > maxFileSize)
+            {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return new BadRequestObjectResult(new { message = "File size exceeds the 10 MB limit." });
+                }
+                TempData["ErrorMessage"] = "File size exceeds the 10 MB limit.";
+                return RedirectToPage(new { joinCode });
+            }
+
+            var uploadResult = await _fileService.UploadFileAsync(Workspace.Id, CurrentUser.Id, CommentFile, CommentTaskId);
+            if (uploadResult.error != null)
+            {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return new BadRequestObjectResult(new { message = uploadResult.error });
+                }
+                TempData["ErrorMessage"] = uploadResult.error;
+                return RedirectToPage(new { joinCode });
+            }
+
+            if (uploadResult.file != null)
+            {
+                finalContent = $"[file:{uploadResult.file.Id}]{finalContent}";
+                uploadedFilePayload = new
+                {
+                    id = uploadResult.file.Id.ToString(),
+                    fileName = uploadResult.file.FileName,
+                    fileUrl = uploadResult.file.FileUrl,
+                    fileSize = uploadResult.file.FileSize,
+                    fileType = uploadResult.file.FileType
+                };
+            }
+        }
+
+        var error = await _taskService.AddTaskCommentAsync(Workspace.Id, CurrentUser.Id, CommentTaskId, finalContent);
         if (error != null)
         {
             if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
@@ -411,7 +464,7 @@ public class WorkspaceDetailModel : PageModel
         {
             var tasks = await _taskRepo.GetWorkspaceTasksAsync(Workspace.Id);
             var task = tasks.FirstOrDefault(t => t.Id == CommentTaskId);
-            var comment = task?.TaskComments.OrderByDescending(c => c.CreatedAt).FirstOrDefault(c => c.UserId == CurrentUser.Id && c.Content == CommentContent);
+            var comment = task?.TaskComments.OrderByDescending(c => c.CreatedAt).FirstOrDefault(c => c.UserId == CurrentUser.Id && c.Content == finalContent);
             if (comment != null)
             {
                 return new JsonResult(new
@@ -421,7 +474,8 @@ public class WorkspaceDetailModel : PageModel
                     userId = comment.UserId,
                     userName = CurrentUser.FullName,
                     content = comment.Content,
-                    createdAt = comment.CreatedAt
+                    createdAt = comment.CreatedAt,
+                    uploadedFile = uploadedFilePayload
                 });
             }
         }
@@ -785,6 +839,13 @@ public class WorkspaceDetailModel : PageModel
                 content = tc.Content,
                 createdAt = tc.CreatedAt,
                 user = new { fullName = tc.User.FullName }
+            }).ToList(),
+            files = task.WorkspaceFiles?.Select(f => new {
+                id = f.Id,
+                fileName = f.FileName,
+                fileUrl = f.FileUrl,
+                fileType = f.FileType,
+                fileSize = f.FileSize
             }).ToList()
         };
         return System.Text.Json.JsonSerializer.Serialize(cleanTask, new System.Text.Json.JsonSerializerOptions {
