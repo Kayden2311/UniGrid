@@ -526,7 +526,7 @@
                             }
                             
                             double lastX = fullStartX + (fullMemberCount - 1) * fullSpacing;
-                            fullRateAreaPoints.Add($"{lastX.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)},200");
+                            fullRateAreaPoints.Add($"L {lastX.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)},200");
                         }
                         
                         var fullPathStr = string.Join(" ", fullRatePoints);
@@ -3293,9 +3293,9 @@
                 hoveredRateIndex: null,
                 hoveredRateName: '',
                 hoveredRatePercent: 0,
-                searchQuery: '',
-                filterPriority: '',
-                filterAssignee: '',
+                searchQuery: sessionStorage.getItem('unigrid_kanban_searchQuery_' + '@Model.Workspace.JoinCode') || '',
+                filterPriority: sessionStorage.getItem('unigrid_kanban_filterPriority_' + '@Model.Workspace.JoinCode') || '',
+                filterAssignee: sessionStorage.getItem('unigrid_kanban_filterAssignee_' + '@Model.Workspace.JoinCode') || '',
                 filterDate: '@Model.DateFilter',
                 calendarOpen: false,
                 calendarYear: new Date().getFullYear(),
@@ -4589,6 +4589,15 @@
                     this.initKpiData();
                     this.initCalendar();
                     this.$watch('globalSearchQuery', value => this.searchQuery = value);
+                    this.$watch('searchQuery', value => {
+                        sessionStorage.setItem('unigrid_kanban_searchQuery_' + '@Model.Workspace.JoinCode', value);
+                    });
+                    this.$watch('filterPriority', value => {
+                        sessionStorage.setItem('unigrid_kanban_filterPriority_' + '@Model.Workspace.JoinCode', value);
+                    });
+                    this.$watch('filterAssignee', value => {
+                        sessionStorage.setItem('unigrid_kanban_filterAssignee_' + '@Model.Workspace.JoinCode', value);
+                    });
                     this.$watch('filterDate', value => {
                         if (value !== '@Model.DateFilter') {
                             const joinCode = '@Model.Workspace.JoinCode';
