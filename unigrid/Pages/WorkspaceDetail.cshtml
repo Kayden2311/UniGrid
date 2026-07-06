@@ -1229,11 +1229,22 @@
                     </div>
 
                     <template x-for="msg in filteredMessages" :key="msg.id">
-                        <div class="group flex gap-3 max-w-[80%] transition-all" :class="msg.senderId === currentUserId ? 'ml-auto flex-row-reverse' : ''">
+                        <div :id="'chat-msg-' + msg.id" class="group flex gap-3 max-w-[80%] transition-all" :class="msg.senderId === currentUserId ? 'ml-auto flex-row-reverse' : ''">
                             <div class="h-8 w-8 rounded-full bg-slate-100 border flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0 select-none" 
                                  x-text="msg.senderName.split(' ').map(n => n[0]).join('')">
                             </div>
                             <div class="space-y-1 min-w-0">
+                                 <!-- Reply Quote Block -->
+                                 <template x-if="msg.parentId">
+                                     <div class="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold bg-slate-50/60 p-1.5 rounded-lg border-l-2 border-indigo-500 max-w-sm mb-1 cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                                          @@click="const el = document.getElementById('chat-msg-' + msg.parentId); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('bg-indigo-50'); setTimeout(() => el.classList.remove('bg-indigo-50'), 2000); }">
+                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-slate-400 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                         <span class="truncate">
+                                             <span x-text="chatMessages.find(m => m.id === msg.parentId)?.senderId === currentUserId ? 'Me' : (chatMessages.find(m => m.id === msg.parentId)?.senderName || 'Someone')"></span>:
+                                             <span class="italic font-normal text-[9px]" x-text="chatMessages.find(m => m.id === msg.parentId)?.content || 'Deleted message'"></span>
+                                         </span>
+                                     </div>
+                                 </template>
                                 <template x-if="msg.senderId !== currentUserId">
                                     <p class="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
                                         <span x-text="msg.senderName"></span>
@@ -1301,6 +1312,15 @@
                                         </template>
                                     </div>
                                     
+                                    <!-- Hover Reply Button -->
+                                    <template x-if="!msg.rawContent.startsWith('[deleted_message]')">
+                                        <button type="button" @@click="replyingToMessage = { id: msg.id, senderName: msg.senderId === currentUserId ? 'Me' : msg.senderName, content: msg.content }; $nextTick(() => document.getElementById('chat-input-field')?.focus())" 
+                                                class="opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg hover:bg-slate-100 hover:text-indigo-600 flex items-center justify-center text-slate-400 transition-all shrink-0 cursor-pointer select-none"
+                                                title="Reply Message">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                        </button>
+                                    </template>
+
                                     <!-- Hover Trash/Revoke Button -->
                                     <template x-if="!msg.rawContent.startsWith('[deleted_message]') && msg.senderId === currentUserId">
                                         <button type="button" @@click="deleteMessage(msg.id)" 
@@ -1409,6 +1429,16 @@
 
                 <!-- Message Input Area -->
                 <div class="p-4 border-t border-slate-100">
+                    <!-- Reply Preview Bar -->
+                    <div x-show="replyingToMessage" class="mb-2.5 p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-xs font-bold text-indigo-700 transition-all" x-transition x-cloak>
+                        <div class="flex items-center gap-2 truncate">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-indigo-500 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                            <span class="truncate">Replying to <span class="text-indigo-900" x-text="replyingToMessage?.senderName"></span>: <span class="italic font-normal text-slate-500" x-text="replyingToMessage?.content"></span></span>
+                        </div>
+                        <button type="button" @@click="replyingToMessage = null" class="text-indigo-400 hover:text-indigo-650 transition-colors cursor-pointer flex items-center justify-center border-0 bg-transparent">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
                     <template x-if="currentUserRole !== 'Viewer'">
                         <form @@submit.prevent="sendChatMessageViaAjax()" class="flex gap-2">
                             <input type="hidden" name="activeChannel" :value="activeChannel">
@@ -2130,11 +2160,30 @@
                         <p class="text-xs font-bold text-slate-400 italic">No comments yet. Start the conversation!</p>
                     </template>
                     <template x-for="comment in selectedTask?.taskComments" :key="comment.id">
-                        <div class="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex gap-3 text-xs leading-relaxed">
+                        <div :id="'comment-' + comment.id" class="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex gap-3 text-xs leading-relaxed group">
                             <div class="h-6 w-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[9px] uppercase text-slate-500 shrink-0" 
                                  x-text="comment.user?.fullName ? comment.user.fullName.split(' ').map(n => n[0]).join('') : 'U'"></div>
                             <div class="min-w-0 flex-1">
-                                <p class="font-bold text-slate-700" x-text="comment.user?.fullName"></p>
+                                <!-- Reply Quote Block -->
+                                <template x-if="comment.parentId">
+                                    <div class="flex items-center gap-1.5 text-[9px] text-slate-400 font-bold bg-slate-100/80 p-1.5 rounded-lg border-l-2 border-indigo-500 max-w-sm mb-1 cursor-pointer select-none hover:bg-slate-200 transition-colors"
+                                         @@click="const el = document.getElementById('comment-' + comment.parentId); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('bg-indigo-50/50'); setTimeout(() => el.classList.remove('bg-indigo-50/50'), 2000); }">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-slate-400 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                        <span class="truncate">
+                                            <span x-text="selectedTask.taskComments.find(c => c.id === comment.parentId)?.user?.fullName === comment.user?.fullName ? 'Himself/Herself' : (selectedTask.taskComments.find(c => c.id === comment.parentId)?.user?.fullName || 'Someone')"></span>:
+                                             <span class="italic font-normal text-slate-500" x-text="selectedTask.taskComments.find(c => c.id === comment.parentId)?.content || 'Deleted comment'"></span>
+                                        </span>
+                                    </div>
+                                </template>
+
+                                <div class="flex items-center justify-between gap-2">
+                                    <p class="font-bold text-slate-700" x-text="comment.user?.fullName"></p>
+                                    <button type="button" @@click="replyingToComment = { id: comment.id, userName: comment.user?.fullName, content: comment.content }; $nextTick(() => document.getElementById('task-comment-field')?.focus())" 
+                                            class="opacity-0 group-hover:opacity-100 h-6 w-6 rounded-lg hover:bg-slate-200/60 text-slate-400 hover:text-indigo-650 flex items-center justify-center transition-all shrink-0 cursor-pointer select-none"
+                                            title="Reply to comment">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                    </button>
+                                </div>
                                 <div class="text-slate-500 mt-0.5 break-words" x-html="parseCommentContent(comment.content)"></div>
                                 
                                 <!-- Render Comment Attachment Box if comment has an attachment -->
@@ -2220,8 +2269,19 @@
                     </div>
 
                     <template x-if="currentUserRole !== 'Viewer'">
-                        <form @@submit.prevent="sendTaskCommentViaAjax()" class="flex gap-2 pt-2" enctype="multipart/form-data">
-                            <input type="hidden" name="commentTaskId" :value="selectedTask?.id">
+                        <div class="space-y-2 pt-2">
+                            <!-- Comment Reply Preview Bar -->
+                            <div x-show="replyingToComment" class="p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-[10px] font-bold text-indigo-700 transition-all" x-transition x-cloak>
+                                <div class="flex items-center gap-1.5 truncate">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-indigo-500 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                    <span class="truncate">Replying to <span class="text-indigo-900" x-text="replyingToComment?.userName"></span>: <span class="italic font-normal text-slate-500" x-text="replyingToComment?.content"></span></span>
+                                </div>
+                                <button type="button" @@click="replyingToComment = null" class="text-indigo-400 hover:text-indigo-650 transition-colors cursor-pointer flex items-center justify-center border-0 bg-transparent">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
+                            <form @@submit.prevent="sendTaskCommentViaAjax()" class="flex gap-2" enctype="multipart/form-data">
+                                <input type="hidden" name="commentTaskId" :value="selectedTask?.id">
                             
                             <!-- Paperclip Button -->
                             <button type="button" 
@@ -2238,7 +2298,8 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                             </button>
                         </form>
-                    </template>
+                    </div>
+                </template>
                     <template x-if="currentUserRole === 'Viewer'">
                         <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-400 font-bold italic">
                             You are viewing as a Viewer. Cannot add comments.
@@ -3388,6 +3449,8 @@
                 selectedChannelMods: [],
                 tempChannelOwner: '',
                 inviteChannelOpen: false,
+                replyingToMessage: null,
+                replyingToComment: null,
 
                 // Bootstrap data sets serialized from C# models
                 chatMessages: JSON.parse(atob('@Model.SerializeChatMessagesBase64()')),
@@ -4459,6 +4522,9 @@
                     if (this.selectedAttachmentId) {
                         formData.append('selectedFileId', this.selectedAttachmentId);
                     }
+                    if (this.replyingToMessage) {
+                        formData.append('parentId', this.replyingToMessage.id);
+                    }
 
                     const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
                     if (tokenInput) {
@@ -4479,6 +4545,7 @@
                             this.chatInput = '';
                             this.selectedAttachmentId = null;
                             this.selectedAttachmentName = '';
+                            this.replyingToMessage = null;
                         } else {
                             console.error('Failed to send chat message.');
                         }
@@ -4498,6 +4565,9 @@
                     formData.append('commentTaskId', this.selectedTask.id);
                     if (hasFile) {
                         formData.append('CommentFile', fileInput.files[0]);
+                    }
+                    if (this.replyingToComment) {
+                        formData.append('CommentParentId', this.replyingToComment.id);
                     }
 
                     const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
@@ -4532,8 +4602,10 @@
                                         id: data.id,
                                         content: data.content,
                                         createdAt: data.createdAt,
-                                        user: { fullName: data.userName }
+                                        user: { fullName: data.userName },
+                                        parentId: data.parentId
                                     });
+                                    this.replyingToComment = null;
                                     this.$nextTick(() => {
                                         const commentsContainer = document.querySelector('.max-h-\\[220px\\].overflow-y-auto');
                                         if (commentsContainer) {
@@ -4650,7 +4722,8 @@
                                     id: payload.id,
                                     content: payload.content,
                                     createdAt: payload.createdAt,
-                                    user: { fullName: payload.userName }
+                                    user: { fullName: payload.userName },
+                                    parentId: payload.parentId
                                 });
                                 
                                 this.$nextTick(() => {

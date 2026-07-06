@@ -63,7 +63,7 @@ public class ChatService : IChatService
         });
     }
 
-    public async Task<(ChatMessage? message, string? error)> SendChatMessageAsync(Guid workspaceId, Guid userId, string content, string activeChannel, Guid? selectedFileId)
+    public async Task<(ChatMessage? message, string? error)> SendChatMessageAsync(Guid workspaceId, Guid userId, string content, string activeChannel, Guid? selectedFileId, Guid? parentId = null)
     {
         var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
         if (workspace == null) return (null, "Workspace not found.");
@@ -294,7 +294,8 @@ public class ChatService : IChatService
             SenderId = userId,
             Content = contentWithChannel,
             SentAt = DateTime.UtcNow,
-            IsDeleted = false
+            IsDeleted = false,
+            ParentId = parentId
         };
 
         await _chatRepo.AddMessageAsync(message);
@@ -346,7 +347,8 @@ public class ChatService : IChatService
             content = cleanContent,
             rawContent = message.Content,
             sentAt = message.SentAt,
-            channel = string.IsNullOrEmpty(activeChannel) ? "general" : activeChannel
+            channel = string.IsNullOrEmpty(activeChannel) ? "general" : activeChannel,
+            parentId = message.ParentId
         };
 
         await _hubContext.Clients.Group(workspaceId.ToString()).SendAsync("ReceiveChatMessage", payload);

@@ -387,7 +387,7 @@ public class TaskService : ITaskService
         return null; // Success
     }
 
-    public async Task<string?> AddTaskCommentAsync(Guid workspaceId, Guid userId, Guid taskId, string content)
+    public async Task<string?> AddTaskCommentAsync(Guid workspaceId, Guid userId, Guid taskId, string content, Guid? parentId = null)
     {
         var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
         if (workspace == null) return "Workspace not found.";
@@ -414,7 +414,8 @@ public class TaskService : ITaskService
             TaskId = taskId,
             UserId = userId,
             Content = sanitizedContent,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            ParentId = parentId
         };
 
         await _taskRepo.AddCommentAsync(comment);
@@ -495,7 +496,8 @@ public class TaskService : ITaskService
             userName = user?.FullName ?? "Someone",
             content = comment.Content,
             createdAt = comment.CreatedAt,
-            uploadedFile = filePayload
+            uploadedFile = filePayload,
+            parentId = comment.ParentId
         };
 
         await _hubContext.Clients.Group(workspaceId.ToString()).SendAsync("ReceiveTaskComment", payload);
