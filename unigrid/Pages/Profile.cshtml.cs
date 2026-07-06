@@ -268,6 +268,18 @@ namespace unigrid.Pages
                 
                 _cache.Remove($"User_{accountId}");
                 _cache.Remove($"UserWorkspaces_{user.Id}");
+
+                // Evict WorkspaceMembers cache for all workspaces this user belongs to
+                var userWorkspaceIds = await _context.WorkspaceMembers
+                    .Where(m => m.UserId == user.Id)
+                    .Select(m => m.WorkspaceId)
+                    .ToListAsync();
+                foreach (var wsId in userWorkspaceIds)
+                    _cache.Remove($"WorkspaceMembers_{wsId}");
+
+                // Also evict WorkspaceTasks cache since task assignee names may be cached
+                foreach (var wsId in userWorkspaceIds)
+                    _cache.Remove($"WorkspaceTasks_{wsId}");
             }
 
             // Dynamic claim update in the active session cookie

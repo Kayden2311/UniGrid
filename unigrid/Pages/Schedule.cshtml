@@ -81,7 +81,7 @@
         <div class="flex-1 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm" style="max-height: calc(100vh - 220px);">
             <div style="min-width: 800px;">
                 <!-- Day Headers -->
-                <div class="sticky top-0 z-10 border-b border-slate-200 bg-white"
+                <div class="sticky top-0 z-[50] border-b border-slate-200 bg-white"
                      style="display: grid; grid-template-columns: 80px repeat(7, 1fr);">
                     <div class="border-r border-slate-200"></div>
                     @for (int idx = 0; idx < 7; idx++)
@@ -120,7 +120,7 @@
                     @for (int dayIdx = 0; dayIdx < 7; dayIdx++)
                     {
                         var dIdx = dayIdx;
-                        <div class="border-r border-slate-200 last:border-r-0 relative h-full bg-white">
+                        <div class="border-r border-slate-200 last:border-r-0 relative h-full bg-white overflow-hidden">
                              
                              <!-- Half-hour grid lines and triggers -->
                              @for (int slotIdx = 0; slotIdx < 48; slotIdx++)
