@@ -120,6 +120,8 @@ public class WorkspaceDetailModel : PageModel
     public string CommentContent { get; set; } = string.Empty;
     [BindProperty]
     public Microsoft.AspNetCore.Http.IFormFile? CommentFile { get; set; }
+    [BindProperty]
+    public Guid? CommentParentId { get; set; }
 
     // Direct binding for chat
     [BindProperty]
@@ -448,7 +450,7 @@ public class WorkspaceDetailModel : PageModel
             }
         }
 
-        var error = await _taskService.AddTaskCommentAsync(Workspace.Id, CurrentUser.Id, CommentTaskId, finalContent);
+        var error = await _taskService.AddTaskCommentAsync(Workspace.Id, CurrentUser.Id, CommentTaskId, finalContent, CommentParentId);
         if (error != null)
         {
             if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
@@ -475,7 +477,8 @@ public class WorkspaceDetailModel : PageModel
                     userName = CurrentUser.FullName,
                     content = comment.Content,
                     createdAt = comment.CreatedAt,
-                    uploadedFile = uploadedFilePayload
+                    uploadedFile = uploadedFilePayload,
+                    parentId = comment.ParentId
                 });
             }
         }
@@ -483,7 +486,7 @@ public class WorkspaceDetailModel : PageModel
         return RedirectToPage(new { joinCode });
     }
 
-    public async System.Threading.Tasks.Task<IActionResult> OnPostSendChatMessageAsync(string joinCode, string activeChannel, Guid? selectedFileId)
+    public async System.Threading.Tasks.Task<IActionResult> OnPostSendChatMessageAsync(string joinCode, string activeChannel, Guid? selectedFileId, Guid? parentId = null)
     {
         if (!await LoadWorkspaceDataAsync(joinCode))
         {
@@ -494,7 +497,7 @@ public class WorkspaceDetailModel : PageModel
             return RedirectToPage("/Dashboard");
         }
 
-        var result = await _chatService.SendChatMessageAsync(Workspace.Id, CurrentUser.Id, ChatContent, activeChannel, selectedFileId);
+        var result = await _chatService.SendChatMessageAsync(Workspace.Id, CurrentUser.Id, ChatContent, activeChannel, selectedFileId, parentId);
         if (result.error != null)
         {
             if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
@@ -520,7 +523,8 @@ public class WorkspaceDetailModel : PageModel
                     content = cleanContent,
                     rawContent = result.message.Content,
                     sentAt = result.message.SentAt,
-                    channel = string.IsNullOrEmpty(activeChannel) ? "general" : activeChannel
+                    channel = string.IsNullOrEmpty(activeChannel) ? "general" : activeChannel,
+                    parentId = result.message.ParentId
                 });
             }
             return new JsonResult(new { success = true });
@@ -838,7 +842,8 @@ public class WorkspaceDetailModel : PageModel
                 id = tc.Id,
                 content = tc.Content,
                 createdAt = tc.CreatedAt,
-                user = new { fullName = tc.User.FullName }
+                user = new { fullName = tc.User.FullName },
+                parentId = tc.ParentId
             }).ToList(),
             files = task.WorkspaceFiles?.Select(f => new {
                 id = f.Id,
@@ -915,7 +920,8 @@ public class WorkspaceDetailModel : PageModel
                 content = cleanContent,
                 rawContent = cm.Content,
                 sentAt = cm.SentAt,
-                channel = channel
+                channel = channel,
+                parentId = cm.ParentId
             };
         }).ToList();
 
