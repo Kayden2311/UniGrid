@@ -1529,61 +1529,37 @@
                                                     
                                                     <div class="space-y-1 pt-1">
                                                         <!-- Vice Manager -->
-                                                        <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
-                                                            @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="memberId" value="@member.UserId" />
-                                                            <input type="hidden" name="newRole" value="Vice Manager" />
-                                                            <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
-                                                            <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
-                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                            <input type="hidden" name="canEditTask" :value="canEditTask" />
-                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                            <input type="hidden" name="canDeleteTask" :value="canDeleteTask" />
-                                                            <button type="submit" :class="selectedRole === 'Vice Manager' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
-                                                                <span>Vice Manager</span>
-                                                                @if (member.Role == "Vice Manager") {
-                                                                    <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
-                                                                }
-                                                            </button>
-                                                        </form>
+                                                        <button type="button" 
+                                                                @@click="selectedRole = 'Vice Manager'"
+                                                                :class="selectedRole === 'Vice Manager' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" 
+                                                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer">
+                                                            <span>Vice Manager</span>
+                                                            <span x-show="selectedRole === 'Vice Manager'">
+                                                                <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                            </span>
+                                                        </button>
 
                                                         <!-- Member -->
-                                                        <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
-                                                            @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="memberId" value="@member.UserId" />
-                                                            <input type="hidden" name="newRole" value="Member" />
-                                                            <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
-                                                            <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
-                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                            <input type="hidden" name="canEditTask" :value="canEditTask" />
-                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                            <input type="hidden" name="canDeleteTask" :value="canDeleteTask" />
-                                                            <button type="submit" :class="selectedRole === 'Member' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
-                                                                <span>Member</span>
-                                                                @if (member.Role == "Member") {
-                                                                    <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
-                                                                }
-                                                            </button>
-                                                        </form>
+                                                        <button type="button" 
+                                                                @@click="selectedRole = 'Member'"
+                                                                :class="selectedRole === 'Member' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" 
+                                                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer">
+                                                            <span>Member</span>
+                                                            <span x-show="selectedRole === 'Member'">
+                                                                <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                            </span>
+                                                        </button>
 
                                                         <!-- Viewer -->
-                                                        <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
-                                                            @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="memberId" value="@member.UserId" />
-                                                            <input type="hidden" name="newRole" value="Viewer" />
-                                                            <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
-                                                            <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
-                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                            <input type="hidden" name="canEditTask" :value="canEditTask" />
-                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                            <input type="hidden" name="canDeleteTask" :value="canDeleteTask" />
-                                                            <button type="submit" :class="selectedRole === 'Viewer' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
-                                                                <span>Viewer</span>
-                                                                @if (member.Role == "Viewer") {
-                                                                    <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
-                                                                }
-                                                            </button>
-                                                        </form>
+                                                        <button type="button" 
+                                                                @@click="selectedRole = 'Viewer'"
+                                                                :class="selectedRole === 'Viewer' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" 
+                                                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer">
+                                                            <span>Viewer</span>
+                                                            <span x-show="selectedRole === 'Viewer'">
+                                                                <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                            </span>
+                                                        </button>
                                                     </div>
                                                 </div>
                                             }
@@ -1628,7 +1604,7 @@
                                                     <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode" class="space-y-2">
                                                         @Html.AntiForgeryToken()
                                                         <input type="hidden" name="memberId" value="@member.UserId" />
-                                                        <input type="hidden" name="newRole" value="@member.Role" />
+                                                        <input type="hidden" name="newRole" :value="selectedRole" />
                                                         <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
                                                         <input type="hidden" name="canCreateTask" :value="canCreateTask" />
                                                         <input type="hidden" name="canEditTask" :value="canEditTask" />
