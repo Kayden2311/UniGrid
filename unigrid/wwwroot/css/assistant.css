@@ -139,6 +139,35 @@
     border-bottom-left-radius: 4px;
     box-shadow: 0 1px 4px rgba(0,0,0,.08);
 }
+.ai-markdown {
+    white-space: normal;
+}
+.ai-markdown > div + div:not(.ai-md-spacer) {
+    margin-top: 4px;
+}
+.ai-markdown strong {
+    font-weight: 700;
+    color: #111827;
+}
+.ai-markdown em {
+    font-style: italic;
+}
+.ai-markdown code {
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: .9em;
+}
+.ai-md-list-item {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 4px;
+    align-items: start;
+}
+.ai-md-spacer {
+    height: 7px;
+}
 .ai-msg--user .ai-bubble {
     background: #4f46e5;
     color: #fff;

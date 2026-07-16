@@ -2,7 +2,7 @@
 {
     public interface IAIAssistantService
     {
-        Task<string> AskAsync(
+        Task<unigrid.Models.AI.AssistantResponse> AskAsync(
             Guid userId,
             string message,
             List<unigrid.Models.AI.AssistantMessage>? history = null);

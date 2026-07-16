@@ -27,7 +27,7 @@
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.15) !important;
     border-color: #6366f1 !important; /* Indigo border tint */
     transition: none !important; /* Disable transition during free-pixel movement for extreme smoothness */
-    clip-path: inset(0); /* prevent visual bleed outside column */
+    will-change: transform;
 }
 
 /* Calendar grid cell custom hover highlights during drag-over */

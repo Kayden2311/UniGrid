@@ -10,7 +10,7 @@ from runeterra.models import create_llm
 from runeterra.agent import ask, create_history
 from runeterra.tools import get_available_tools
 from runeterra.logging import log_panel, green_border_style
-from runeterra.context import current_user_id
+from runeterra.context import current_user_id, schedule_data_changed
 
 load_dotenv()
 
@@ -78,6 +78,7 @@ def chat_endpoint(req: ChatRequest, user_id: str = Depends(get_current_user_id))
                 chat_history.append(AIMessage(content=msg.content))
 
     current_user_id.set(user_id)
+    schedule_data_changed.set(False)
 
     reply = ask(
         req.message,
@@ -91,7 +92,7 @@ def chat_endpoint(req: ChatRequest, user_id: str = Depends(get_current_user_id))
         content=f"Reply: {reply}",
         border_style=green_border_style,
     )
-    return {"reply": reply}
+    return {"reply": reply, "dataChanged": schedule_data_changed.get()}
 
 
 @app.get("/ping")

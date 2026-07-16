@@ -38,7 +38,7 @@
         checkoutLoading: false,
         paymentConfirming: false,
         paymentSuccess: false,
-        qrUrl: '',
+        checkoutUrl: '',
         txnRef: '',
         amountVnd: 0,
         errorMessage: '',
@@ -56,7 +56,7 @@
             // Reset checkout state
             this.errorMessage = '';
             this.paymentSuccess = false;
-            this.qrUrl = '';
+            this.checkoutUrl = '';
             this.txnRef = '';
             this.amountVnd = 0;
             this.checkoutLoading = true;
@@ -75,7 +75,7 @@
 
                 const data = await response.json();
                 if (response.ok && data.success) {
-                    this.qrUrl = data.qrUrl;
+                    this.checkoutUrl = data.checkoutUrl;
                     this.txnRef = data.transactionRef;
                     this.amountVnd = data.amount;
                 } else {
@@ -94,39 +94,6 @@
                 return;
             }
             this.showBusinessModal = true;
-        },
-        async confirmPayment() {
-            this.paymentConfirming = true;
-            this.errorMessage = '';
-
-            try {
-                const response = await fetch('/api/billing/confirm-payment', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        transactionRef: this.txnRef,
-                        tier: this.selectedTier,
-                        billingPeriod: this.billing,
-                        joinCode: '@Model.ActiveWorkspaceJoinCode'
-                    })
-                });
-
-                const data = await response.json();
-                if (response.ok && data.success) {
-                    this.paymentSuccess = true;
-                    setTimeout(() => {
-                        this.showConfirmModal = false;
-                        window.location.href = data.joinCode ? ('/WorkspaceDetail/' + data.joinCode) : '/Dashboard';
-                    }, 1500);
-                } else {
-                    this.errorMessage = data.message || 'Transaction confirmation failed.';
-                }
-            } catch (err) {
-                this.errorMessage = 'Network error while verifying payment.';
-                console.error(err);
-            } finally {
-                this.paymentConfirming = false;
-            }
         },
         async submitFederationRequest() {
             if (!this.businessName.trim() || !this.contactPhone.trim()) return;
@@ -301,7 +268,7 @@
             <!-- Loading Checkout State -->
             <div x-show="checkoutLoading" class="py-12 flex flex-col items-center justify-center space-y-4">
                 <div class="h-10 w-10 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
-                <p class="text-xs font-bold text-slate-500 uppercase tracking-widest animate-pulse">Generating dynamic VietQR...</p>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-widest animate-pulse">Creating secure payOS checkout...</p>
             </div>
 
             <!-- Error State -->
@@ -335,8 +302,8 @@
                         <i data-lucide="qr-code" class="w-5 h-5"></i>
                     </div>
                     <div>
-                        <h3 class="text-xl font-black text-slate-800 tracking-tight">VietQR Instant Payment</h3>
-                        <p class="text-[10px] text-slate-400 font-black uppercase tracking-wider">Scan QR code to transfer instantly</p>
+                        <h3 class="text-xl font-black text-slate-800 tracking-tight">Secure payment with payOS</h3>
+                        <p class="text-[10px] text-slate-400 font-black uppercase tracking-wider">Automatic payment verification</p>
                     </div>
                 </div>
                 
@@ -351,38 +318,15 @@
                     </div>
                 </div>
 
-                <!-- VietQR Dynamic Image -->
-                <div class="relative py-2 flex justify-center bg-white rounded-3xl border border-slate-100 shadow-sm p-4">
-                    <img :src="qrUrl" alt="VietQR Payment Code" class="rounded-xl max-w-[200px] border border-slate-100 shadow-sm" />
-                </div>
-
-                <!-- Transfer Credentials Details -->
-                <div class="p-4 bg-indigo-50/20 border border-indigo-100/50 rounded-2xl space-y-2 text-[11px] font-semibold text-slate-600">
-                    <div class="flex justify-between">
-                        <span>Merchant Bank:</span>
-                        <span class="font-bold text-slate-800">MoMo</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>Account Number:</span>
-                        <span class="font-bold text-slate-800 select-all">PSG2615912200000011</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>Account Name:</span>
-                        <span class="font-bold text-slate-800">DUONG XUAN PHU</span>
-                    </div>
-                    <div class="flex justify-between border-t border-indigo-100/60 pt-2 text-indigo-700">
-                        <span>Transfer Message:</span>
-                        <span class="font-black select-all" x-text="'UNIGRID ' + txnRef"></span>
-                    </div>
+                <div class="p-4 bg-indigo-50/40 border border-indigo-100 rounded-2xl text-xs leading-relaxed text-slate-600">
+                    You will be redirected to payOS to scan the VietQR code. UniGrid activates the plan automatically after payOS confirms the payment; you do not need to submit a transfer confirmation manually.
                 </div>
 
                 <!-- Action Triggers -->
                 <div class="flex gap-4 pt-2">
-                    <button :disabled="paymentConfirming" @@click="showConfirmModal = false" class="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-all text-xs disabled:opacity-50">Cancel</button>
-                    <button :disabled="paymentConfirming" @@click="confirmPayment()" class="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all text-xs flex items-center justify-center gap-2">
-                        <span x-show="paymentConfirming" class="h-3 w-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-                        <span x-show="!paymentConfirming" x-text="'I have completed payment'"></span>
-                        <span x-show="paymentConfirming" x-text="'Verifying transfer...'"></span>
+                    <button @@click="showConfirmModal = false" class="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-all text-xs">Cancel</button>
+                    <button @@click="window.location.assign(checkoutUrl)" class="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all text-xs flex items-center justify-center gap-2">
+                        Continue to payOS
                     </button>
                 </div>
             </div>

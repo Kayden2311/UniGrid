@@ -526,7 +526,7 @@
                             }
                             
                             double lastX = fullStartX + (fullMemberCount - 1) * fullSpacing;
-                            fullRateAreaPoints.Add($"{lastX.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)},200");
+                            fullRateAreaPoints.Add($"L {lastX.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)},200");
                         }
                         
                         var fullPathStr = string.Join(" ", fullRatePoints);
@@ -1229,11 +1229,22 @@
                     </div>
 
                     <template x-for="msg in filteredMessages" :key="msg.id">
-                        <div class="group flex gap-3 max-w-[80%] transition-all" :class="msg.senderId === currentUserId ? 'ml-auto flex-row-reverse' : ''">
+                        <div :id="'chat-msg-' + msg.id" class="group flex gap-3 max-w-[80%] transition-all" :class="msg.senderId === currentUserId ? 'ml-auto flex-row-reverse' : ''">
                             <div class="h-8 w-8 rounded-full bg-slate-100 border flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0 select-none" 
                                  x-text="msg.senderName.split(' ').map(n => n[0]).join('')">
                             </div>
                             <div class="space-y-1 min-w-0">
+                                 <!-- Reply Quote Block -->
+                                 <template x-if="msg.parentId">
+                                     <div class="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold bg-slate-50/60 p-1.5 rounded-lg border-l-2 border-indigo-500 max-w-sm mb-1 cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                                          @@click="const el = document.getElementById('chat-msg-' + msg.parentId); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('bg-indigo-50'); setTimeout(() => el.classList.remove('bg-indigo-50'), 2000); }">
+                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-slate-400 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                         <span class="truncate">
+                                             <span x-text="chatMessages.find(m => m.id === msg.parentId)?.senderId === currentUserId ? 'Me' : (chatMessages.find(m => m.id === msg.parentId)?.senderName || 'Someone')"></span>:
+                                             <span class="italic font-normal text-[9px]" x-text="chatMessages.find(m => m.id === msg.parentId)?.content || 'Deleted message'"></span>
+                                         </span>
+                                     </div>
+                                 </template>
                                 <template x-if="msg.senderId !== currentUserId">
                                     <p class="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
                                         <span x-text="msg.senderName"></span>
@@ -1301,6 +1312,15 @@
                                         </template>
                                     </div>
                                     
+                                    <!-- Hover Reply Button -->
+                                    <template x-if="!msg.rawContent.startsWith('[deleted_message]')">
+                                        <button type="button" @@click="replyingToMessage = { id: msg.id, senderName: msg.senderId === currentUserId ? 'Me' : msg.senderName, content: msg.content }; $nextTick(() => document.getElementById('chat-input-field')?.focus())" 
+                                                class="opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg hover:bg-slate-100 hover:text-indigo-600 flex items-center justify-center text-slate-400 transition-all shrink-0 cursor-pointer select-none"
+                                                title="Reply Message">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                        </button>
+                                    </template>
+
                                     <!-- Hover Trash/Revoke Button -->
                                     <template x-if="!msg.rawContent.startsWith('[deleted_message]') && msg.senderId === currentUserId">
                                         <button type="button" @@click="deleteMessage(msg.id)" 
@@ -1409,6 +1429,16 @@
 
                 <!-- Message Input Area -->
                 <div class="p-4 border-t border-slate-100">
+                    <!-- Reply Preview Bar -->
+                    <div x-show="replyingToMessage" class="mb-2.5 p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-xs font-bold text-indigo-700 transition-all" x-transition x-cloak>
+                        <div class="flex items-center gap-2 truncate">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-indigo-500 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                            <span class="truncate">Replying to <span class="text-indigo-900" x-text="replyingToMessage?.senderName"></span>: <span class="italic font-normal text-slate-500" x-text="replyingToMessage?.content"></span></span>
+                        </div>
+                        <button type="button" @@click="replyingToMessage = null" class="text-indigo-400 hover:text-indigo-650 transition-colors cursor-pointer flex items-center justify-center border-0 bg-transparent">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
                     <template x-if="currentUserRole !== 'Viewer'">
                         <form @@submit.prevent="sendChatMessageViaAjax()" class="flex gap-2">
                             <input type="hidden" name="activeChannel" :value="activeChannel">
@@ -1453,6 +1483,10 @@
                 <h3 class="text-lg font-black text-slate-800">Workspace Members</h3>
                 <p class="text-xs text-slate-500 mt-0.5">Manage access, roles, and review contribution details.</p>
             </div>
+            <button @@click="leaveDialogOpen = true" 
+                    class="bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="log-out" class="w-4 h-4"></i> Leave Workspace
+            </button>
         </div>
 
         <div class="glass rounded-[2.5rem] overflow-visible border border-slate-200 shadow-sm">
@@ -1525,61 +1559,37 @@
                                                     
                                                     <div class="space-y-1 pt-1">
                                                         <!-- Vice Manager -->
-                                                        <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
-                                                            @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="memberId" value="@member.UserId" />
-                                                            <input type="hidden" name="newRole" value="Vice Manager" />
-                                                            <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
-                                                            <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
-                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                            <input type="hidden" name="canEditTask" :value="canEditTask" />
-                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                            <input type="hidden" name="canDeleteTask" :value="canDeleteTask" />
-                                                            <button type="submit" :class="selectedRole === 'Vice Manager' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
-                                                                <span>Vice Manager</span>
-                                                                @if (member.Role == "Vice Manager") {
-                                                                    <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
-                                                                }
-                                                            </button>
-                                                        </form>
+                                                        <button type="button" 
+                                                                @@click="selectedRole = 'Vice Manager'"
+                                                                :class="selectedRole === 'Vice Manager' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" 
+                                                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer">
+                                                            <span>Vice Manager</span>
+                                                            <span x-show="selectedRole === 'Vice Manager'">
+                                                                <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                            </span>
+                                                        </button>
 
                                                         <!-- Member -->
-                                                        <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
-                                                            @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="memberId" value="@member.UserId" />
-                                                            <input type="hidden" name="newRole" value="Member" />
-                                                            <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
-                                                            <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
-                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                            <input type="hidden" name="canEditTask" :value="canEditTask" />
-                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                            <input type="hidden" name="canDeleteTask" :value="canDeleteTask" />
-                                                            <button type="submit" :class="selectedRole === 'Member' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
-                                                                <span>Member</span>
-                                                                @if (member.Role == "Member") {
-                                                                    <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
-                                                                }
-                                                            </button>
-                                                        </form>
+                                                        <button type="button" 
+                                                                @@click="selectedRole = 'Member'"
+                                                                :class="selectedRole === 'Member' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" 
+                                                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer">
+                                                            <span>Member</span>
+                                                            <span x-show="selectedRole === 'Member'">
+                                                                <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                            </span>
+                                                        </button>
 
                                                         <!-- Viewer -->
-                                                        <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode">
-                                                            @Html.AntiForgeryToken()
-                                                            <input type="hidden" name="memberId" value="@member.UserId" />
-                                                            <input type="hidden" name="newRole" value="Viewer" />
-                                                            <input type="hidden" name="newDisplayRole" :value="tempDisplayRole" />
-                                                            <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
-                                                            <input type="hidden" name="canCreateTask" :value="canCreateTask" />
-                                                            <input type="hidden" name="canEditTask" :value="canEditTask" />
-                                                            <input type="hidden" name="canCreateChannel" :value="canCreateChannel" />
-                                                            <input type="hidden" name="canDeleteTask" :value="canDeleteTask" />
-                                                            <button type="submit" :class="selectedRole === 'Viewer' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all">
-                                                                <span>Viewer</span>
-                                                                @if (member.Role == "Viewer") {
-                                                                    <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
-                                                                }
-                                                            </button>
-                                                        </form>
+                                                        <button type="button" 
+                                                                @@click="selectedRole = 'Viewer'"
+                                                                :class="selectedRole === 'Viewer' ? 'bg-indigo-50 text-indigo-655 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'" 
+                                                                class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer">
+                                                            <span>Viewer</span>
+                                                            <span x-show="selectedRole === 'Viewer'">
+                                                                <i data-lucide="check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                                                            </span>
+                                                        </button>
                                                     </div>
                                                 </div>
                                             }
@@ -1624,7 +1634,7 @@
                                                     <form method="post" asp-page-handler="UpdateMemberRole" asp-route-joinCode="@Model.Workspace.JoinCode" class="space-y-2">
                                                         @Html.AntiForgeryToken()
                                                         <input type="hidden" name="memberId" value="@member.UserId" />
-                                                        <input type="hidden" name="newRole" value="@member.Role" />
+                                                        <input type="hidden" name="newRole" :value="selectedRole" />
                                                         <input type="hidden" name="canDeleteFile" :value="canDeleteFile" />
                                                         <input type="hidden" name="canCreateTask" :value="canCreateTask" />
                                                         <input type="hidden" name="canEditTask" :value="canEditTask" />
@@ -2150,12 +2160,49 @@
                         <p class="text-xs font-bold text-slate-400 italic">No comments yet. Start the conversation!</p>
                     </template>
                     <template x-for="comment in selectedTask?.taskComments" :key="comment.id">
-                        <div class="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex gap-3 text-xs leading-relaxed">
+                        <div :id="'comment-' + comment.id" class="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex gap-3 text-xs leading-relaxed group">
                             <div class="h-6 w-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[9px] uppercase text-slate-500 shrink-0" 
                                  x-text="comment.user?.fullName ? comment.user.fullName.split(' ').map(n => n[0]).join('') : 'U'"></div>
-                            <div>
-                                <p class="font-bold text-slate-700" x-text="comment.user?.fullName"></p>
-                                <p class="text-slate-500 mt-0.5" x-text="comment.content"></p>
+                            <div class="min-w-0 flex-1">
+                                <!-- Reply Quote Block -->
+                                <template x-if="comment.parentId">
+                                    <div class="flex items-center gap-1.5 text-[9px] text-slate-400 font-bold bg-slate-100/80 p-1.5 rounded-lg border-l-2 border-indigo-500 max-w-sm mb-1 cursor-pointer select-none hover:bg-slate-200 transition-colors"
+                                         @@click="const el = document.getElementById('comment-' + comment.parentId); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('bg-indigo-50/50'); setTimeout(() => el.classList.remove('bg-indigo-50/50'), 2000); }">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-slate-400 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                        <span class="truncate">
+                                            <span x-text="selectedTask.taskComments.find(c => c.id === comment.parentId)?.user?.fullName === comment.user?.fullName ? 'Himself/Herself' : (selectedTask.taskComments.find(c => c.id === comment.parentId)?.user?.fullName || 'Someone')"></span>:
+                                             <span class="italic font-normal text-slate-500" x-text="selectedTask.taskComments.find(c => c.id === comment.parentId)?.content || 'Deleted comment'"></span>
+                                        </span>
+                                    </div>
+                                </template>
+
+                                <div class="flex items-center justify-between gap-2">
+                                    <p class="font-bold text-slate-700" x-text="comment.user?.fullName"></p>
+                                    <button type="button" @@click="replyingToComment = { id: comment.id, userName: comment.user?.fullName, content: comment.content }; $nextTick(() => document.getElementById('task-comment-field')?.focus())" 
+                                            class="opacity-0 group-hover:opacity-100 h-6 w-6 rounded-lg hover:bg-slate-200/60 text-slate-400 hover:text-indigo-650 flex items-center justify-center transition-all shrink-0 cursor-pointer select-none"
+                                            title="Reply to comment">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                    </button>
+                                </div>
+                                <div class="text-slate-500 mt-0.5 break-words" x-html="parseCommentContent(comment.content)"></div>
+                                
+                                <!-- Render Comment Attachment Box if comment has an attachment -->
+                                <template x-if="getCommentAttachment(comment.content)">
+                                    <div class="mt-2.5 p-2.5 border border-slate-200 bg-white rounded-xl flex items-center justify-between gap-4 max-w-sm text-slate-700 shadow-sm">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <p class="text-[11px] font-bold truncate text-slate-800" x-text="getCommentAttachment(comment.content).fileName"></p>
+                                                <p class="text-[9px] font-bold text-slate-400 uppercase" x-text="Math.round(getCommentAttachment(comment.content).fileSize / 1024) + ' KB'"></p>
+                                            </div>
+                                        </div>
+                                        <a :href="'/' + getCommentAttachment(comment.content).fileUrl" class="h-7 w-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-650 flex items-center justify-center shrink-0 transition-colors cursor-pointer" download>
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                        </a>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </template>
@@ -2207,16 +2254,52 @@
                         </div>
                     </div>
 
+                    <!-- Selected Comment Attachment Status Indicator Box -->
+                    <div x-show="selectedCommentFileName" 
+                         class="mb-2 p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-[10px] font-bold text-indigo-700 transition-all"
+                         x-transition x-cloak>
+                        <span class="flex items-center gap-1.5 truncate">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-indigo-600"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></svg>
+                            <span>Attachment: </span>
+                            <strong class="truncate" x-text="selectedCommentFileName"></strong>
+                        </span>
+                        <button type="button" @@click="clearCommentFile()" class="text-indigo-400 hover:text-indigo-600 transition-colors cursor-pointer flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+
                     <template x-if="currentUserRole !== 'Viewer'">
-                        <form @@submit.prevent="sendTaskCommentViaAjax()" class="flex gap-2 pt-2">
-                            <input type="hidden" name="commentTaskId" :value="selectedTask?.id">
-                            <input type="text" id="task-comment-field" asp-for="CommentContent" x-model="newCommentContent" placeholder="Post a comment..." required autocomplete="off"
+                        <div class="space-y-2 pt-2">
+                            <!-- Comment Reply Preview Bar -->
+                            <div x-show="replyingToComment" class="p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-[10px] font-bold text-indigo-700 transition-all" x-transition x-cloak>
+                                <div class="flex items-center gap-1.5 truncate">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-indigo-500 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                    <span class="truncate">Replying to <span class="text-indigo-900" x-text="replyingToComment?.userName"></span>: <span class="italic font-normal text-slate-500" x-text="replyingToComment?.content"></span></span>
+                                </div>
+                                <button type="button" @@click="replyingToComment = null" class="text-indigo-400 hover:text-indigo-650 transition-colors cursor-pointer flex items-center justify-center border-0 bg-transparent">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                            </div>
+                            <form @@submit.prevent="sendTaskCommentViaAjax()" class="flex gap-2" enctype="multipart/form-data">
+                                <input type="hidden" name="commentTaskId" :value="selectedTask?.id">
+                            
+                            <!-- Paperclip Button -->
+                            <button type="button" 
+                                    @@click="document.getElementById('task-comment-file-input').click()" 
+                                    :class="selectedCommentFileName ? 'bg-indigo-50 text-indigo-600 border border-indigo-250' : 'bg-slate-50 text-slate-400 hover:text-slate-600 border border-slate-200'"
+                                    class="p-2.5 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                            </button>
+                            <input type="file" id="task-comment-file-input" class="hidden" @@change="handleCommentFileChange($event)">
+
+                            <input type="text" id="task-comment-field" asp-for="CommentContent" x-model="newCommentContent" placeholder="Post a comment..." :required="!selectedCommentFileName" autocomplete="off"
                                    class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                             <button type="submit" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                             </button>
                         </form>
-                    </template>
+                    </div>
+                </template>
                     <template x-if="currentUserRole === 'Viewer'">
                         <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-400 font-bold italic">
                             You are viewing as a Viewer. Cannot add comments.
@@ -2716,7 +2799,7 @@
                                         </div>
                                         
                                         <!-- AM / PM Toggle strictly AM/PM -->
-                                        <div class="flex flex-col justify-center ml-2 border border-slate-100 rounded-lg overflow-hidden bg-slate-50">
+                                        <div class="flex flex-col justify-center ml-2 border border-slate-100 rounded-hidden overflow-hidden bg-slate-50">
                                             <button type="button" @@click="setAM(true)" 
                                                     :class="isAM(createTaskTime) ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-600'"
                                                     class="px-2 py-1 text-[9px] font-black tracking-wide uppercase transition-all">AM</button>
@@ -2939,6 +3022,10 @@
             </div>
         </div>
     </div>
+
+    <form id="leave-workspace-form" method="post" asp-page-handler="LeaveWorkspace" asp-route-joinCode="@Model.Workspace.JoinCode">
+        @Html.AntiForgeryToken()
+    </form>
 
     <!-- ════════════════════════════════════════ -->
     <!-- ─── CREATE VIRTUAL CHANNEL MODAL DIALOG ─── -->
@@ -3239,9 +3326,9 @@
                 hoveredRateIndex: null,
                 hoveredRateName: '',
                 hoveredRatePercent: 0,
-                searchQuery: '',
-                filterPriority: '',
-                filterAssignee: '',
+                searchQuery: sessionStorage.getItem('unigrid_kanban_searchQuery_' + '@Model.Workspace.JoinCode') || '',
+                filterPriority: sessionStorage.getItem('unigrid_kanban_filterPriority_' + '@Model.Workspace.JoinCode') || '',
+                filterAssignee: sessionStorage.getItem('unigrid_kanban_filterAssignee_' + '@Model.Workspace.JoinCode') || '',
                 filterDate: '@Model.DateFilter',
                 calendarOpen: false,
                 calendarYear: new Date().getFullYear(),
@@ -3308,6 +3395,7 @@
                 renameOpen: false,
                 renameFileId: null,
                 renameFileName: '',
+                selectedCommentFileName: '',
                 selectedTask: { taskComments: [] },
                 createTaskDate: '',
                 createTaskTime: '09:00',
@@ -3361,6 +3449,8 @@
                 selectedChannelMods: [],
                 tempChannelOwner: '',
                 inviteChannelOpen: false,
+                replyingToMessage: null,
+                replyingToComment: null,
 
                 // Bootstrap data sets serialized from C# models
                 chatMessages: JSON.parse(atob('@Model.SerializeChatMessagesBase64()')),
@@ -4095,6 +4185,48 @@
                     });
                 },
 
+                handleCommentFileChange(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    const maxSize = 10 * 1024 * 1024;
+                    if (file.size > maxSize) {
+                        alert("File size exceeds the 10 MB limit. Please select a smaller file.");
+                        event.target.value = '';
+                        this.selectedCommentFileName = '';
+                        return;
+                    }
+
+                    this.selectedCommentFileName = file.name;
+                },
+                clearCommentFile() {
+                    const input = document.getElementById('task-comment-file-input');
+                    if (input) input.value = '';
+                    this.selectedCommentFileName = '';
+                },
+                getCommentAttachment(content) {
+                    if (!content) return null;
+                    const fileRegex = /\[file:([a-f0-9-]{36})\]/i;
+                    const match = content.match(fileRegex);
+                    if (match) {
+                        const fileId = match[1];
+                        return this.workspaceFiles.find(f => f.id === fileId);
+                    }
+                    return null;
+                },
+                parseCommentContent(content) {
+                    if (!content) return '';
+                    let text = content.replace(/\[file:[a-f0-9-]{36}\]/gi, '').trim();
+                    if (!text) return '<span class="italic text-slate-400 text-xs inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg> Shared document</span>';
+                    
+                    let html = text
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
+                    
+                    return html;
+                },
+
                 parseMessageContent(content) {
                     if (content && content.startsWith('[deleted_message]')) {
                         return '<span class="italic text-slate-400 text-xs inline-flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg> Message revoked</span>';
@@ -4324,6 +4456,9 @@
                 },
 
                 selectTask(taskJsonBase64) {
+                    this.selectedCommentFileName = '';
+                    const commentInput = document.getElementById('task-comment-file-input');
+                    if (commentInput) commentInput.value = '';
                     let task = JSON.parse(atob(taskJsonBase64));
                     this.selectedTask = task;
                     if (task) {
@@ -4387,6 +4522,9 @@
                     if (this.selectedAttachmentId) {
                         formData.append('selectedFileId', this.selectedAttachmentId);
                     }
+                    if (this.replyingToMessage) {
+                        formData.append('parentId', this.replyingToMessage.id);
+                    }
 
                     const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
                     if (tokenInput) {
@@ -4407,6 +4545,7 @@
                             this.chatInput = '';
                             this.selectedAttachmentId = null;
                             this.selectedAttachmentName = '';
+                            this.replyingToMessage = null;
                         } else {
                             console.error('Failed to send chat message.');
                         }
@@ -4417,11 +4556,19 @@
                 },
 
                 sendTaskCommentViaAjax() {
-                    if (!this.newCommentContent.trim()) return;
+                    const fileInput = document.getElementById('task-comment-file-input');
+                    const hasFile = fileInput && fileInput.files.length > 0;
+                    if (!this.newCommentContent.trim() && !hasFile) return;
 
                     const formData = new FormData();
                     formData.append('CommentContent', this.newCommentContent);
                     formData.append('commentTaskId', this.selectedTask.id);
+                    if (hasFile) {
+                        formData.append('CommentFile', fileInput.files[0]);
+                    }
+                    if (this.replyingToComment) {
+                        formData.append('CommentParentId', this.replyingToComment.id);
+                    }
 
                     const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
                     if (tokenInput) {
@@ -4431,6 +4578,7 @@
                     const joinCode = '@Model.Workspace.JoinCode';
                     const content = this.newCommentContent;
                     this.newCommentContent = '';
+                    this.clearCommentFile();
 
                     fetch(`/WorkspaceDetail/${joinCode}?handler=AddTaskComment`, {
                         method: 'POST',
@@ -4443,18 +4591,32 @@
                         if (res.ok) {
                             const data = await res.json();
                             if (data && data.id) {
+                                if (data.uploadedFile) {
+                                    if (!this.workspaceFiles.some(f => f.id === data.uploadedFile.id)) {
+                                        this.workspaceFiles.unshift(data.uploadedFile);
+                                    }
+                                }
                                 if (!this.selectedTask.taskComments) this.selectedTask.taskComments = [];
                                 if (!this.selectedTask.taskComments.some(c => c.id === data.id)) {
                                     this.selectedTask.taskComments.push({
                                         id: data.id,
                                         content: data.content,
                                         createdAt: data.createdAt,
-                                        user: { fullName: data.userName }
+                                        user: { fullName: data.userName },
+                                        parentId: data.parentId
+                                    });
+                                    this.replyingToComment = null;
+                                    this.$nextTick(() => {
+                                        const commentsContainer = document.querySelector('.max-h-\\[220px\\].overflow-y-auto');
+                                        if (commentsContainer) {
+                                            commentsContainer.scrollTop = commentsContainer.scrollHeight;
+                                        }
                                     });
                                 }
                             }
                         } else {
-                            console.error('Failed to post task comment.');
+                            const errData = await res.json().catch(() => ({}));
+                            alert(errData.message || 'Failed to post task comment.');
                             this.newCommentContent = content; // restore on error
                         }
                     })
@@ -4471,6 +4633,15 @@
                     this.initKpiData();
                     this.initCalendar();
                     this.$watch('globalSearchQuery', value => this.searchQuery = value);
+                    this.$watch('searchQuery', value => {
+                        sessionStorage.setItem('unigrid_kanban_searchQuery_' + '@Model.Workspace.JoinCode', value);
+                    });
+                    this.$watch('filterPriority', value => {
+                        sessionStorage.setItem('unigrid_kanban_filterPriority_' + '@Model.Workspace.JoinCode', value);
+                    });
+                    this.$watch('filterAssignee', value => {
+                        sessionStorage.setItem('unigrid_kanban_filterAssignee_' + '@Model.Workspace.JoinCode', value);
+                    });
                     this.$watch('filterDate', value => {
                         if (value !== '@Model.DateFilter') {
                             const joinCode = '@Model.Workspace.JoinCode';
@@ -4542,11 +4713,17 @@
                         if (this.selectedTask && this.selectedTask.id === payload.taskId) {
                             if (!this.selectedTask.taskComments) this.selectedTask.taskComments = [];
                             if (!this.selectedTask.taskComments.some(c => c.id === payload.id)) {
+                                if (payload.uploadedFile) {
+                                    if (!this.workspaceFiles.some(f => f.id === payload.uploadedFile.id)) {
+                                        this.workspaceFiles.unshift(payload.uploadedFile);
+                                    }
+                                }
                                 this.selectedTask.taskComments.push({
                                     id: payload.id,
                                     content: payload.content,
                                     createdAt: payload.createdAt,
-                                    user: { fullName: payload.userName }
+                                    user: { fullName: payload.userName },
+                                    parentId: payload.parentId
                                 });
                                 
                                 this.$nextTick(() => {

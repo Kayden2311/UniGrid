@@ -44,8 +44,8 @@ namespace unigrid.Controllers
             }
 
             // Forward history to the assistant service so Python receives conversation turns
-            var reply = await _assistantService.AskAsync(user.Id, req.Message ?? string.Empty, req.History);
-            return Ok(new AssistantResponse { Reply = reply });
+            var response = await _assistantService.AskAsync(user.Id, req.Message ?? string.Empty, req.History);
+            return Ok(response);
         }
     }
 }

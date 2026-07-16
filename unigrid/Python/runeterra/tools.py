@@ -9,12 +9,9 @@ Design rules baked into every tool below:
    schedule."
 2. Reads use parameterized SQL Server queries only. No string interpolation
    of values into SQL text.
-3. The only mutation is `reschedule_event`. It now writes directly to
-   SQL Server with a parameterized UPDATE (see
-   db.reschedule_personal_schedule_event), wrapped in a transaction that
-   also re-implements the "no double-booking" conflict check -- that
-   check used to live only in the backend API, and now that mutations
-   no longer go through the backend, this tool is the one enforcing it.
+3. Mutations write directly to SQL Server through narrow, parameterized
+   db helpers wrapped in transactions. The helpers enforce ownership,
+   "not disabled", unscheduled-task, and no-overlap checks before writing.
 4. Week/date math is resolved in Python (week_utils.py) before the LLM
    ever sees it, so "this week" / "next week" always map to the correct
    calendar dates.
@@ -27,14 +24,18 @@ from langchain.tools import tool
 from langchain_core.messages import ToolMessage
 from langchain_core.messages.tool import ToolCall
 from langchain_core.tools import BaseTool
-from runeterra.context import current_user_id
+from runeterra.context import current_user_id, schedule_data_changed
 
 from runeterra.db import (
     run_query,
     rows_to_dicts,
     reschedule_personal_schedule_event,
+    schedule_unscheduled_task,
     EventNotFoundError,
     ScheduleConflictError,
+    TaskAlreadyScheduledError,
+    TaskDueDateViolationError,
+    TaskNotFoundError,
 )
 from runeterra.week_utils import get_week_range, resolve_relative_week
 from runeterra.logging import log, log_panel
@@ -75,8 +76,10 @@ def _format_for_user(dt_value) -> str:
 def get_available_tools() -> List[BaseTool]:
     return [
         get_schedule_for_week,
+        get_unscheduled_tasks,
         get_event_details,
         reschedule_event,
+        schedule_task,
     ]
 
 
@@ -92,6 +95,8 @@ def call_tool(tool_call: ToolCall) -> Any:
     args = dict(tool_call["args"])
     args.pop("user_id", None)  # defensively strip; user_id is never LLM-supplied
     response = tool_obj.invoke(args)
+    if tool_call["name"] in {"schedule_task", "reschedule_event"} and str(response).startswith("Done"):
+        schedule_data_changed.set(True)
     return ToolMessage(content=str(response), tool_call_id=tool_call["id"])
 
 
@@ -135,8 +140,9 @@ def get_schedule_for_week(week_offset: int = 0) -> str:
         SELECT "Id", "Title", "StartTime", "EndTime", "TimeZone", "TaskId"
         FROM "PersonalSchedules"
         WHERE "UserId" = %s
+          AND "IsDisabled" = FALSE
           AND "StartTime" >= %s
-          AND "EndTime" < %s::date + INTERVAL '1 day'
+          AND "EndTime" < (%s::date + INTERVAL '1 day')
         ORDER BY "StartTime" ASC
     """
     columns, rows = run_query(sql, (user_id, week.start.isoformat(), week.end.isoformat()))
@@ -163,6 +169,89 @@ def get_schedule_for_week(week_offset: int = 0) -> str:
 
 
 @tool(parse_docstring=False)
+def get_unscheduled_tasks(search_text: Optional[str] = None, limit: int = 20) -> str:
+    """
+    Retrieves active Tasks assigned to the current user that do not already
+    have an active PersonalSchedules row.
+
+    Args:
+        search_text: Optional title/description text to narrow results.
+        limit: Maximum number of tasks to return. Clamped between 1 and 50.
+
+    Returns:
+        Matching unscheduled tasks. Each task contains a TASK_ID for use
+        with schedule_task. TASK_ID is internal and must never be shown in
+        final user-facing responses.
+    """
+    user_id = current_user_id.get()
+
+    if not user_id:
+        raise ValueError(
+            "Authenticated user ID was not injected."
+        )
+
+    safe_limit = max(1, min(int(limit or 20), 50))
+    params = [user_id]
+    search_clause = ""
+    if search_text:
+        like_value = f"%{search_text.strip()}%"
+        search_clause = 'AND (t."Title" ILIKE %s OR t."Description" ILIKE %s)'
+        params.extend([like_value, like_value])
+
+    sql = f"""
+        SELECT
+            t."Id",
+            t."Title",
+            t."Description",
+            t."Priority",
+            t."Status",
+            t."DueDate",
+            t."IsCounterTask",
+            t."TargetCount",
+            t."CurrentCount"
+        FROM "Tasks" t
+        WHERE t."AssigneeId" = %s
+          AND t."IsDisabled" = FALSE
+          {search_clause}
+          AND NOT EXISTS (
+              SELECT 1
+              FROM "PersonalSchedules" ps
+              WHERE ps."TaskId" = t."Id"
+                AND ps."IsDisabled" = FALSE
+          )
+        ORDER BY
+            CASE WHEN t."DueDate" IS NULL THEN 1 ELSE 0 END,
+            t."DueDate" ASC,
+            t."Priority" DESC,
+            t."CreatedAt" ASC
+        LIMIT %s
+    """
+    params.append(safe_limit)
+    columns, rows = run_query(sql, tuple(params))
+    tasks = rows_to_dicts(columns, rows)
+
+    if not tasks:
+        if search_text:
+            return f"No unscheduled tasks found matching '{search_text}'."
+        return "No unscheduled tasks found for your account."
+
+    lines = ["Unscheduled tasks:"]
+    for task in tasks:
+        task_id = str(task.get("Id"))
+        title = task.get("Title", "Untitled")
+        due_date = task.get("DueDate")
+        due_text = _format_for_user(due_date) if due_date else "No due date"
+        counter_text = ""
+        if task.get("IsCounterTask"):
+            counter_text = f" ({task.get('CurrentCount')}/{task.get('TargetCount')})"
+        lines.append(
+            f"[TASK_ID={task_id}] {title}{counter_text} -- due: {due_text}, "
+            f"priority: {task.get('Priority')}, status: {task.get('Status')}"
+        )
+    return "\n".join(lines)
+
+
+@tool(parse_docstring=False)
 def get_event_details(event_id: str) -> str:
     """
     Retrieves full details for a single personal schedule event, only if
@@ -178,7 +267,7 @@ def get_event_details(event_id: str) -> str:
     sql = """
         SELECT "Id", "Title", "StartTime", "EndTime", "TimeZone", "TaskId"
         FROM "PersonalSchedules"
-        WHERE "Id" = %s AND "UserId" = %s
+        WHERE "Id" = %s AND "UserId" = %s AND "IsDisabled" = FALSE
     """
 
     user_id = current_user_id.get()
@@ -187,9 +276,6 @@ def get_event_details(event_id: str) -> str:
         raise ValueError(
             "Authenticated user ID was not injected."
         )
-
-    print("event_id =", repr(event_id))
-    print("user_id =", repr(user_id))
 
     columns, rows = run_query(sql, (event_id, user_id))
     events = rows_to_dicts(columns, rows)
@@ -257,5 +343,63 @@ def reschedule_event(
     except ScheduleConflictError as e:
         log(f"[red]Reschedule conflict: {e}[/red]")
         return f"Could not reschedule that event: {e}"
+    except ValueError:
+        return "That date or time wasn't in a valid format -- please use YYYY-MM-DD and HH:MM (24h)."
+
+
+@tool(parse_docstring=False)
+def schedule_task(
+    task_id: str,
+    start_time: str,
+    end_time: str,
+    time_zone: str = "UTC",
+) -> str:
+    """
+    Schedules one active, unscheduled task assigned to the current user by
+    creating a PersonalSchedules row linked to Tasks.Id.
+
+    Args:
+        task_id: The id of the Tasks row to schedule. Get this from
+            get_unscheduled_tasks first -- never guess an id, never ask the
+            user for one, and never use an id typed by the user.
+        start_time: UTC start datetime in ISO-like SQL format, e.g.
+            2026-07-02 03:30:00.
+        end_time: UTC end datetime in ISO-like SQL format. Must be later
+            than start_time.
+        time_zone: IANA or display timezone to store with the schedule row.
+            Use UTC unless the user explicitly gave another timezone.
+
+    Returns:
+        Confirmation of the new schedule, or an explanation of why the task
+        could not be scheduled.
+    """
+    user_id = current_user_id.get()
+
+    if not user_id:
+        raise ValueError(
+            "Authenticated user ID was not injected."
+        )
+
+    try:
+        result = schedule_unscheduled_task(
+            user_id=user_id,
+            task_id=task_id,
+            start_time=start_time,
+            end_time=end_time,
+            time_zone=time_zone,
+        )
+        return (
+            f"Done -- scheduled '{result['title']}' from "
+            f"{_format_for_user(result['start_time'])} to {_format_for_user(result['end_time'])}."
+        )
+    except TaskNotFoundError as e:
+        return str(e)
+    except TaskAlreadyScheduledError as e:
+        return str(e)
+    except TaskDueDateViolationError as e:
+        return str(e)
+    except ScheduleConflictError as e:
+        log(f"[red]Schedule conflict: {e}[/red]")
+        return f"Could not schedule that task: {e}"
     except ValueError:
         return "That date or time wasn't in a valid format -- please use YYYY-MM-DD and HH:MM (24h)."

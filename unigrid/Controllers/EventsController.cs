@@ -23,6 +23,61 @@ namespace unigrid.Controllers
             _logger = logger;
         }
 
+        [HttpGet("snapshot")]
+        public async Task<IActionResult> GetSnapshot()
+        {
+            var accountIdClaim = User.FindFirst("AccountId")?.Value;
+            if (!Guid.TryParse(accountIdClaim, out var accountId))
+            {
+                return Unauthorized();
+            }
+
+            var userProfile = await _context.Users.FirstOrDefaultAsync(u => u.AccountId == accountId);
+            if (userProfile == null)
+            {
+                return Unauthorized();
+            }
+
+            var eventEntities = await _context.PersonalSchedules
+                .Where(e => !e.IsDisabled && e.UserId == userProfile.Id)
+                .ToListAsync();
+            var events = eventEntities.Select(e => new
+            {
+                id = e.Id,
+                title = e.Title,
+                description = e.Description ?? string.Empty,
+                startTime = e.StartTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                endTime = e.EndTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                taskId = e.TaskId,
+                timeZone = e.TimeZone ?? "UTC"
+            });
+
+            var taskEntities = await _context.Tasks
+                .Include(t => t.Workspace)
+                .Where(t => !t.IsDisabled && t.AssigneeId == userProfile.Id)
+                .ToListAsync();
+            var tasks = taskEntities.Select(t =>
+            {
+                var dueDate = t.DueDate;
+                if (dueDate.HasValue && dueDate.Value.TimeOfDay == TimeSpan.Zero)
+                {
+                    dueDate = dueDate.Value.Date.AddHours(23).AddMinutes(50);
+                }
+                return new
+                {
+                    id = t.Id,
+                    title = t.Title,
+                    description = t.Description ?? string.Empty,
+                    workspaceName = t.Workspace?.Name ?? "Workspace",
+                    workspaceJoinCode = t.Workspace?.JoinCode ?? string.Empty,
+                    dueDate = dueDate?.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    priority = t.Priority == 3 ? "high" : (t.Priority == 2 ? "medium" : "low")
+                };
+            });
+
+            return Ok(new { events, tasks });
+        }
+
         [HttpPatch("{id}/time")]
         public async Task<IActionResult> UpdateEventTime(Guid id, [FromBody] UpdateEventTimeRequest request)
         {

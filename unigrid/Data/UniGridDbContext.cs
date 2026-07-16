@@ -155,6 +155,10 @@ public partial class UniGridDbContext : DbContext
                 .HasForeignKey(d => d.SenderId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Messages_Users");
+
+            entity.HasOne(d => d.Parent).WithMany(p => p.Replies)
+                .HasForeignKey(d => d.ParentId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<ChatRoom>(entity =>
@@ -251,6 +255,10 @@ public partial class UniGridDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Comments_Users");
+
+            entity.HasOne(d => d.Parent).WithMany(p => p.Replies)
+                .HasForeignKey(d => d.ParentId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<User>(entity =>

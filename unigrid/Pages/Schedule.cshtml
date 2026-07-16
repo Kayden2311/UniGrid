@@ -120,7 +120,8 @@
                     @for (int dayIdx = 0; dayIdx < 7; dayIdx++)
                     {
                         var dIdx = dayIdx;
-                        <div class="border-r border-slate-200 last:border-r-0 relative h-full bg-white overflow-hidden">
+                        <div class="border-r border-slate-200 last:border-r-0 relative h-full bg-white"
+                             :class="mode === 'moving' && movingTask && movingTask.sourceDayIdx === @dIdx ? 'overflow-visible z-[60]' : 'overflow-hidden z-0'">
                              
                              <!-- Half-hour grid lines and triggers -->
                              @for (int slotIdx = 0; slotIdx < 48; slotIdx++)

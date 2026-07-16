@@ -1,34 +1,43 @@
-"""
-PostgreSQL (Supabase) data access layer.
+"""PostgreSQL/Supabase data access for the scheduling chatbot.
 
-Reads are plain parameterized SELECTs (run_query / with_pg_cursor).
-The one write path is reschedule_personal_schedule_event(), which moves
-a PersonalSchedules row via a parameterized UPDATE inside a transaction,
-with a conflict check using SELECT ... FOR UPDATE to prevent double-booking.
-
-All queries use %s placeholders (psycopg2 style). Never interpolate
-user or LLM-provided values directly into SQL strings.
+All values are parameterized with psycopg2 ``%s`` placeholders. Reads use
+short-lived autocommit connections. Schedule mutations run in transactions
+and lock the relevant rows while ownership, due-date, and overlap checks are
+performed.
 """
 
-import psycopg2
-import psycopg2.extras
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Any, Iterable, List, Optional, Sequence
 from uuid import UUID
+
+import psycopg2
 
 from runeterra.config import Config
 from runeterra.logging import log
 
 
 class EventNotFoundError(Exception):
-    """No PersonalSchedules row with that id belongs to this user."""
+    """No active PersonalSchedules row belongs to this user."""
 
 
 class ScheduleConflictError(Exception):
-    """Another event already occupies the requested date/time slot."""
+    """Another event overlaps the requested date/time slot."""
 
 
-def _create_connection(autocommit: bool = True) -> psycopg2.extensions.connection:
+class TaskNotFoundError(Exception):
+    """No active unscheduled Tasks row belongs to this user."""
+
+
+class TaskAlreadyScheduledError(Exception):
+    """The requested task already has an active PersonalSchedules row."""
+
+
+class TaskDueDateViolationError(Exception):
+    """The requested schedule is after the task's due date."""
+
+
+def _create_connection(autocommit: bool = True):
     conn = psycopg2.connect(**Config.Postgres.connection_kwargs())
     conn.autocommit = autocommit
     return conn
@@ -36,7 +45,6 @@ def _create_connection(autocommit: bool = True) -> psycopg2.extensions.connectio
 
 @contextmanager
 def with_pg_cursor():
-    """Read path -- autocommit connection for plain SELECTs."""
     conn = _create_connection(autocommit=True)
     cur = conn.cursor()
     try:
@@ -48,7 +56,6 @@ def with_pg_cursor():
 
 @contextmanager
 def with_pg_transaction():
-    """Write path -- autocommit OFF, commit on success, rollback on error."""
     conn = _create_connection(autocommit=False)
     cur = conn.cursor()
     try:
@@ -62,16 +69,13 @@ def with_pg_transaction():
         conn.close()
 
 
-# Keep old names as aliases so tools.py needs no changes
+# Compatibility aliases for existing imports.
 with_sql_cursor = with_pg_cursor
 with_sql_transaction = with_pg_transaction
 
 
 def run_query(sql: str, params: Sequence[Any] = ()):
-    """
-    Executes a parameterized SELECT and returns (columns, rows).
-    Uses %s placeholders (psycopg2 style).
-    """
+    """Execute a parameterized SELECT and return ``(columns, rows)``."""
     log(f"[SQL] {sql} | params={params}")
     with with_pg_cursor() as cursor:
         cursor.execute(sql, params)
@@ -84,11 +88,24 @@ def rows_to_dicts(columns: List[str], rows: Iterable[tuple]) -> List[dict]:
     return [dict(zip(columns, row)) for row in rows]
 
 
-def validate_guid(value, name):
+def _parse_datetime(value: Any, name: str) -> datetime:
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        try:
+            dt = datetime.fromisoformat(str(value).strip())
+        except Exception as exc:
+            raise ValueError(f"{name} is not a valid datetime.") from exc
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def validate_guid(value: Any, name: str) -> UUID:
     try:
-        UUID(str(value))
-    except Exception:
-        raise ValueError(f"{name} is not a valid GUID: {value}")
+        return UUID(str(value))
+    except Exception as exc:
+        raise ValueError(f"{name} is not a valid GUID: {value}") from exc
 
 
 def reschedule_personal_schedule_event(
@@ -97,48 +114,41 @@ def reschedule_personal_schedule_event(
     new_start_time: Optional[str] = None,
     new_end_time: Optional[str] = None,
 ) -> dict:
-    """
-    Moves one PersonalSchedules row owned by `user_id` to a new date/time.
-    Runs as a single transaction:
-      1. Lock + fetch the target event (must belong to user_id).
-      2. Check for any other event at the same slot (FOR UPDATE lock).
-      3. UPDATE if clear.
-
-    Raises:
-        EventNotFoundError: no such event for this user.
-        ScheduleConflictError: another event already occupies that slot.
-        ValueError: invalid GUID or datetime string.
-    """
-    validate_guid(user_id, "user_id")
-    validate_guid(event_id, "event_id")
+    user_uuid = validate_guid(user_id, "user_id")
+    event_uuid = validate_guid(event_id, "event_id")
+    parsed_start = _parse_datetime(new_start_time, "new_start_time")
+    parsed_end = _parse_datetime(new_end_time, "new_end_time")
+    if parsed_end <= parsed_start:
+        raise ValueError("new_end_time must be later than new_start_time.")
 
     with with_pg_transaction() as cur:
-        # Step 1: lock and fetch the target event
+        # Serialize schedule mutations per user, including concurrent inserts
+        # for which no row exists yet to lock.
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (str(user_uuid),))
         cur.execute(
             """
             SELECT "StartTime", "EndTime"
             FROM "PersonalSchedules"
-            WHERE "Id" = %s AND "UserId" = %s
+            WHERE "Id" = %s AND "UserId" = %s AND "IsDisabled" = FALSE
             FOR UPDATE
             """,
-            (event_id, user_id),
+            (str(event_uuid), str(user_uuid)),
         )
-        row = cur.fetchone()
-        if row is None:
+        if cur.fetchone() is None:
             raise EventNotFoundError("No event found with that id on your schedule.")
 
-        # Step 2: conflict check
         cur.execute(
             """
             SELECT "Id", "Title"
             FROM "PersonalSchedules"
             WHERE "UserId" = %s
-              AND "StartTime" = %s
-              AND "EndTime" = %s
+              AND "IsDisabled" = FALSE
+              AND "StartTime" < %s
+              AND "EndTime" > %s
               AND "Id" <> %s
             FOR UPDATE
             """,
-            (user_id, new_start_time, new_end_time, event_id),
+            (str(user_uuid), parsed_end, parsed_start, str(event_uuid)),
         )
         conflict = cur.fetchone()
         if conflict is not None:
@@ -146,17 +156,109 @@ def reschedule_personal_schedule_event(
                 f"That slot is already taken by another event on your schedule ('{conflict[1]}')."
             )
 
-        # Step 3: update
         cur.execute(
             """
             UPDATE "PersonalSchedules"
             SET "StartTime" = %s, "EndTime" = %s
-            WHERE "Id" = %s AND "UserId" = %s
+            WHERE "Id" = %s AND "UserId" = %s AND "IsDisabled" = FALSE
             """,
-            (new_start_time, new_end_time, event_id, user_id),
+            (parsed_start, parsed_end, str(event_uuid), str(user_uuid)),
         )
         if cur.rowcount == 0:
             raise EventNotFoundError("No event found with that id on your schedule.")
 
-    log(f"[SQL] Rescheduled event {event_id} for user_id={user_id} -> {new_start_time} to {new_end_time}")
-    return {"event_id": event_id, "new_event_date": f"{new_start_time} to {new_end_time}"}
+    log(f"[SQL] Rescheduled event {event_uuid} for user_id={user_uuid}")
+    return {"event_id": str(event_uuid), "new_event_date": f"{parsed_start} to {parsed_end}"}
+
+
+def schedule_unscheduled_task(
+    user_id: str,
+    task_id: str,
+    start_time: str,
+    end_time: str,
+    time_zone: str = "UTC",
+) -> dict:
+    user_uuid = validate_guid(user_id, "user_id")
+    task_uuid = validate_guid(task_id, "task_id")
+    parsed_start = _parse_datetime(start_time, "start_time")
+    parsed_end = _parse_datetime(end_time, "end_time")
+    if parsed_end <= parsed_start:
+        raise ValueError("end_time must be later than start_time.")
+    clean_time_zone = (time_zone or "UTC").strip()[:100] or "UTC"
+
+    with with_pg_transaction() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (str(user_uuid),))
+        cur.execute(
+            """
+            SELECT "Id", "Title", "Description", "DueDate"
+            FROM "Tasks"
+            WHERE "Id" = %s
+              AND "AssigneeId" = %s
+              AND "IsDisabled" = FALSE
+            FOR UPDATE
+            """,
+            (str(task_uuid), str(user_uuid)),
+        )
+        task = cur.fetchone()
+        if task is None:
+            raise TaskNotFoundError("No active unscheduled task found for your account.")
+
+        due_date = task[3]
+        if due_date is not None:
+            due_dt = _parse_datetime(due_date, "due_date")
+            if parsed_start.date() > due_dt.date() or parsed_end.date() > due_dt.date():
+                raise TaskDueDateViolationError("That task cannot be scheduled after its due date.")
+
+        cur.execute(
+            """
+            SELECT "Id"
+            FROM "PersonalSchedules"
+            WHERE "TaskId" = %s AND "IsDisabled" = FALSE
+            FOR UPDATE
+            """,
+            (str(task_uuid),),
+        )
+        if cur.fetchone() is not None:
+            raise TaskAlreadyScheduledError("That task is already on a schedule.")
+
+        cur.execute(
+            """
+            SELECT "Id", "Title"
+            FROM "PersonalSchedules"
+            WHERE "UserId" = %s
+              AND "IsDisabled" = FALSE
+              AND "StartTime" < %s
+              AND "EndTime" > %s
+            FOR UPDATE
+            """,
+            (str(user_uuid), parsed_end, parsed_start),
+        )
+        conflict = cur.fetchone()
+        if conflict is not None:
+            raise ScheduleConflictError(
+                f"That slot overlaps another event on your schedule ('{conflict[1]}')."
+            )
+
+        title = str(task[1])[:256]
+        description = task[2]
+        cur.execute(
+            """
+            INSERT INTO "PersonalSchedules"
+                ("UserId", "Title", "Description", "StartTime", "EndTime", "TaskId", "TimeZone")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING "Id"
+            """,
+            (str(user_uuid), title, description, parsed_start, parsed_end, str(task_uuid), clean_time_zone),
+        )
+        schedule_id = cur.fetchone()[0]
+
+    log(f"[SQL] Scheduled task {task_uuid} for user_id={user_uuid}")
+    return {
+        "schedule_id": str(schedule_id),
+        "task_id": str(task_uuid),
+        "title": title,
+        "start_time": str(parsed_start),
+        "end_time": str(parsed_end),
+        "time_zone": clean_time_zone,
+        "due_date": str(due_date) if due_date is not None else None,
+    }

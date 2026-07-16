@@ -6,6 +6,8 @@ function scheduleComponent() {
         events: [],
         workspaceTasks: [],
         tasks: window.scheduleRawTasks || [],
+        assistantRefreshHandler: null,
+        isRefreshingFromAssistant: false,
         
         // Confirmation Modal and Pending states
         confirmDialogOpen: false,
@@ -166,6 +168,11 @@ function scheduleComponent() {
         },
 
         init() {
+            if (!this.assistantRefreshHandler) {
+                this.assistantRefreshHandler = () => this.refreshScheduleSnapshot();
+                window.addEventListener('unigrid:schedule-changed', this.assistantRefreshHandler);
+            }
+
             // Load serialized C# Razor Page models
             let rawEvents = window.scheduleRawEvents || [];
             let rawTasks = window.scheduleRawTasks || [];
@@ -223,6 +230,28 @@ function scheduleComponent() {
 
             this.events = allMapped.filter(e => !e.isTask);
             this.workspaceTasks = allMapped.filter(e => e.isTask);
+        },
+
+        async refreshScheduleSnapshot() {
+            if (this.isRefreshingFromAssistant) return;
+            this.isRefreshingFromAssistant = true;
+            try {
+                const response = await fetch('/api/events/snapshot', {
+                    headers: { 'Accept': 'application/json' },
+                    cache: 'no-store'
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const snapshot = await response.json();
+                window.scheduleRawEvents = Array.isArray(snapshot.events) ? snapshot.events : [];
+                window.scheduleRawTasks = Array.isArray(snapshot.tasks) ? snapshot.tasks : [];
+                this.tasks = window.scheduleRawTasks;
+                this.init();
+            } catch (error) {
+                console.error('Unable to refresh schedule after assistant update:', error);
+            } finally {
+                this.isRefreshingFromAssistant = false;
+            }
         },
 
         get weekDates() {
@@ -851,6 +880,7 @@ function scheduleComponent() {
                 taskId: ev.id,
                 isTask: !!ev.isTask,
                 offsetSlot: offsetSlot,
+                sourceDayIdx: dayIdx,
                 currentDayIdx: dayIdx,
                 currentStartSlot: ev.startSlot
             };

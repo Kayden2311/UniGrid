@@ -1,6 +1,14 @@
 import os
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+# Load the Python service's own .env before class-level settings are evaluated,
+# regardless of the directory from which Uvicorn or tests are launched.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 
 class ModelProvider(str, Enum):
@@ -25,14 +33,14 @@ class Config:
     OLLAMA_CONTEXT_WINDOW = 2048
 
     class Postgres:
-        """
-        PostgreSQL (Supabase) connection settings.
-        """
+        """PostgreSQL/Supabase connection settings for chatbot tools."""
         HOST = os.getenv("PG_HOST", "localhost")
         PORT = int(os.getenv("PG_PORT", 5432))
         USER = os.getenv("PG_USER", "postgres")
         PASSWORD = os.getenv("PG_PASSWORD", "")
         DATABASE = os.getenv("PG_DATABASE", "postgres")
+        SSLMODE = os.getenv("PG_SSLMODE", "require")
+        CONNECT_TIMEOUT = int(os.getenv("PG_CONNECT_TIMEOUT", 10))
 
         @classmethod
         def connection_kwargs(cls) -> dict:
@@ -42,4 +50,6 @@ class Config:
                 "user": cls.USER,
                 "password": cls.PASSWORD,
                 "dbname": cls.DATABASE,
+                "sslmode": cls.SSLMODE,
+                "connect_timeout": cls.CONNECT_TIMEOUT,
             }

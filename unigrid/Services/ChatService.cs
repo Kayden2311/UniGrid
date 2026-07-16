@@ -20,6 +20,7 @@ public class ChatService : IChatService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMemoryCache _cache;
     private readonly IHubContext<ChatHub> _hubContext;
+    private readonly INotificationService _notificationService;
     private readonly ILogger<ChatService> _logger;
 
     public ChatService(
@@ -30,6 +31,7 @@ public class ChatService : IChatService
         IUnitOfWork unitOfWork,
         IMemoryCache cache,
         IHubContext<ChatHub> hubContext,
+        INotificationService notificationService,
         ILogger<ChatService> logger)
     {
         _workspaceRepo = workspaceRepo;
@@ -39,6 +41,7 @@ public class ChatService : IChatService
         _unitOfWork = unitOfWork;
         _cache = cache;
         _hubContext = hubContext;
+        _notificationService = notificationService;
         _logger = logger;
     }
 
@@ -60,7 +63,7 @@ public class ChatService : IChatService
         });
     }
 
-    public async Task<(ChatMessage? message, string? error)> SendChatMessageAsync(Guid workspaceId, Guid userId, string content, string activeChannel, Guid? selectedFileId)
+    public async Task<(ChatMessage? message, string? error)> SendChatMessageAsync(Guid workspaceId, Guid userId, string content, string activeChannel, Guid? selectedFileId, Guid? parentId = null)
     {
         var workspace = await _workspaceRepo.GetByIdAsync(workspaceId);
         if (workspace == null) return (null, "Workspace not found.");
@@ -291,13 +294,49 @@ public class ChatService : IChatService
             SenderId = userId,
             Content = contentWithChannel,
             SentAt = DateTime.UtcNow,
-            IsDeleted = false
+            IsDeleted = false,
+            ParentId = parentId
         };
 
         await _chatRepo.AddMessageAsync(message);
         await _unitOfWork.SaveChangesAsync();
 
         _cache.Remove($"WorkspaceChatMessages_{chatRoom.Id}");
+
+        // Scan for mentions and send notifications
+        if (!string.IsNullOrEmpty(content))
+        {
+            var senderName = user?.FullName ?? "Someone";
+            foreach (var m in members)
+            {
+                if (m.UserId == userId) continue;
+
+                string mentionTag = $"@{m.User.FullName}";
+                if (content.Contains(mentionTag, StringComparison.OrdinalIgnoreCase))
+                {
+                    var truncatedContent = content.Length > 60 ? content.Substring(0, 57) + "..." : content;
+                    
+                    // Clean up any [file:...] or [channel:...] tags
+                    var displayContent = truncatedContent;
+                    var fileRegex = new System.Text.RegularExpressions.Regex(@"\[file:[a-f0-9-]{36}\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    displayContent = fileRegex.Replace(displayContent, "").Trim();
+                    
+                    var channelRegex = new System.Text.RegularExpressions.Regex(@"\[channel:[^\]]+\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    displayContent = channelRegex.Replace(displayContent, "").Trim();
+
+                    var ch = string.IsNullOrEmpty(activeChannel) ? "general" : activeChannel;
+                    var notificationMessage = $"{senderName} mentioned you in #{ch} chat: \"{displayContent}\"";
+                    
+                    await _notificationService.CreateAndSendNotificationAsync(
+                        m.UserId,
+                        notificationMessage,
+                        "ChatMention",
+                        $"/WorkspaceDetail/{workspace.JoinCode}",
+                        message.Id
+                    );
+                }
+            }
+        }
 
         var payload = new
         {
@@ -308,7 +347,8 @@ public class ChatService : IChatService
             content = cleanContent,
             rawContent = message.Content,
             sentAt = message.SentAt,
-            channel = string.IsNullOrEmpty(activeChannel) ? "general" : activeChannel
+            channel = string.IsNullOrEmpty(activeChannel) ? "general" : activeChannel,
+            parentId = message.ParentId
         };
 
         await _hubContext.Clients.Group(workspaceId.ToString()).SendAsync("ReceiveChatMessage", payload);

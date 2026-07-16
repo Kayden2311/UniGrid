@@ -26,12 +26,12 @@ namespace unigrid.Services
             _logger = logger;
         }
 
-        public async Task<string> AskAsync(Guid userId, string message, List<unigrid.Models.AI.AssistantMessage>? history = null)
+        public async Task<unigrid.Models.AI.AssistantResponse> AskAsync(Guid userId, string message, List<unigrid.Models.AI.AssistantMessage>? history = null)
         {
             if (userId == Guid.Empty)
             {
                 _logger.LogWarning("Assistant call attempted with empty user id.");
-                return "Assistant unavailable (invalid user).";
+                return new unigrid.Models.AI.AssistantResponse { Reply = "Assistant unavailable (invalid user)." };
             }
 
             var payload = new AssistantRequest
@@ -57,42 +57,37 @@ namespace unigrid.Services
                 resp.EnsureSuccessStatusCode();
 
                 await using var stream = await resp.Content.ReadAsStreamAsync(cts.Token);
-                var result = await JsonSerializer.DeserializeAsync<AssistantResponse>(stream, _jsonOptions, cts.Token);
+                var result = await JsonSerializer.DeserializeAsync<unigrid.Models.AI.AssistantResponse>(stream, _jsonOptions, cts.Token);
 
                 sw.Stop();
                 _logger.LogInformation("Chatbot responded in {Elapsed}s for user {UserId}", sw.Elapsed.TotalSeconds, userId);
-                return result?.Reply ?? "No response.";
+                return result ?? new unigrid.Models.AI.AssistantResponse { Reply = "No response." };
             }
             catch (System.IO.IOException ioEx)
             {
                 _logger.LogError(ioEx, "I/O error while calling chatbot for user {UserId} after {Elapsed}s", userId, sw.Elapsed.TotalSeconds);
-                return "Assistant connection error. Try again later.";
+                return new unigrid.Models.AI.AssistantResponse { Reply = "Assistant connection error. Try again later." };
             }
             catch (TaskCanceledException tex) when (!cts.IsCancellationRequested)
             {
                 _logger.LogWarning(tex, "Chatbot request canceled (global timeout) for user {UserId} after {Elapsed}s", userId, sw.Elapsed.TotalSeconds);
-                return "Assistant service timed out. Try again shortly.";
+                return new unigrid.Models.AI.AssistantResponse { Reply = "Assistant service timed out. Try again shortly." };
             }
             catch (TaskCanceledException tex)
             {
                 _logger.LogWarning(tex, "Chatbot request canceled by token for user {UserId} after {Elapsed}s", userId, sw.Elapsed.TotalSeconds);
-                return "Assistant request cancelled.";
+                return new unigrid.Models.AI.AssistantResponse { Reply = "Assistant request cancelled." };
             }
             catch (HttpRequestException hex)
             {
                 _logger.LogError(hex, "Network error calling chatbot for user {UserId}", userId);
-                return "Assistant network error.";
+                return new unigrid.Models.AI.AssistantResponse { Reply = "Assistant network error." };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Assistant call failed for user {UserId}", userId);
-                return "Assistant service unavailable.";
+                return new unigrid.Models.AI.AssistantResponse { Reply = "Assistant service unavailable." };
             }
-        }
-
-        private class AssistantResponse
-        {
-            public string Reply { get; set; } = string.Empty;
         }
     }
 }

@@ -4,10 +4,18 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Polly;
 using System.IO;
+using PayOS;
 using unigrid.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
+
+// WebApplication.CreateBuilder automatically loads appsettings.json and then
+// appsettings.{Environment}.json. Local-only secrets must never override the
+// Production/VPS configuration.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
+}
 
 // Add services to the container.
 builder.Services.AddRazorPages()
@@ -24,6 +32,13 @@ builder.Services.AddControllers()
     });
 builder.Services.AddSignalR();
 builder.Services.AddMemoryCache();
+
+// payOS credentials are supplied through PayOS__ClientId, PayOS__ApiKey and
+// PayOS__ChecksumKey environment variables (or local user secrets).
+builder.Services.AddSingleton(_ => new PayOSClient(
+    builder.Configuration["PayOS:ClientId"] ?? string.Empty,
+    builder.Configuration["PayOS:ApiKey"] ?? string.Empty,
+    builder.Configuration["PayOS:ChecksumKey"] ?? string.Empty));
 
 // Register IHttpContextAccessor
 builder.Services.AddHttpContextAccessor();
