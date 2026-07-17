@@ -314,6 +314,50 @@ app.UseWebSockets();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Store one aggregate row per date and page. This intentionally records only
+// page-view counts; it does not store visitor identity, IP address or cookies.
+app.Use(async (context, next) =>
+{
+    await next();
+
+    if (!HttpMethods.IsGet(context.Request.Method) ||
+        context.Response.StatusCode != StatusCodes.Status200OK ||
+        context.Response.ContentType?.StartsWith("text/html", StringComparison.OrdinalIgnoreCase) != true)
+    {
+        return;
+    }
+
+    var path = context.Request.Path.Value ?? "/";
+    if (path.StartsWith("/api", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/chatHub", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/files", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/health", StringComparison.OrdinalIgnoreCase))
+    {
+        return;
+    }
+
+    try
+    {
+        var db = context.RequestServices.GetRequiredService<unigrid.Data.UniGridDbContext>();
+        var trafficDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        var normalizedPath = path.Length <= 500 ? path : path[..500];
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "WebsiteTraffic" ("TrafficDate", "Path", "VisitCount", "UpdatedAt")
+            VALUES ({trafficDate}, {normalizedPath}, 1, CURRENT_TIMESTAMP)
+            ON CONFLICT ("TrafficDate", "Path")
+            DO UPDATE SET
+                "VisitCount" = "WebsiteTraffic"."VisitCount" + 1,
+                "UpdatedAt" = CURRENT_TIMESTAMP;
+            """);
+    }
+    catch (Exception ex)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogWarning(ex, "Could not record website traffic for {Path}.", path);
+    }
+});
+
 app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();

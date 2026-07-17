@@ -58,6 +58,10 @@ public partial class UniGridDbContext : DbContext
 
     public virtual DbSet<SystemSetting> SystemSettings { get; set; }
 
+    public virtual DbSet<WebsiteTraffic> WebsiteTraffic { get; set; }
+
+    public virtual DbSet<MonthlyProjectCost> MonthlyProjectCosts { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)
@@ -527,6 +531,30 @@ public partial class UniGridDbContext : DbContext
             entity.HasIndex(e => e.SettingKey, "UQ_SystemSettings_Key").IsUnique();
             entity.Property(e => e.SettingKey).HasMaxLength(100).IsRequired();
             entity.Property(e => e.SettingValue).IsRequired();
+        });
+
+        modelBuilder.Entity<WebsiteTraffic>(entity =>
+        {
+            entity.ToTable("WebsiteTraffic");
+            entity.HasKey(e => new { e.TrafficDate, e.Path });
+            entity.Property(e => e.TrafficDate).HasColumnType("date");
+            entity.Property(e => e.Path).HasMaxLength(500);
+            entity.Property(e => e.VisitCount).HasDefaultValue(0L);
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<MonthlyProjectCost>(entity =>
+        {
+            entity.ToTable("MonthlyProjectCosts");
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.CostMonth);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.CostMonth).HasColumnType("date");
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Amount).HasColumnType("numeric(18,2)");
+            entity.Property(e => e.IsDisabled).HasDefaultValue(false);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())

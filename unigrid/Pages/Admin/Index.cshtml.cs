@@ -35,6 +35,19 @@ namespace unigrid.Pages.Admin
         public int TotalFilesCount { get; set; }
         public int TotalTasksCount { get; set; }
 
+        // Anonymous website traffic aggregates
+        public long TrafficToday { get; set; }
+        public long TotalTraffic { get; set; }
+        public string TrafficChartLabelsJson { get; set; } = "[]";
+        public string TrafficChartDataJson { get; set; } = "[]";
+        public List<TopTrafficPageItem> TopTrafficPages { get; set; } = new();
+
+        public class TopTrafficPageItem
+        {
+            public string Path { get; set; } = "/";
+            public long VisitCount { get; set; }
+        }
+
         // Income Metrics
         public long ProjectedMonthlyRevenue { get; set; }
         public int ActiveSubscriptionsCount { get; set; }
@@ -56,6 +69,9 @@ namespace unigrid.Pages.Admin
 
         [BindProperty]
         public string PlansJson { get; set; } = "[]";
+
+        [BindProperty]
+        public string CostMonth { get; set; } = string.Empty;
 
         public class PlanBreakdownItem
         {
@@ -88,9 +104,7 @@ namespace unigrid.Pages.Admin
         {
             // Load settings and json configurations
             var settings = unigrid.Models.AdminSettings.Load(_context);
-            OperationCostsJson = JsonSerializer.Serialize(settings.OperationCosts);
             PlansJson = JsonSerializer.Serialize(settings.Plans);
-            TotalCosts = settings.OperationCosts.Where(c => !c.IsDisabled).Sum(c => c.Amount);
 
             // Populate AvailableMonths dropdown (last 6 months)
             var now = DateTime.UtcNow;
@@ -112,6 +126,29 @@ namespace unigrid.Pages.Admin
                     Selected = (SelectedMonth == value)
                 });
             }
+
+            var selectedCostMonth = ResolveMonth(SelectedMonth, now);
+            CostMonth = selectedCostMonth.ToString("yyyy-MM");
+            var savedMonthlyCosts = await _context.MonthlyProjectCosts
+                .AsNoTracking()
+                .Where(c => c.CostMonth == selectedCostMonth)
+                .OrderBy(c => c.Id)
+                .ToListAsync();
+
+            // Use the existing configured costs as the editable starting point for
+            // the current month only. Historical months start empty until entered.
+            var displayedCosts = savedMonthlyCosts.Count > 0
+                ? savedMonthlyCosts.Select(c => new OperationCostSetting
+                {
+                    Name = c.Name,
+                    Amount = c.Amount,
+                    IsDisabled = c.IsDisabled
+                }).ToList()
+                : selectedCostMonth == new DateOnly(now.Year, now.Month, 1)
+                    ? settings.OperationCosts
+                    : new List<OperationCostSetting>();
+            OperationCostsJson = JsonSerializer.Serialize(displayedCosts);
+            TotalCosts = displayedCosts.Where(c => !c.IsDisabled).Sum(c => c.Amount);
 
             // Fetch accounts and users
             TotalAccounts = await _context.Accounts.CountAsync();
@@ -339,6 +376,14 @@ namespace unigrid.Pages.Admin
             var revenueData = new List<decimal>();
             var costData = new List<decimal>();
             var profitData = new List<decimal>();
+            var chartStartMonth = new DateOnly(now.AddMonths(-5).Year, now.AddMonths(-5).Month, 1);
+            var chartCosts = await _context.MonthlyProjectCosts
+                .AsNoTracking()
+                .Where(c => c.CostMonth >= chartStartMonth && !c.IsDisabled)
+                .ToListAsync();
+            var costsByMonth = chartCosts
+                .GroupBy(c => c.CostMonth)
+                .ToDictionary(g => g.Key, g => g.Sum(c => c.Amount));
 
             for (int i = 5; i >= 0; i--)
             {
@@ -395,15 +440,64 @@ namespace unigrid.Pages.Admin
                     }
                 }
 
+                var chartMonth = new DateOnly(monthDate.Year, monthDate.Month, 1);
+                var monthlyCost = costsByMonth.GetValueOrDefault(chartMonth);
+                if (chartMonth == selectedCostMonth && savedMonthlyCosts.Count == 0)
+                {
+                    monthlyCost = TotalCosts;
+                }
+
                 revenueData.Add(monthlyRev);
-                costData.Add(TotalCosts); // Constant operational fee
-                profitData.Add(monthlyRev - TotalCosts); // Profit = Rev - Cost
+                costData.Add(monthlyCost);
+                profitData.Add(monthlyRev - monthlyCost);
             }
 
             ChartLabelsJson = JsonSerializer.Serialize(labels);
             RevenueChartDataJson = JsonSerializer.Serialize(revenueData);
             CostChartDataJson = JsonSerializer.Serialize(costData);
             ProfitChartDataJson = JsonSerializer.Serialize(profitData);
+
+            // Anonymous page-view traffic for the Admin dashboard.
+            var trafficToday = DateOnly.FromDateTime(DateTime.UtcNow);
+            var trafficStartDate = trafficToday.AddDays(-13);
+            var recentTraffic = await _context.WebsiteTraffic
+                .AsNoTracking()
+                .Where(t => t.TrafficDate >= trafficStartDate)
+                .ToListAsync();
+
+            TrafficToday = recentTraffic
+                .Where(t => t.TrafficDate == trafficToday)
+                .Sum(t => t.VisitCount);
+            TotalTraffic = await _context.WebsiteTraffic
+                .AsNoTracking()
+                .SumAsync(t => (long?)t.VisitCount) ?? 0;
+
+            var trafficByDate = recentTraffic
+                .GroupBy(t => t.TrafficDate)
+                .ToDictionary(g => g.Key, g => g.Sum(t => t.VisitCount));
+            var trafficLabels = new List<string>();
+            var trafficValues = new List<long>();
+            for (var date = trafficStartDate; date <= trafficToday; date = date.AddDays(1))
+            {
+                trafficLabels.Add(date.ToString("dd/MM"));
+                trafficValues.Add(trafficByDate.GetValueOrDefault(date));
+            }
+
+            TrafficChartLabelsJson = JsonSerializer.Serialize(trafficLabels);
+            TrafficChartDataJson = JsonSerializer.Serialize(trafficValues);
+
+            var topTrafficPages = await _context.WebsiteTraffic
+                .AsNoTracking()
+                .GroupBy(t => t.Path)
+                .Select(g => new { Path = g.Key, VisitCount = g.Sum(t => t.VisitCount) })
+                .OrderByDescending(t => t.VisitCount)
+                .Take(5)
+                .ToListAsync();
+            TopTrafficPages = topTrafficPages.Select(t => new TopTrafficPageItem
+            {
+                Path = t.Path,
+                VisitCount = t.VisitCount
+            }).ToList();
 
             // Recent system activities (Audit Logs)
             RecentAuditLogs = await _context.AuditLogs
@@ -425,9 +519,54 @@ namespace unigrid.Pages.Admin
                 return RedirectToPage();
             }
 
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            List<OperationCostSetting> costs;
+            try
+            {
+                costs = JsonSerializer.Deserialize<List<OperationCostSetting>>(OperationCostsJson, options) ?? new();
+            }
+            catch (JsonException)
+            {
+                StatusMessage = "Error: Invalid operational cost data.";
+                return RedirectToPage(new { SelectedMonth = CostMonth });
+            }
+
+            if (!DateOnly.TryParseExact($"{CostMonth}-01", "yyyy-MM-dd", out var costMonth) ||
+                costs.Any(c => string.IsNullOrWhiteSpace(c.Name) || c.Amount < 0))
+            {
+                StatusMessage = "Error: Invalid month or operational cost values.";
+                return RedirectToPage(new { SelectedMonth = CostMonth });
+            }
+
+            var existingCosts = await _context.MonthlyProjectCosts
+                .Where(c => c.CostMonth == costMonth)
+                .ToListAsync();
+            _context.MonthlyProjectCosts.RemoveRange(existingCosts);
+            _context.MonthlyProjectCosts.AddRange(costs.Select(c => new MonthlyProjectCost
+            {
+                CostMonth = costMonth,
+                Name = c.Name.Trim(),
+                Amount = c.Amount,
+                IsDisabled = c.IsDisabled,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            }));
+            await _context.SaveChangesAsync();
+
             SaveSettings();
-            StatusMessage = "Success: Operational fee settings saved successfully.";
-            return RedirectToPage();
+            StatusMessage = $"Success: Costs for {costMonth:MM/yyyy} saved successfully.";
+            return RedirectToPage(new { SelectedMonth = CostMonth });
+        }
+
+        private static DateOnly ResolveMonth(string? selectedMonth, DateTime now)
+        {
+            if (!string.IsNullOrWhiteSpace(selectedMonth) && selectedMonth != "current" &&
+                DateOnly.TryParseExact($"{selectedMonth}-01", "yyyy-MM-dd", out var parsed))
+            {
+                return parsed;
+            }
+
+            return new DateOnly(now.Year, now.Month, 1);
         }
 
         private void LoadSettings()
@@ -441,19 +580,9 @@ namespace unigrid.Pages.Admin
         private void SaveSettings()
         {
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var settings = new unigrid.Models.AdminSettings();
-
-            if (!string.IsNullOrWhiteSpace(OperationCostsJson))
-            {
-                try
-                {
-                    settings.OperationCosts = JsonSerializer.Deserialize<List<OperationCostSetting>>(OperationCostsJson, options) ?? new();
-                }
-                catch (JsonException)
-                {
-                    settings.OperationCosts = unigrid.Models.AdminSettings.Load(_context).OperationCosts;
-                }
-            }
+            // Monthly costs are stored in MonthlyProjectCosts. Keep the legacy
+            // OperationCosts setting only as the initial template for this month.
+            var settings = unigrid.Models.AdminSettings.Load(_context);
 
             if (!string.IsNullOrWhiteSpace(PlansJson))
             {

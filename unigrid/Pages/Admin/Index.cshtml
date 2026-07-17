@@ -140,6 +140,63 @@
         </div>
     </div>
 
+    <!-- Website Traffic -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="lg:col-span-2 glass p-8 rounded-[2.5rem] shadow-sm min-h-[390px]">
+            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-5 mb-7">
+                <div>
+                    <h3 class="text-lg font-black text-slate-800 font-display">Website Traffic</h3>
+                    <p class="text-xs text-slate-400 mt-1">Page views over the last 14 days. No visitor identity is stored.</p>
+                </div>
+                <div class="flex gap-3">
+                    <div class="bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 min-w-[110px]">
+                        <p class="text-[9px] font-black uppercase tracking-widest text-indigo-500">Today</p>
+                        <p class="text-xl font-black text-indigo-700 mt-1">@Model.TrafficToday.ToString("N0")</p>
+                    </div>
+                    <div class="bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3 min-w-[110px]">
+                        <p class="text-[9px] font-black uppercase tracking-widest text-emerald-500">All time</p>
+                        <p class="text-xl font-black text-emerald-700 mt-1">@Model.TotalTraffic.ToString("N0")</p>
+                    </div>
+                </div>
+            </div>
+            <div class="relative w-full h-[255px]">
+                <canvas id="trafficChart"></canvas>
+            </div>
+        </div>
+
+        <div class="glass p-8 rounded-[2.5rem] shadow-sm">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-lg font-black text-slate-800 font-display">Top Pages</h3>
+                    <p class="text-xs text-slate-400 mt-1">Most viewed pages</p>
+                </div>
+                <div class="h-10 w-10 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+                </div>
+            </div>
+            @if (Model.TopTrafficPages.Count == 0)
+            {
+                <div class="h-56 flex items-center justify-center text-center">
+                    <p class="text-xs text-slate-400">Traffic will appear after pages are visited.</p>
+                </div>
+            }
+            else
+            {
+                <div class="space-y-3">
+                    @for (var i = 0; i < Model.TopTrafficPages.Count; i++)
+                    {
+                        var trafficPage = Model.TopTrafficPages[i];
+                        <div class="flex items-center gap-3 rounded-2xl bg-white/60 border border-slate-100 px-3 py-2.5">
+                            <span class="h-7 w-7 shrink-0 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center text-[10px] font-black">@(i + 1)</span>
+                            <span class="min-w-0 flex-1 truncate text-xs font-bold text-slate-600" title="@trafficPage.Path">@trafficPage.Path</span>
+                            <span class="text-xs font-black text-slate-800">@trafficPage.VisitCount.ToString("N0")</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
     <!-- Financial Analytics Section -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Income Chart Card -->
@@ -212,6 +269,10 @@
                 
                 addCost() {
                     this.costs.push({ Name: 'New Operational Cost', Amount: 100000, IsDisabled: false });
+                },
+
+                removeCost(index) {
+                    this.costs.splice(index, 1);
                 },
                 
                 openEditPlanModal(plan, index) {
@@ -361,6 +422,7 @@
                     
                     <input type="hidden" asp-for="OperationCostsJson" :value="getCostsJson()" />
                     <input type="hidden" asp-for="PlansJson" :value="getPlansJson()" />
+                    <input type="hidden" asp-for="CostMonth" />
 
                     <!-- Operational Costs Tab -->
                     <div x-show="settingsTab == 'costs'" class="space-y-4 max-h-[380px] overflow-y-auto pr-1">
@@ -382,12 +444,15 @@
                                         </label>
                                         <input type="number" x-model.number="cost.Amount" class="w-full bg-white/40 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:bg-white/95 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all duration-200" />
                                     </div>
-                                    <div class="col-span-12 sm:col-span-2 flex sm:flex-col justify-between sm:justify-end items-center pb-1 sm:pb-2">
+                                    <div class="col-span-12 sm:col-span-2 flex sm:flex-col justify-between sm:justify-end items-center gap-2 pb-1 sm:pb-2">
                                         <label class="text-[8px] font-black uppercase tracking-wider text-slate-400 sm:mb-1 select-none">Disable</label>
                                         <label class="relative inline-flex items-center cursor-pointer select-none">
                                             <input type="checkbox" x-model="cost.IsDisabled" class="sr-only peer" />
                                             <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
                                         </label>
+                                        <button type="button" @@click="removeCost(index)" title="Delete cost" class="text-slate-300 hover:text-rose-500 transition-colors">
+                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -395,6 +460,7 @@
                         <button type="button" @@click="addCost()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer">
                             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg> Add Cost Parameter
                         </button>
+                        <p class="text-[10px] text-slate-400 text-center">Editing costs for @Model.CostMonth. Save before switching month.</p>
                     </div>
 
                     <!-- Plan Pricing Tab -->
@@ -733,6 +799,46 @@
             const revenues = @Html.Raw(Model.RevenueChartDataJson);
             const costs = @Html.Raw(Model.CostChartDataJson);
             const profits = @Html.Raw(Model.ProfitChartDataJson);
+            const trafficLabels = @Html.Raw(Model.TrafficChartLabelsJson);
+            const trafficValues = @Html.Raw(Model.TrafficChartDataJson);
+
+            const trafficCanvas = document.getElementById('trafficChart');
+            if (trafficCanvas) {
+                new Chart(trafficCanvas.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: trafficLabels,
+                        datasets: [{
+                            label: 'Page views',
+                            data: trafficValues,
+                            borderColor: 'rgb(79, 70, 229)',
+                            backgroundColor: 'rgba(79, 70, 229, 0.12)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            pointBackgroundColor: 'rgb(79, 70, 229)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                                callbacks: {
+                                    label: context => `${new Intl.NumberFormat('vi-VN').format(context.raw)} views`
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10, weight: 'bold' } } },
+                            y: { beginAtZero: true, ticks: { precision: 0, color: '#94a3b8', font: { size: 10 } }, grid: { color: '#e2e8f0' } }
+                        }
+                    }
+                });
+            }
 
             const ctx = document.getElementById('financeChart').getContext('2d');
             

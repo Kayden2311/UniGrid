@@ -2,15 +2,18 @@
   "OperationCosts": [
     {
       "Name": "Server \u0026 Infrastructure",
-      "Amount": 1500000
+      "Amount": 1500000,
+      "IsDisabled": false
     },
     {
       "Name": "Cloud Storage \u0026 Database",
-      "Amount": 2500000
+      "Amount": 2500000,
+      "IsDisabled": false
     },
     {
       "Name": "AI APIs Usage",
-      "Amount": 1800000
+      "Amount": 1800000,
+      "IsDisabled": false
     }
   ],
   "Plans": [
@@ -34,7 +37,8 @@
       "ChatLimit": 0,
       "TaskBranchLimit": 1,
       "HasAdvancedAnalytics": false,
-      "HasRolePermissions": false
+      "HasRolePermissions": false,
+      "IsDisabled": false
     },
     {
       "Id": "Pro",
@@ -56,7 +60,8 @@
       "ChatLimit": 3,
       "TaskBranchLimit": 2,
       "HasAdvancedAnalytics": false,
-      "HasRolePermissions": false
+      "HasRolePermissions": false,
+      "IsDisabled": false
     },
     {
       "Id": "ProPlus",
@@ -79,7 +84,8 @@
       "ChatLimit": 5,
       "TaskBranchLimit": 4,
       "HasAdvancedAnalytics": true,
-      "HasRolePermissions": true
+      "HasRolePermissions": true,
+      "IsDisabled": false
     },
     {
       "Id": "Business",
@@ -102,7 +108,8 @@
       "ChatLimit": -1,
       "TaskBranchLimit": -1,
       "HasAdvancedAnalytics": true,
-      "HasRolePermissions": true
+      "HasRolePermissions": true,
+      "IsDisabled": false
     }
   ]
 }
