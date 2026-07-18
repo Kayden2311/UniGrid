@@ -31,6 +31,20 @@
             Rate = rate
         };
     }).OrderByDescending(m => m.Completed).ToList();
+
+    // Storage Calculations for Federation (simulated high corporate storage limits)
+    long totalStorageUsed = Model.SharedFiles.Sum(f => f.FileSize);
+    long maxStorageLimit = 500L * 1024 * 1024 * 1024; // 500 GB corporate limit
+    double storagePercent = maxStorageLimit > 0 ? ((double)totalStorageUsed / maxStorageLimit) * 100 : 0.0;
+
+    string usedStorageStr = "";
+    if (totalStorageUsed >= 1024L * 1024 * 1024) {
+        usedStorageStr = $"{(totalStorageUsed / (1024.0 * 1024 * 1024)):F1} GB";
+    } else {
+        usedStorageStr = $"{(totalStorageUsed / (1024.0 * 1024)):F1} MB";
+    }
+
+    string limitStr = "500 GB";
 }
 
 <div class="space-y-8 py-6 px-4 md:px-8 max-w-7xl mx-auto overflow-y-auto h-[calc(100vh-4rem)] scrollbar-thin">
@@ -125,10 +139,22 @@
     </div>
 
     <!-- ─── Tab-Based Navigation Wrapper ─── -->
-    <div x-data="federationDetail" class="space-y-8">
+    <div x-data="federationDetail" class="space-y-8"
+         @@open-task-detail.window="
+            const matchedTask = workspaceTasks.find(t => t.id.toLowerCase() === $event.detail.toLowerCase());
+            if (matchedTask) {
+                const selector = `[draggable='true'][@@dragstart*='${$event.detail}']`;
+                const card = document.querySelector(selector);
+                if (card) {
+                    card.click();
+                } else {
+                    alert('Open task detail: ' + matchedTask.title);
+                }
+            }
+         ">
         
         <!-- Tab Navigation Buttons -->
-        <div class="flex items-center gap-2 p-1.5 glass rounded-2xl border border-slate-200/60 shadow-xs max-w-xl">
+        <div class="flex items-center gap-2 p-1.5 glass rounded-2xl border border-slate-200/60 shadow-xs max-w-3xl">
             <button @@click="activeTab = 'overview'" :class="activeTab === 'overview' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100/50'" class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
                 <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Overview
             </button>
@@ -140,6 +166,9 @@
             </button>
             <button @@click="activeTab = 'chat'" :class="activeTab === 'chat' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100/50'" class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
                 <i data-lucide="message-square" class="w-4 h-4"></i> Chat Hub
+            </button>
+            <button @@click="activeTab = 'files'" :class="activeTab === 'files' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100/50'" class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
+                <i data-lucide="folder" class="w-4 h-4"></i> Files
             </button>
             <button @@click="activeTab = 'members'" :class="activeTab === 'members' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100/50'" class="flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
                 <i data-lucide="users" class="w-4 h-4"></i> Members
@@ -532,11 +561,20 @@
                     <h3 class="text-xl font-black text-slate-800 tracking-tight">Active Federation Members</h3>
                     <p class="text-xs text-slate-500 mt-0.5">List of all active accounts in this federation and their roles.</p>
                 </div>
-                <div class="relative w-full sm:w-80">
-                    <span class="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center text-slate-400">
-                        <i data-lucide="search" class="w-4 h-4"></i>
-                    </span>
-                    <input type="text" x-model="searchQuery" placeholder="Search members by name or email..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <div class="relative w-full sm:w-80">
+                        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center text-slate-400">
+                            <i data-lucide="search" class="w-4 h-4"></i>
+                        </span>
+                        <input type="text" x-model="searchQuery" placeholder="Search members by name or email..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
+                    @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident")
+                    {
+                        <button type="button" @@click="inviteOpen = true"
+                                class="px-4 py-2.5 bg-indigo-600 text-white rounded-2xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 whitespace-nowrap">
+                            <i data-lucide="user-plus" class="w-4 h-4"></i> Add Member
+                        </button>
+                    }
                 </div>
             </div>
 
@@ -725,7 +763,7 @@
                                         }
                                     </td>
                                     <td class="px-6 py-4 text-slate-400">
-                                        @if (member.PersonalWorkspace != null)
+                                        @if (member.PersonalWorkspace != null && member.PersonalWorkspace.FederationId == Model.Federation.Id)
                                         {
                                             <a href="/WorkspaceDetail/@member.PersonalWorkspace.JoinCode" class="text-indigo-650 hover:text-indigo-800 underline font-black">
                                                 @member.PersonalWorkspace.Name
@@ -988,6 +1026,79 @@
                 }
             </div>
 
+            <!-- Search & Filter Controls -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                        <input type="text" x-model="searchQuery" placeholder="Search tasks..." 
+                               class="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-64 transition-all">
+                    </div>
+                    <!-- Combined Filter Button with Premium Dropdown -->
+                    <div class="relative" x-data="{ filterDropdownOpen: false }">
+                        <button type="button" @@click="filterDropdownOpen = !filterDropdownOpen" 
+                                :class="filterDropdownOpen || filterPriority !== '' || filterAssignee !== '' ? 'border-indigo-650 text-indigo-650 bg-indigo-50/50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'"
+                                class="px-4 py-2 bg-white border rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer outline-none">
+                            <i data-lucide="filter" class="w-4 h-4"></i>
+                            <span>Filter</span>
+                            <template x-if="filterPriority !== '' || filterAssignee !== ''">
+                                <span class="h-2 w-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                            </template>
+                        </button>
+
+                        <!-- Dropdown Card -->
+                        <div x-show="filterDropdownOpen" 
+                             @@click.away="filterDropdownOpen = false" 
+                             x-transition x-cloak
+                             class="absolute left-0 mt-2 w-64 bg-white border border-slate-150 rounded-2xl shadow-xl z-50 p-2 flex flex-col select-none">
+                             
+                             <!-- Section 1: Priority -->
+                             <div class="p-2 space-y-1">
+                                 <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-2 pb-1.5 border-b border-slate-100/50">Priority</span>
+                                 <div class="space-y-0.5 pt-1.5">
+                                     <button type="button" @@click="filterPriority = (filterPriority === '3' ? '' : '3'); filterDropdownOpen = false"
+                                             :class="filterPriority === '3' ? 'bg-indigo-50 text-indigo-600 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'"
+                                             class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-all">
+                                         <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                                         <span>High</span>
+                                     </button>
+                                     <button type="button" @@click="filterPriority = (filterPriority === '2' ? '' : '2'); filterDropdownOpen = false"
+                                             :class="filterPriority === '2' ? 'bg-indigo-50 text-indigo-600 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'"
+                                             class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-all">
+                                         <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                         <span>Medium</span>
+                                     </button>
+                                     <button type="button" @@click="filterPriority = (filterPriority === '1' ? '' : '1'); filterDropdownOpen = false"
+                                             :class="filterPriority === '1' ? 'bg-indigo-50 text-indigo-600 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'"
+                                             class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-all">
+                                         <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                                         <span>Low</span>
+                                     </button>
+                                 </div>
+                             </div>
+
+                             <!-- Divider -->
+                             <div class="h-px bg-slate-100 my-1 mx-2"></div>
+
+                             <!-- Section 2: Assignee -->
+                             <div class="p-2 space-y-1">
+                                 <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block px-2 pb-1.5 border-b border-slate-100/50">Assignee</span>
+                                 <div class="space-y-0.5 pt-1.5 max-h-40 overflow-y-auto pr-0.5 scrollbar-none">
+                                     <template x-for="m in federationMembers" :key="m.id">
+                                         <button type="button" @@click="filterAssignee = (filterAssignee === m.id ? '' : m.id); filterDropdownOpen = false"
+                                                 :class="filterAssignee === m.id ? 'bg-indigo-50 text-indigo-600 font-extrabold shadow-sm' : 'hover:bg-slate-50 text-slate-700'"
+                                                 class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all">
+                                             <div class="h-5 w-5 rounded-full bg-slate-100 border flex items-center justify-center text-[7px] font-black uppercase text-slate-500 shrink-0" x-text="m.fullName.split(' ').map(n => n[0]).join('')"></div>
+                                             <span class="truncate" x-text="m.fullName"></span>
+                                         </button>
+                                     </template>
+                                 </div>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             @{
                 bool canCreateTask = Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident" || (Model.CurrentUserRole == "HeadVicePresident" && (await Model.GetSettingValueAsync(Model.Federation.JoinCode, "allowViceCreateTask", true)));
             }
@@ -1056,6 +1167,10 @@
                                           draggedTaskId = '@task.Id';
                                           draggedTaskTitle = '@Html.Raw(task.Title.Replace("'", "\\'").Replace("\"", "\\\""))';
                                      "
+                                     @@click="selectTask('@Model.SerializeTaskBase64(task)')"
+                                     x-show="(searchQuery === '' || '@Html.Raw(task.Title.Replace("'", "\\'").Replace("\"", "\\\"").ToLower())'.includes(searchQuery.toLowerCase())) && 
+                                             (filterPriority === '' || '@task.Priority' === filterPriority) && 
+                                             (filterAssignee === '' || '@task.AssigneeId' === filterAssignee)"
                                      class="bg-white p-3 rounded-[1.25rem] border border-slate-200 border-l-[4px] @priorityBorderColor shadow-sm hover:shadow-md cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between @cardHeight w-full shrink-0 group">
                                     <div class="absolute -right-6 -top-6 w-16 h-16 bg-slate-50 rounded-full blur-xl pointer-events-none"></div>
                                     
@@ -1071,7 +1186,7 @@
                                             </div>
                                             @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident")
                                             {
-                                                <form method="post" asp-page-handler="DeleteFederationTask" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-taskId="@task.Id" class="inline">
+                                                <form method="post" asp-page-handler="DeleteFederationTask" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-taskId="@task.Id" class="inline" @@click.stop>
                                                     @Html.AntiForgeryToken()
                                                     <button type="submit" class="text-slate-400 hover:text-rose-500 transition-colors border-0 bg-transparent cursor-pointer p-0" onclick="return confirm('Are you sure you want to delete this task?')">
                                                         <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
@@ -1142,7 +1257,7 @@
                                     <!-- Row 4: Status edit dropdown -->
                                     @if (canEdit)
                                     {
-                                        <form method="post" asp-page-handler="UpdateFederationTaskStatus" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-taskId="@task.Id" class="flex items-center gap-1.5 shrink-0 mt-1">
+                                        <form method="post" asp-page-handler="UpdateFederationTaskStatus" asp-route-joinCode="@Model.Federation.JoinCode" asp-route-taskId="@task.Id" class="flex items-center gap-1.5 shrink-0 mt-1" @@click.stop>
                                             @Html.AntiForgeryToken()
                                             <select name="status" class="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[9px] font-black text-slate-600 outline-none transition-all cursor-pointer h-[26px]" onchange="this.form.submit()">
                                                 <option value="0" selected="@(task.Status == 0)">To Do</option>
@@ -1181,37 +1296,65 @@
                             <i data-lucide="lock" class="w-4 h-4"></i> Assign KPI (Restricted)
                         </button>
                     }
-                    <div class="h-6 w-px bg-slate-200"></div>
-                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Category:</span>
-                    <select x-model="selectedKpiCategoryFilter" 
-                            class="bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/50 text-xs font-bold px-3 py-1.5 rounded-lg outline-none transition-all cursor-pointer">
-                        <option value="all">All Categories</option>
-                        <template x-for="cat in kpiCategories" :key="cat.id">
-                            <option :value="cat.id" x-text="cat.name + ' (' + cat.workspaceName + ')'"></option>
-                        </template>
-                    </select>
 
-                    <div class="h-6 w-px bg-slate-200"></div>
-                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Period:</span>
-                    <div class="flex gap-1.5">
-                        <template x-for="period in ['Daily', 'Weekly', 'Monthly']" :key="period">
-                            <button type="button" @@click="selectedKpiPeriodFilter = period"
-                                    :class="selectedKpiPeriodFilter === period ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
-                                    class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer" x-text="period"></button>
-                        </template>
-                    </div>
-                    
-                    <div class="h-6 w-px bg-slate-200"></div>
-                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Timeframe:</span>
-                    <div class="flex gap-1.5">
-                        <button type="button" @@click="selectedKpiTimeframe = 'current'"
-                                :class="selectedKpiTimeframe === 'current' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
-                                class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
-                                x-text="selectedKpiPeriodFilter === 'Daily' ? 'Today' : selectedKpiPeriodFilter === 'Weekly' ? 'This Week' : 'This Month'"></button>
-                        <button type="button" @@click="selectedKpiTimeframe = 'previous'"
-                                :class="selectedKpiTimeframe === 'previous' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
-                                class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
-                                x-text="selectedKpiPeriodFilter === 'Daily' ? 'Yesterday' : selectedKpiPeriodFilter === 'Weekly' ? 'Last Week' : 'Last Month'"></button>
+                    <!-- Premium KPI Filter Dropdown -->
+                    <div class="relative" x-data="{ kpiFilterOpen: false }">
+                        <button type="button" @@click="kpiFilterOpen = !kpiFilterOpen" 
+                                :class="kpiFilterOpen || selectedKpiCategoryFilter !== 'all' || selectedKpiPeriodFilter !== 'Weekly' || selectedKpiTimeframe !== 'current' ? 'border-indigo-650 text-indigo-650 bg-indigo-50/50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'"
+                                class="px-4 py-2.5 bg-white border rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer outline-none">
+                            <i data-lucide="filter" class="w-4.5 h-4.5"></i>
+                            <span>Filter KPIs</span>
+                            <template x-if="selectedKpiCategoryFilter !== 'all' || selectedKpiPeriodFilter !== 'Weekly' || selectedKpiTimeframe !== 'current'">
+                                <span class="h-2 w-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                            </template>
+                        </button>
+
+                        <!-- Dropdown Card -->
+                        <div x-show="kpiFilterOpen" 
+                             @@click.away="kpiFilterOpen = false" 
+                             x-transition x-cloak
+                             class="absolute right-0 mt-2 w-72 bg-white border border-slate-150 rounded-2xl shadow-xl z-50 p-4 flex flex-col gap-4 select-none">
+                             
+                             <!-- Section 1: Category -->
+                             <div class="space-y-1.5">
+                                 <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block pb-1 border-b border-slate-100/50">Category</span>
+                                 <select x-model="selectedKpiCategoryFilter" 
+                                         class="w-full bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/50 text-xs font-bold px-3 py-2 rounded-xl outline-none transition-all cursor-pointer">
+                                     <option value="all">All Categories</option>
+                                     <template x-for="cat in kpiCategories" :key="cat.id">
+                                         <option :value="cat.id" x-text="cat.name + ' (' + cat.workspaceName + ')'"></option>
+                                     </template>
+                                 </select>
+                             </div>
+
+                             <!-- Section 2: Period -->
+                             <div class="space-y-1.5">
+                                 <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block pb-1 border-b border-slate-100/50">Period</span>
+                                 <div class="flex gap-1.5">
+                                     <template x-for="period in ['Daily', 'Weekly', 'Monthly']" :key="period">
+                                         <button type="button" @@click="selectedKpiPeriodFilter = period"
+                                                 :class="selectedKpiPeriodFilter === period ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
+                                                 class="flex-1 text-[11px] font-bold py-1.5 rounded-lg transition-all cursor-pointer border-0" x-text="period"></button>
+                                     </template>
+                                 </div>
+                             </div>
+
+                             <!-- Section 3: Timeframe -->
+                             <div class="space-y-1.5">
+                                 <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block pb-1 border-b border-slate-100/50">Timeframe</span>
+                                 <div class="flex gap-1.5">
+                                     <button type="button" @@click="selectedKpiTimeframe = 'current'"
+                                             :class="selectedKpiTimeframe === 'current' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
+                                             class="flex-1 text-[11px] font-bold py-1.5 rounded-lg transition-all cursor-pointer border-0"
+                                             x-text="selectedKpiPeriodFilter === 'Daily' ? 'Today' : selectedKpiPeriodFilter === 'Weekly' ? 'This Week' : 'This Month'"></button>
+                                     <button type="button" @@click="selectedKpiTimeframe = 'previous'"
+                                             :class="selectedKpiTimeframe === 'previous' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/50'"
+                                             class="flex-1 text-[11px] font-bold py-1.5 rounded-lg transition-all cursor-pointer border-0"
+                                             x-text="selectedKpiPeriodFilter === 'Daily' ? 'Yesterday' : selectedKpiPeriodFilter === 'Weekly' ? 'Last Week' : 'Last Month'"></button>
+                                 </div>
+                             </div>
+
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1535,7 +1678,6 @@
                     </div>
                 </div>
             </div>
-        </div>
 
         <!-- Task-to-KPI Conversion & Productivity Analysis Panel -->
         <div class="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm mt-6">
@@ -1648,6 +1790,7 @@
                 </div>
             </template>
         </div>
+    </div>
 
         <!-- ─── ASSIGN KPI MODAL DIALOG ─── -->
         <div x-show="assignKpiOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" x-transition style="display: none;">
@@ -1730,6 +1873,86 @@
                             <i data-lucide="check" class="w-4 h-4"></i> Establish KPI Target
                         </button>
                     </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ─── INVITE FEDERATION MEMBER DIALOG MODAL ─── -->
+        <div x-show="inviteOpen" 
+             class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
+             style="display: none;"
+             x-transition>
+            
+            <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-sm p-8 relative flex flex-col gap-6"
+                 @@click.away="inviteOpen = false">
+                
+                <button @@click="inviteOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all border-0 bg-transparent cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+
+                <h3 class="text-xl font-black text-slate-800">Invite Federation Member</h3>
+
+                <form method="post" asp-page-handler="InviteFederationMember" class="space-y-4">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="joinCode" value="@Model.Federation.JoinCode">
+                    
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Invitee Email</label>
+                        <input type="email" name="inviteEmail" placeholder="e.g. member@student.edu" required
+                               x-model="inviteEmail" @@input.debounce.500ms="checkInviteEmail()"
+                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
+
+                    <!-- User Found Card -->
+                    <div x-show="checkingEmail" class="flex items-center gap-2 text-xs font-bold text-slate-400 py-1" x-cloak>
+                        <div class="animate-spin h-4 w-4 border-2 border-indigo-600 border-t-transparent rounded-full"></div>
+                        <span>Checking user existence...</span>
+                    </div>
+
+                    <div x-show="userFound === true" x-cloak class="p-3.5 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-center gap-3">
+                        <div class="h-9 w-9 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center overflow-hidden">
+                            <template x-if="inviteeAvatar">
+                                <img :src="inviteeAvatar" class="h-full w-full object-cover">
+                            </template>
+                            <template x-if="!inviteeAvatar">
+                                <div class="text-[10px] font-black text-indigo-600" x-text="inviteeName.charAt(0)"></div>
+                            </template>
+                        </div>
+                        <div>
+                            <div class="text-xs font-black text-slate-800" x-text="inviteeName"></div>
+                            <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">UniGrid User</div>
+                        </div>
+                        <span class="ml-auto text-[8px] bg-green-100 text-green-700 px-2 py-0.5 rounded font-black uppercase tracking-wider">Registered</span>
+                    </div>
+
+                    <!-- User Not Found Warning -->
+                    <div x-show="userFound === false" x-cloak class="p-3.5 bg-amber-50/50 rounded-2xl border border-amber-100 flex gap-2.5 items-start">
+                        <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
+                        <div>
+                            <div class="text-xs font-black text-amber-800">Email not registered on UniGrid</div>
+                            <p class="text-[9px] font-semibold text-slate-500 leading-normal mt-0.5">An invitation will be sent to this email. The new member can click the link in the email or log in with Google to join after registration.</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Federation Role</label>
+                        <select name="inviteRole" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer">
+                            <option value="Member">Member (default)</option>
+                            <option value="DepartmentManager">Department Manager</option>
+                            <option value="HeadPresident">Head President</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Display Role (Title)</label>
+                        <input type="text" name="inviteDisplayRole" placeholder="e.g. Lead Researcher, BA, ML Specialist"
+                               class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                    </div>
+
+                    <button type="submit" class="w-full py-4 mt-2 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-750 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 border-0 cursor-pointer">
+                        Send Member Invite
+                        <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </button>
                 </form>
             </div>
         </div>
@@ -2147,7 +2370,9 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1">
                             <label class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Due Date</label>
-                            <input type="date" name="dueDate" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            <input type="date" name="dueDate" value="@DateTime.UtcNow.ToString("yyyy-MM-dd")"
+                                   min="@DateTime.UtcNow.ToString("yyyy-MM-dd")"
+                                   class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
                         </div>
 
                         <div class="space-y-1">
@@ -2318,6 +2543,576 @@
         </div>
     </div>
 
+    <!-- ─── TAB: FILES ─── -->
+    <div x-show="activeTab === 'files'" class="h-[calc(100vh-22rem)] min-h-[500px] border border-slate-200 rounded-[2.5rem] bg-white flex overflow-hidden shadow-sm" x-transition style="display: none;">
+        <!-- Left panel - Storage Info -->
+        <div class="w-64 border-r border-slate-100 flex flex-col bg-slate-50/50 shrink-0">
+            <div class="p-4 border-b border-slate-100">
+                <h3 class="text-sm font-black text-slate-700">Federation Storage</h3>
+            </div>
+            <div class="flex-1 p-2 space-y-1">
+                <button @@click="activeFileSection = 'files'" :class="activeFileSection === 'files' ? 'bg-indigo-50 border border-indigo-100/50 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'" class="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-left text-xs font-bold transition-all border-0 bg-transparent cursor-pointer">
+                    <i data-lucide="folder" class="w-4 h-4"></i> Corporate Shared Files
+                </button>
+            </div>
+            <!-- Progress Bar -->
+            <div class="p-4 border-t border-slate-100 text-xs font-bold text-slate-400">
+                <div class="flex justify-between mb-1.5">
+                    <span>Usage</span>
+                    <span class="text-slate-600">@usedStorageStr / @limitStr</span>
+                </div>
+                <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div class="h-full bg-indigo-600 rounded-full" style="width: @(storagePercent > 100 ? "100" : storagePercent.ToString("F1"))%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right panel - Repository Files List/Grid -->
+        <div class="flex-1 flex flex-col min-w-0 bg-white">
+            @if (TempData["UploadError"] != null)
+            {
+                <div class="m-6 mb-0 p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl text-xs font-bold flex items-center gap-2">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i>
+                    <span>@TempData["UploadError"]</span>
+                </div>
+            }
+            @if (TempData["UploadSuccess"] != null)
+            {
+                <div class="m-6 mb-0 p-4 bg-green-50 border border-green-100 text-green-600 rounded-2xl text-xs font-bold flex items-center gap-2">
+                    <i data-lucide="check-circle" class="w-4 h-4 shrink-0"></i>
+                    <span>@TempData["UploadSuccess"]</span>
+                </div>
+            }
+
+            <!-- Toolbar -->
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-2">
+                    @if (Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident" || Model.CurrentUserRole == "DepartmentManager" || (await Model.GetSettingValueAsync(Model.Federation.JoinCode, "allowMemberPushFile", true)))
+                    {
+                        <form method="post" asp-page-handler="UploadFederationFile" asp-route-joinCode="@Model.Federation.JoinCode" enctype="multipart/form-data" class="flex items-center gap-2">
+                            @Html.AntiForgeryToken()
+                            <input type="file" name="UploadedFederationFile" class="hidden" id="real-file-upload" onchange="validateAndUploadFile(event)">
+                            
+                            <button type="button" onclick="document.getElementById('real-file-upload').click()" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2 cursor-pointer border-0">
+                                <i data-lucide="upload-cloud" class="w-4 h-4"></i> Pick & Upload Local File
+                            </button>
+                            <span class="text-[10px] text-slate-400 font-bold max-w-xs truncate italic" id="selected-file-label">No file selected. Only alphanumeric, space, dash, and underscore characters are allowed.</span>
+                        </form>
+                    }
+                    else
+                    {
+                        <div class="text-xs font-bold text-slate-400 italic bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl">
+                            You are viewing as a Member with restricted file permissions.
+                        </div>
+                    }
+                </div>
+
+                <!-- Layout switcher -->
+                <div class="flex items-center border border-slate-200 rounded-xl overflow-hidden shrink-0">
+                    <button @@click="viewMode = 'grid'" :class="viewMode === 'grid' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'" class="p-2 transition-all border-0 bg-transparent cursor-pointer">
+                        <i data-lucide="grid-3x3" class="w-4 h-4"></i>
+                    </button>
+                    <button @@click="viewMode = 'list'" :class="viewMode === 'list' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'" class="p-2 transition-all border-0 bg-transparent cursor-pointer">
+                        <i data-lucide="list" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Documents Grid -->
+            <div class="flex-1 p-6 overflow-y-auto">
+                @if (!Model.SharedFiles.Any())
+                {
+                    <div class="text-center py-20 text-slate-400">
+                        <i data-lucide="folder-open" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+                        <p class="font-bold">No files uploaded yet.</p>
+                        <p class="text-xs text-slate-400 mt-1">Upload a file above!</p>
+                    </div>
+                }
+
+                <div x-show="viewMode === 'grid'" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    @foreach (var file in Model.SharedFiles)
+                    {
+                        var icon = file.FileType == "pdf" ? "file-text" : file.FileType == "doc" ? "file-text" : file.FileType == "spreadsheet" ? "file-spreadsheet" : "image";
+                        var iconColor = file.FileType == "pdf" ? "text-rose-500 bg-rose-50" : file.FileType == "doc" ? "text-indigo-600 bg-indigo-50" : file.FileType == "spreadsheet" ? "text-green-600 bg-green-50" : "text-purple-500 bg-purple-50";
+
+                        <div @@click="previewFile = JSON.parse(atob('@Model.SerializeFileBase64(file)'))"
+                             class="p-4 bg-white/60 hover:bg-white border border-slate-100 hover:border-slate-200 hover:shadow shadow-sm rounded-2xl flex flex-col items-center text-center cursor-pointer transition-all relative group">
+                            
+                            <div class="h-12 w-12 rounded-xl flex items-center justify-center mb-3 @iconColor">
+                                <i data-lucide="@icon" class="w-6 h-6"></i>
+                            </div>
+                            <span class="text-xs font-bold text-slate-700 truncate w-full">@file.FileName</span>
+                            <span class="text-[9px] font-bold text-slate-400 mt-1 uppercase">@(file.FileSize / 1024) KB</span>
+                        </div>
+                    }
+                </div>
+
+                <div x-show="viewMode === 'list'" class="glass rounded-[2rem] overflow-hidden border border-slate-100 shadow-sm" style="display: none;">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                                <th class="px-6 py-3">File Name</th>
+                                <th class="px-6 py-3">Uploaded By</th>
+                                <th class="px-6 py-3">Modified</th>
+                                <th class="px-6 py-3">File Size</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-xs font-bold text-slate-500">
+                            @foreach (var file in Model.SharedFiles)
+                            {
+                                <tr @@click="previewFile = JSON.parse(atob('@Model.SerializeFileBase64(file)'))" class="hover:bg-slate-50/50 transition-colors cursor-pointer">
+                                    <td class="px-6 py-3 text-slate-700">
+                                        <div class="flex items-center gap-2">
+                                            <span>@file.FileName</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-3">@(file.User?.FullName ?? "System")</td>
+                                    <td class="px-6 py-3">@(file.CreatedAt?.ToString("MMM dd, yyyy") ?? "Just now")</td>
+                                    <td class="px-6 py-3 uppercase">@(file.FileSize / 1024) KB</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Sidebar -->
+        <div x-show="previewFile" x-transition class="w-72 border-l border-slate-100 bg-slate-50/30 flex flex-col shrink-0" style="display: none;">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <span class="text-sm font-black text-slate-700">File Preview</span>
+                <button @@click="previewFile = null" class="h-6 w-6 flex items-center justify-center rounded hover:bg-slate-100 text-slate-400 border-0 bg-transparent cursor-pointer">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="flex-1 p-6 flex flex-col items-center">
+                <div class="h-20 w-20 rounded-2xl bg-indigo-50 border flex items-center justify-center text-indigo-600 mb-4 shadow-sm">
+                    <i data-lucide="file" class="w-10 h-10"></i>
+                </div>
+                <h4 class="text-sm font-black text-slate-700 text-center break-all" x-text="previewFile?.fileName"></h4>
+                <div class="w-full mt-6 space-y-4 text-xs font-bold text-slate-500">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400 uppercase tracking-wider">Type</span>
+                        <span class="text-slate-700 uppercase" x-text="previewFile?.fileType"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400 uppercase tracking-wider">Size</span>
+                        <span class="text-slate-700" x-text="Math.round(previewFile?.fileSize / 1024) + ' KB'"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400 uppercase tracking-wider">Uploaded</span>
+                        <span class="text-slate-700" x-text="previewFile?.createdAt ? new Date(previewFile.createdAt).toLocaleDateString('en-US') : 'Just now'"></span>
+                    </div>
+                </div>
+                <a :href="'/' + previewFile?.fileUrl" class="w-full py-3 mt-8 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center gap-2 transition-all decoration-none" download>
+                    <i data-lucide="download" class="w-4 h-4"></i> Download File
+                </a>
+                
+                <template x-if="currentUserCanDeleteFile">
+                    <form method="post" asp-page-handler="DeleteFederationFile" asp-route-joinCode="@Model.Federation.JoinCode" class="w-full mt-2" onsubmit="return confirm('Are you sure you want to delete this file? This action will permanently remove the file from the system.')">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="fileId" :value="previewFile?.id" />
+                        <button type="submit" class="w-full py-2.5 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl font-bold hover:bg-rose-100/70 transition-all flex items-center justify-center gap-2 cursor-pointer text-xs">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i> Delete File Permanently
+                        </button>
+                    </form>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function validateAndUploadFile(event) {
+            const input = event.target;
+            if (!input.files || input.files.length === 0) return;
+            
+            const file = input.files[0];
+            const fileName = file.name;
+            const label = document.getElementById('selected-file-label');
+            
+            const lastDotIndex = fileName.lastIndexOf('.');
+            if (lastDotIndex === -1) {
+                alert("Invalid file name. The file must have a valid extension.");
+                input.value = "";
+                label.innerText = "Invalid file selected.";
+                return;
+            }
+            
+            const baseName = fileName.substring(0, lastDotIndex);
+            
+            if (baseName.includes('.')) {
+                alert("File name contains invalid characters. Multiple dots ('.') are not allowed in the file name.");
+                input.value = "";
+                label.innerText = "Upload failed: Invalid character '.' in file name.";
+                return;
+            }
+            
+            const regex = /^[a-zA-Z0-9\s-_]+$/;
+            if (!regex.test(baseName)) {
+                alert("File name contains invalid characters. Only alphanumeric characters, spaces, hyphens, and underscores are allowed. Regex or special characters are not allowed.");
+                input.value = "";
+                label.innerText = "Upload failed: Regex/special characters not allowed in file name.";
+                return;
+            }
+            
+            label.innerText = "Uploading: " + fileName;
+            input.form.submit();
+        }
+    </script>
+
+    <!-- ─── FEDERATION TASK DETAIL MODAL ─── -->
+    <div x-show="detailOpen" 
+         class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
+         style="display: none;"
+         x-transition>
+        
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-8 relative flex flex-col gap-6"
+             @@click.away="detailOpen = false">
+            
+            <button @@click="detailOpen = false" class="absolute top-6 right-6 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 transition-all border-0 bg-transparent cursor-pointer">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <!-- View Mode -->
+            <div x-show="!isEditing" class="space-y-6">
+                <!-- Dialog Header -->
+                <div class="space-y-3">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2.5 py-0.5 rounded text-[10px] font-black uppercase"
+                              :class="selectedTask?.priority === 1 ? 'bg-blue-50 text-blue-600' : selectedTask?.priority === 2 ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'"
+                              x-text="selectedTask?.priority === 1 ? 'Low' : selectedTask?.priority === 2 ? 'Medium' : 'High'"></span>
+                        <span class="px-2.5 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-50 text-indigo-600"
+                              x-text="selectedTask?.status === 0 ? 'To Do' : selectedTask?.status === 1 ? 'In Progress' : selectedTask?.status === 2 ? 'Review' : 'Done'"></span>
+                    </div>
+                    <h3 class="text-xl font-black text-slate-800 flex items-center justify-between gap-4">
+                        <span x-text="selectedTask?.title"></span>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button x-show="currentUserCanEditTask" @@click="isEditing = true" class="text-indigo-600 hover:text-indigo-700 text-xs font-bold flex items-center gap-1.5 bg-indigo-50 px-3 py-1.5 rounded-xl transition-all cursor-pointer border-0">
+                                <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                Edit Task
+                            </button>
+                        </div>
+                    </h3>
+                </div>
+
+                <!-- Description -->
+                <div class="space-y-1.5">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Description</h4>
+                    <p class="text-sm text-slate-500 leading-relaxed bg-slate-50/50 p-4 rounded-2xl border border-slate-100" x-text="selectedTask?.description || 'No description provided.'"></p>
+                </div>
+
+                <!-- Task Metadata -->
+                <div class="grid grid-cols-2 gap-6 py-4 border-y border-slate-100">
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Assignee</h4>
+                        <p class="text-sm font-bold text-slate-700 mt-1" x-text="selectedTask?.assignee?.fullName || 'Unassigned'"></p>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date</h4>
+                        <p class="text-sm font-bold text-slate-700 mt-1" x-text="selectedTask?.dueDate ? new Date(selectedTask.dueDate).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'No date set'"></p>
+                    </div>
+                </div>
+
+                <!-- Review Actions (Available only for tasks in status = 2) -->
+                <div x-show="selectedTask?.status === 2">
+                    <template x-if="currentUserRole === 'Owner' || currentUserRole === 'HeadPresident'">
+                        <div class="p-4 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-3">
+                            <p class="text-xs font-black text-purple-700 flex items-center gap-1.5">
+                                <i data-lucide="eye" class="w-4 h-4"></i> Approve Completion (Assurance Process)
+                            </p>
+                            <div class="flex gap-2">
+                                <form method="post" asp-page-handler="UpdateFederationTaskStatus" asp-route-joinCode="@Model.Federation.JoinCode" class="inline-block">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="taskId" :value="selectedTask?.id">
+                                    <input type="hidden" name="status" value="3">
+                                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow shadow-green-100 transition-all flex items-center gap-1.5 cursor-pointer border-0">
+                                        <i data-lucide="check" class="w-4 h-4"></i> Approve & Complete
+                                    </button>
+                                </form>
+                                <form method="post" asp-page-handler="UpdateFederationTaskStatus" asp-route-joinCode="@Model.Federation.JoinCode" class="inline-block">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="taskId" :value="selectedTask?.id">
+                                    <input type="hidden" name="status" value="1">
+                                    <button type="submit" class="border border-purple-300 text-purple-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-purple-100 transition-all flex items-center gap-1.5 cursor-pointer bg-transparent">
+                                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Request Rework
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="currentUserRole !== 'Owner' && currentUserRole !== 'HeadPresident'">
+                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-2.5">
+                            <i data-lucide="shield-alert" class="w-5 h-5 text-indigo-500 shrink-0 mt-0.5 animate-pulse"></i>
+                            <div>
+                                <p class="text-xs font-black text-slate-700">Waiting for Executive Approval</p>
+                                <p class="mt-0.5 text-[10px] text-slate-500 leading-normal font-semibold">This task has been submitted to the Review column and is waiting for the Owner or Head President to review quality and approve completion.</p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Edit Mode -->
+            <form method="post" asp-page-handler="EditFederationTask" asp-route-joinCode="@Model.Federation.JoinCode" class="space-y-4" enctype="multipart/form-data" x-show="isEditing" x-cloak>
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="editTaskId" :value="selectedTask?.id">
+                
+                <h3 class="text-xl font-black text-slate-800">Edit Task</h3>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Task Title</label>
+                    <input type="text" name="editTaskTitle" x-model="selectedTask.title" required
+                           :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'HeadPresident'"
+                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Description</label>
+                    <textarea name="editTaskDescription" x-model="selectedTask.description" rows="3"
+                              class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Priority</label>
+                        <select name="editTaskPriority" x-model="selectedTask.priority"
+                                :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'HeadPresident'"
+                                class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                            <option value="1">Low</option>
+                            <option value="2">Medium</option>
+                            <option value="3">High</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Due Date & Time</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="date" x-model="selectedTask.dueDateDate"
+                                   :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'HeadPresident'"
+                                   class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                            
+                            <div class="relative" x-data="{ showDropdown: false }">
+                                <button type="button" @@click="if (currentUserRole === 'Owner' || currentUserRole === 'HeadPresident') showDropdown = !showDropdown"
+                                        :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'HeadPresident'"
+                                        class="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 text-left focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                                    <span x-text="formatTimeDisplay(selectedTask?.dueDateTime)"></span>
+                                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+                                </button>
+                                
+                                <div x-show="showDropdown" @@click.away="showDropdown = false" x-transition
+                                     class="absolute right-0 mt-2 p-4 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 w-56 space-y-3">
+                                    <div class="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1.5">
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider">Set Custom Time</span>
+                                        <div class="flex gap-2">
+                                            <button type="button" @@click="selectedTask.dueDateTime = ''; showDropdown = false" class="text-[9px] font-black text-rose-600 hover:text-rose-700 uppercase cursor-pointer border-0 bg-transparent">Clear</button>
+                                            <button type="button" @@click="showDropdown = false" class="text-[9px] font-black text-indigo-600 hover:text-indigo-700 uppercase cursor-pointer border-0 bg-transparent">Done</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex items-center justify-center gap-2">
+                                        <div class="flex flex-col items-center">
+                                            <button type="button" @@click="incrementHour(false)" class="p-1 hover:bg-slate-50 text-slate-500 rounded border-0 bg-transparent cursor-pointer"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
+                                            <span class="text-sm font-black text-slate-800 my-1" x-text="getDisplayHour(selectedTask?.dueDateTime)"></span>
+                                            <button type="button" @@click="decrementHour(false)" class="p-1 hover:bg-slate-50 text-slate-500 rounded border-0 bg-transparent cursor-pointer"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
+                                        </div>
+                                        <span class="text-slate-400 font-bold text-sm">:</span>
+                                        <div class="flex flex-col items-center">
+                                            <button type="button" @@click="incrementMinute(false)" class="p-1 hover:bg-slate-50 text-slate-500 rounded border-0 bg-transparent cursor-pointer"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
+                                            <span class="text-sm font-black text-slate-800 my-1" x-text="getDisplayMinute(selectedTask?.dueDateTime)"></span>
+                                            <button type="button" @@click="decrementMinute(false)" class="p-1 hover:bg-slate-50 text-slate-500 rounded border-0 bg-transparent cursor-pointer"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
+                                        </div>
+                                        
+                                        <div class="flex flex-col justify-center ml-2 border border-slate-100 rounded-lg overflow-hidden bg-slate-50">
+                                            <button type="button" @@click="setAM(false)" 
+                                                    :class="isAM(selectedTask?.dueDateTime) ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-600'"
+                                                    class="px-2 py-1 text-[9px] font-black tracking-wide uppercase transition-all border-0 bg-transparent cursor-pointer">AM</button>
+                                            <button type="button" @@click="setPM(false)" 
+                                                    :class="!isAM(selectedTask?.dueDateTime) ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-600'"
+                                                    class="px-2 py-1 text-[9px] font-black tracking-wide uppercase transition-all border-0 bg-transparent cursor-pointer">PM</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" name="editTaskDueDate" :value="selectedTask.dueDateDate ? (selectedTask.dueDateTime ? (selectedTask.dueDateDate + 'T' + selectedTask.dueDateTime) : selectedTask.dueDateDate) : ''">
+                    </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Assignee</label>
+                    <select name="editTaskAssigneeId" x-model="selectedTask.assigneeId"
+                            :disabled="currentUserRole !== 'Owner' && currentUserRole !== 'HeadPresident'"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+                        <option value="">Unassigned</option>
+                        @foreach (var m in Model.ActiveFederationMembers)
+                        {
+                            <option value="@m.UserId">@m.User.FullName</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="submit" class="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow hover:bg-indigo-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0">
+                        <i data-lucide="save" class="w-4 h-4"></i> Save Changes
+                    </button>
+                    <button type="button" @@click="isEditing = false" class="flex-1 py-3 border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer bg-transparent">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+
+            <!-- Task Comments Feed -->
+            <div class="space-y-3">
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Comments Timeline</h4>
+                
+                <div class="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+                    <template x-if="!selectedTask?.taskComments || selectedTask.taskComments.length === 0">
+                        <p class="text-xs font-bold text-slate-400 italic">No comments yet. Start the conversation!</p>
+                    </template>
+                    <template x-for="comment in selectedTask?.taskComments" :key="comment.id">
+                        <div :id="'comment-' + comment.id" class="p-3 bg-slate-50 border border-slate-100 rounded-2xl flex gap-3 text-xs leading-relaxed group">
+                            <div class="h-6 w-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[9px] uppercase text-slate-500 shrink-0" 
+                                 x-text="comment.user?.fullName ? comment.user.fullName.split(' ').map(n => n[0]).join('') : 'U'"></div>
+                            <div class="min-w-0 flex-1">
+                                <!-- Reply Quote Block -->
+                                <template x-if="comment.parentId">
+                                    <div class="flex items-center gap-1.5 text-[9px] text-slate-400 font-bold bg-slate-100/80 p-1.5 rounded-lg border-l-2 border-indigo-500 max-w-sm mb-1 cursor-pointer select-none hover:bg-slate-200 transition-colors"
+                                         @@click="const el = document.getElementById('comment-' + comment.parentId); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('bg-indigo-50/50'); setTimeout(() => el.classList.remove('bg-indigo-50/50'), 2000); }">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 text-slate-400 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                        <span class="truncate">
+                                            <span x-text="selectedTask.taskComments.find(c => c.id === comment.parentId)?.user?.fullName === comment.user?.fullName ? 'Himself/Herself' : (selectedTask.taskComments.find(c => c.id === comment.parentId)?.user?.fullName || 'Someone')"></span>:
+                                             <span class="italic font-normal text-slate-500" x-text="selectedTask.taskComments.find(c => c.id === comment.parentId)?.content || 'Deleted comment'"></span>
+                                        </span>
+                                    </div>
+                                </template>
+
+                                <div class="flex items-center justify-between gap-2">
+                                    <p class="font-bold text-slate-700" x-text="comment.user?.fullName"></p>
+                                    <button type="button" @@click="replyingToComment = { id: comment.id, userName: comment.user?.fullName, content: comment.content }; $nextTick(() => document.getElementById('task-comment-field')?.focus())" 
+                                            class="opacity-0 group-hover:opacity-100 h-6 w-6 rounded-lg hover:bg-slate-200/60 text-slate-400 hover:text-indigo-650 flex items-center justify-center transition-all shrink-0 cursor-pointer select-none border-0 bg-transparent"
+                                            title="Reply to comment">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                    </button>
+                                </div>
+                                <div class="text-slate-500 mt-0.5 break-words" x-html="parseCommentContent(comment.content)"></div>
+                                
+                                <!-- Render Comment Attachment Box if comment has an attachment -->
+                                <template x-if="getCommentAttachment(comment.content)">
+                                    <div class="mt-2.5 p-2.5 border border-slate-200 bg-white rounded-xl flex items-center justify-between gap-4 max-w-sm text-slate-700 shadow-sm">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <p class="text-[11px] font-bold truncate text-slate-800" x-text="getCommentAttachment(comment.content).fileName"></p>
+                                                <p class="text-[9px] font-bold text-slate-400 uppercase" x-text="Math.round(getCommentAttachment(comment.content).fileSize / 1024) + ' KB'"></p>
+                                            </div>
+                                        </div>
+                                        <a :href="'/' + getCommentAttachment(comment.content).fileUrl" class="h-7 w-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-650 flex items-center justify-center shrink-0 transition-colors cursor-pointer" download>
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                        </a>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Add Comment Form -->
+                <div class="relative w-full">
+                    <!-- Comment Autocomplete Popover Box -->
+                    <div x-show="showCommentSuggestions" 
+                         class="absolute bottom-full left-0 right-0 mb-2 p-2 bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col gap-1.5 max-h-40 overflow-y-auto transition-all z-50 text-left"
+                         x-transition x-cloak>
+                        <div class="px-3 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                            Mentions suggestions (Type <span x-text="showCommentSuggestions?.type"></span>)
+                        </div>
+                        <div class="space-y-0.5">
+                            <!-- Member Suggestions -->
+                            <template x-if="showCommentSuggestions?.type === '@@'">
+                                <div>
+                                    <template x-for="member in filteredCommentMembers" :key="member.id">
+                                        <button type="button" 
+                                                @@click="insertCommentSuggestion('@@' + member.fullName)"
+                                                class="w-full text-left px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl flex items-center gap-2 transition-all border-0 bg-transparent cursor-pointer">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 opacity-60"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                            <span x-text="member.fullName"></span>
+                                        </button>
+                                    </template>
+                                    <template x-if="filteredCommentMembers.length === 0">
+                                        <div class="px-3 py-1.5 text-xs font-bold text-slate-400 italic">No matching members found.</div>
+                                    </template>
+                                </div>
+                            </template>
+                            
+                            <!-- Task Suggestions -->
+                            <template x-if="showCommentSuggestions?.type === '#'">
+                                <div>
+                                    <template x-for="task in filteredCommentTasks" :key="task.id">
+                                        <button type="button" 
+                                                @@click="insertCommentSuggestion('#' + task.title)"
+                                                class="w-full text-left px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-600 rounded-xl flex items-center gap-2 transition-all border-0 bg-transparent cursor-pointer">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 opacity-60"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>
+                                            <span x-text="task.title"></span>
+                                        </button>
+                                    </template>
+                                    <template x-if="filteredCommentTasks.length === 0">
+                                        <div class="px-3 py-1.5 text-xs font-bold text-slate-400 italic">No matching tasks found.</div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Selected Comment Attachment Status Indicator Box -->
+                    <div x-show="selectedCommentFileName" 
+                         class="mb-2 p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-[10px] font-bold text-indigo-700 transition-all"
+                         x-transition x-cloak>
+                        <span class="flex items-center gap-1.5 truncate">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-indigo-600"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></svg>
+                            <span>Attachment: </span>
+                            <strong class="truncate" x-text="selectedCommentFileName"></strong>
+                        </span>
+                        <button type="button" @@click="clearCommentFile()" class="text-indigo-400 hover:text-indigo-650 transition-colors cursor-pointer flex items-center justify-center border-0 bg-transparent">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="space-y-2 pt-2">
+                        <!-- Comment Reply Preview Bar -->
+                        <div x-show="replyingToComment" class="p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-[10px] font-bold text-indigo-700 transition-all" x-transition x-cloak>
+                            <div class="flex items-center gap-1.5 truncate">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 text-indigo-500 shrink-0"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                                <span class="truncate">Replying to <span class="text-indigo-900" x-text="replyingToComment?.userName"></span>: <span class="italic font-normal text-slate-500" x-text="replyingToComment?.content"></span></span>
+                            </div>
+                            <button type="button" @@click="replyingToComment = null" class="text-indigo-400 hover:text-indigo-655 transition-colors cursor-pointer flex items-center justify-center border-0 bg-transparent">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                        </div>
+                        <form @@submit.prevent="sendTaskCommentViaAjax()" class="flex gap-2" enctype="multipart/form-data">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="commentTaskId" :value="selectedTask?.id">
+                        
+                            <!-- Paperclip Button -->
+                            <button type="button" 
+                                    @@click="document.getElementById('task-comment-file-input').click()" 
+                                    :class="selectedCommentFileName ? 'bg-indigo-50 text-indigo-600 border border-indigo-250' : 'bg-slate-50 text-slate-400 hover:text-slate-600 border border-slate-200'"
+                                    class="p-2.5 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer bg-transparent">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                            </button>
+                            <input type="file" id="task-comment-file-input" class="hidden" @@change="handleCommentFileChange($event)">
+
+                            <input type="text" id="task-comment-field" name="CommentContent" x-model="newCommentContent" placeholder="Post a comment..." :required="!selectedCommentFileName" autocomplete="off"
+                                   class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] focus:ring-2 focus:ring-indigo-500 outline-none transition-all">
+                            <button type="submit" class="bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 shadow shadow-indigo-100 flex items-center justify-center transition-all shrink-0 border-0 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
@@ -2335,6 +3130,19 @@
             createChannelOpen: false,
             inviteChannelOpen: false,
             channels: ['general'],
+            searchQuery: sessionStorage.getItem('unigrid_kanban_searchQuery_' + '@Model.Federation.JoinCode') || '',
+            filterPriority: sessionStorage.getItem('unigrid_kanban_filterPriority_' + '@Model.Federation.JoinCode') || '',
+            filterAssignee: sessionStorage.getItem('unigrid_kanban_filterAssignee_' + '@Model.Federation.JoinCode') || '',
+            selectedTask: { taskComments: [] },
+            isEditing: false,
+            detailOpen: false,
+            selectedCommentFileName: '',
+            newCommentContent: '',
+            replyingToComment: null,
+            viewMode: 'grid',
+            activeFileSection: 'files',
+            previewFile: null,
+            replyingToMessage: null,
             lockedChannels: {},
             channelOwners: {},
             channelModerators: {},
@@ -2357,7 +3165,7 @@
                 targetCount = t.TargetCount,
                 currentCount = t.CurrentCount
             }).ToList())),
-            workspaceFiles: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.SharedFiles.Select(f => new { id = f.Id.ToString(), fileName = f.FileName, fileSize = f.FileSize, fileUrl = f.FileUrl }).ToList())),
+            workspaceFiles: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.SharedFiles.Select(f => new { id = f.Id.ToString(), fileName = f.FileName, fileSize = f.FileSize, fileUrl = f.FileUrl, userId = f.UserId.ToString().ToLower() }).ToList())),
             attachFileOpen: false,
             selectedAttachmentId: null,
             selectedAttachmentName: '',
@@ -2375,7 +3183,6 @@
             selectedKpiCategoryFilter: 'all',
             assignKpiOpen: false,
             kpiRequests: [],
-            canManageKpi: @((Model.CurrentUserRole == "Owner" || Model.CurrentUserRole == "HeadPresident" || (Model.CurrentUserRole == "DepartmentManager" && (await Model.GetSettingValueAsync(Model.Federation.JoinCode, "allowManagerSetKpi", true)))).ToString().ToLower()),
             initialLockedChannels: @Html.Raw(Model.GetLockedChannelsJson()),
             initialChannelOwners: @Html.Raw(Model.GetChannelOwnersJson()),
             initialChannelModerators: @Html.Raw(Model.GetChannelModeratorsJson()),
@@ -2386,6 +3193,14 @@
             initialChannels: @Html.Raw(Model.GetChannelsJson()),
 
             disabledChatUsers: [],
+            inviteOpen: false,
+            inviteEmail: '',
+            inviteRole: 'Member',
+            inviteDisplayRole: '',
+            checkingEmail: false,
+            userFound: null,
+            inviteeName: '',
+            inviteeAvatar: '',
             hoveredSegment: '',
             hoveredMemberIndex: null,
             hoveredMemberText: '',
@@ -2404,6 +3219,15 @@
                 this.$watch('activeChannel', value => {
                     localStorage.setItem('unigrid_fed_active_channel_' + '@Model.Federation.JoinCode', value);
                     this.scrollChatToBottom();
+                });
+                this.$watch('searchQuery', value => {
+                    sessionStorage.setItem('unigrid_kanban_searchQuery_' + '@Model.Federation.JoinCode', value);
+                });
+                this.$watch('filterPriority', value => {
+                    sessionStorage.setItem('unigrid_kanban_filterPriority_' + '@Model.Federation.JoinCode', value);
+                });
+                this.$watch('filterAssignee', value => {
+                    sessionStorage.setItem('unigrid_kanban_filterAssignee_' + '@Model.Federation.JoinCode', value);
                 });
 
                 // Start SignalR Connection
@@ -2434,6 +3258,67 @@
                     if (index !== -1) {
                         this.chatMessages[index].rawContent = '[deleted_message]';
                         this.chatMessages[index].content = '[deleted_message]';
+                    }
+                });
+                connection.on("ReceiveTaskComment", (payload) => {
+                    console.log("Fed SignalR Comment:", payload);
+                    if (this.selectedTask && this.selectedTask.id === payload.taskId) {
+                        if (!this.selectedTask.taskComments) this.selectedTask.taskComments = [];
+                        if (!this.selectedTask.taskComments.some(c => c.id === payload.id)) {
+                            if (payload.uploadedFile) {
+                                if (!this.workspaceFiles.some(f => f.id === payload.uploadedFile.id)) {
+                                    this.workspaceFiles.unshift(payload.uploadedFile);
+                                }
+                            }
+                            this.selectedTask.taskComments.push({
+                                id: payload.id,
+                                content: payload.content,
+                                createdAt: payload.createdAt,
+                                user: { fullName: payload.userName },
+                                parentId: payload.parentId
+                            });
+                            this.$nextTick(() => {
+                                const commentsContainer = document.querySelector('.max-h-\\[220px\\].overflow-y-auto');
+                                if (commentsContainer) {
+                                    commentsContainer.scrollTop = commentsContainer.scrollHeight;
+                                }
+                            });
+                        }
+                    }
+                });
+
+                connection.on("ReceiveTaskUpdate", (payload) => {
+                    console.log("Fed SignalR Task Update:", payload);
+                    const taskIdx = this.workspaceTasks.findIndex(t => t.id === payload.id);
+                    if (taskIdx !== -1) {
+                        this.workspaceTasks[taskIdx].title = payload.title;
+                        this.workspaceTasks[taskIdx].description = payload.description;
+                        this.workspaceTasks[taskIdx].status = payload.status;
+                        this.workspaceTasks[taskIdx].assigneeId = payload.assigneeId;
+                        this.workspaceTasks[taskIdx].dueDate = payload.dueDate;
+                        this.workspaceTasks[taskIdx].priority = payload.priority;
+                        this.workspaceTasks[taskIdx].isCounterTask = payload.isCounterTask;
+                        this.workspaceTasks[taskIdx].targetCount = payload.targetCount;
+                        this.workspaceTasks[taskIdx].currentCount = payload.currentCount;
+                    }
+                    if (this.selectedTask && this.selectedTask.id === payload.id) {
+                        this.selectedTask.title = payload.title;
+                        this.selectedTask.description = payload.description;
+                        this.selectedTask.status = payload.status;
+                        this.selectedTask.assigneeId = payload.assigneeId;
+                        this.selectedTask.dueDate = payload.dueDate;
+                        this.selectedTask.priority = payload.priority;
+                        this.selectedTask.isCounterTask = payload.isCounterTask;
+                        this.selectedTask.targetCount = payload.targetCount;
+                        this.selectedTask.currentCount = payload.currentCount;
+                    }
+                });
+
+                connection.on("ReceiveTaskDeletion", (payload) => {
+                    console.log("Fed SignalR Task Deletion:", payload);
+                    this.workspaceTasks = this.workspaceTasks.filter(t => t.id !== payload.taskId);
+                    if (this.selectedTask && this.selectedTask.id === payload.taskId) {
+                        this.detailOpen = false;
                     }
                 });
 
@@ -2636,6 +3521,9 @@
                 if (this.selectedAttachmentId) {
                     formData.append('selectedFileId', this.selectedAttachmentId);
                 }
+                if (this.replyingToMessage) {
+                    formData.append('parentId', this.replyingToMessage.id);
+                }
                 formData.append('__RequestVerificationToken', document.querySelector('input[name="__RequestVerificationToken"]').value);
 
                 const response = await fetch('?handler=SendFederationChatMessage&joinCode=@Model.Federation.JoinCode', {
@@ -2651,6 +3539,7 @@
                     this.chatInput = '';
                     this.selectedAttachmentId = null;
                     this.selectedAttachmentName = '';
+                    this.replyingToMessage = null;
                     if (!this.chatMessages.some(m => m.id === payload.id)) {
                         this.chatMessages.push(payload);
                         this.scrollChatToBottom();
@@ -2685,6 +3574,357 @@
                 } else {
                     alert('Failed to recall message.');
                 }
+            },
+
+            selectTask(taskJsonBase64) {
+                this.selectedCommentFileName = '';
+                const commentInput = document.getElementById('task-comment-file-input');
+                if (commentInput) commentInput.value = '';
+                let task = JSON.parse(atob(taskJsonBase64));
+                this.selectedTask = task;
+                if (task) {
+                    task.assigneeId = task.assignee ? task.assignee.id : '';
+                    if (task.dueDate) {
+                        let d = new Date(task.dueDate);
+                        
+                        if (d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0) {
+                            d.setHours(23);
+                            d.setMinutes(50);
+                            let year = d.getFullYear();
+                            let month = (d.getMonth() + 1).toString().padStart(2, '0');
+                            let date = d.getDate().toString().padStart(2, '0');
+                            task.dueDate = `${year}-${month}-${date}T23:50:00`;
+                        }
+
+                        let year = d.getFullYear();
+                        let month = (d.getMonth() + 1).toString().padStart(2, '0');
+                        let date = d.getDate().toString().padStart(2, '0');
+                        task.dueDateDate = `${year}-${month}-${date}`;
+                        
+                        let hours = d.getHours();
+                        let minutes = d.getMinutes();
+                        if ((hours === 0 && minutes === 0) || (hours === 23 && minutes === 50) || (hours === 23 && minutes === 59)) {
+                            task.dueDateTime = '';
+                        } else {
+                            let hoursStr = hours.toString().padStart(2, '0');
+                            let minutesStr = minutes.toString().padStart(2, '0');
+                            let minNum = parseInt(minutesStr);
+                            if (minNum >= 45) {
+                                let hNum = parseInt(hoursStr) + 1;
+                                hoursStr = hNum.toString().padStart(2, '0');
+                                minutesStr = '00';
+                            } else if (minNum >= 15) {
+                                minutesStr = '30';
+                            } else {
+                                minutesStr = '00';
+                            }
+                            task.dueDateTime = `${hoursStr}:${minutesStr}`;
+                        }
+                    } else {
+                        task.dueDateDate = '';
+                        task.dueDateTime = '';
+                    }
+                }
+                this.isEditing = false;
+                this.detailOpen = true;
+                this.$nextTick(() => {
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                });
+            },
+
+            async checkInviteEmail() {
+                const email = this.inviteEmail.trim();
+                if (!email || !email.includes('@@')) {
+                    this.userFound = null;
+                    this.inviteeName = "";
+                    this.inviteeAvatar = "";
+                    return;
+                }
+                this.checkingEmail = true;
+                try {
+                    const res = await fetch(`/api/notifications/search-by-email?email=${encodeURIComponent(email)}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.exists) {
+                            this.userFound = true;
+                            this.inviteeName = data.fullName;
+                            this.inviteeAvatar = data.avatarUrl;
+                        } else {
+                            this.userFound = false;
+                            this.inviteeName = "";
+                            this.inviteeAvatar = "";
+                        }
+                    } else {
+                        this.userFound = false;
+                    }
+                } catch (err) {
+                    console.error(err);
+                    this.userFound = false;
+                } finally {
+                    this.checkingEmail = false;
+                }
+            },
+
+            sendTaskCommentViaAjax() {
+                const fileInput = document.getElementById('task-comment-file-input');
+                const hasFile = fileInput && fileInput.files.length > 0;
+                if (!this.newCommentContent.trim() && !hasFile) return;
+
+                const formData = new FormData();
+                formData.append('CommentContent', this.newCommentContent);
+                formData.append('commentTaskId', this.selectedTask.id);
+                if (hasFile) {
+                    formData.append('CommentFile', fileInput.files[0]);
+                }
+                if (this.replyingToComment) {
+                    formData.append('CommentParentId', this.replyingToComment.id);
+                }
+
+                const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                if (tokenInput) {
+                    formData.append('__RequestVerificationToken', tokenInput.value);
+                }
+
+                const joinCode = '@Model.Federation.JoinCode';
+                const content = this.newCommentContent;
+                this.newCommentContent = '';
+                this.clearCommentFile();
+
+                fetch(`/FederationDetail?handler=AddFederationTaskComment&joinCode=${joinCode}`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(async res => {
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.id) {
+                            if (data.uploadedFile) {
+                                if (!this.workspaceFiles.some(f => f.id === data.uploadedFile.id)) {
+                                    this.workspaceFiles.unshift(data.uploadedFile);
+                                }
+                            }
+                            if (!this.selectedTask.taskComments) this.selectedTask.taskComments = [];
+                            if (!this.selectedTask.taskComments.some(c => c.id === data.id)) {
+                                this.selectedTask.taskComments.push({
+                                    id: data.id,
+                                    content: data.content,
+                                    createdAt: data.createdAt,
+                                    user: { fullName: data.userName },
+                                    parentId: data.parentId
+                                });
+                                this.replyingToComment = null;
+                                this.$nextTick(() => {
+                                    const commentsContainer = document.querySelector('.max-h-\\[220px\\].overflow-y-auto');
+                                    if (commentsContainer) {
+                                        commentsContainer.scrollTop = commentsContainer.scrollHeight;
+                                    }
+                                });
+                            }
+                        }
+                    } else {
+                        const errData = await res.json().catch(() => ({}));
+                        alert(errData.message || 'Failed to post task comment.');
+                        this.newCommentContent = content; // restore on error
+                    }
+                })
+                .catch(err => {
+                    console.error('Error posting task comment:', err);
+                    this.newCommentContent = content;
+                });
+            },
+
+            handleCommentFileChange(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const maxSize = 10 * 1024 * 1024;
+                if (file.size > maxSize) {
+                    alert("File size exceeds the 10 MB limit. Please select a smaller file.");
+                    event.target.value = '';
+                    this.selectedCommentFileName = '';
+                    return;
+                }
+
+                this.selectedCommentFileName = file.name;
+            },
+
+            clearCommentFile() {
+                const input = document.getElementById('task-comment-file-input');
+                if (input) input.value = '';
+                this.selectedCommentFileName = '';
+            },
+
+            getCommentAttachment(content) {
+                if (!content) return null;
+                const fileRegex = /\[file:([a-f0-9-]{36})\]/i;
+                const match = content.match(fileRegex);
+                if (match) {
+                    const fileId = match[1];
+                    return this.workspaceFiles.find(f => f.id === fileId);
+                }
+                return null;
+            },
+
+            parseCommentContent(content) {
+                if (!content) return '';
+                let text = content.replace(/\[file:[a-f0-9-]{36}\]/gi, '').trim();
+                if (!text) return '<span class="italic text-slate-400 text-xs inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg> Shared document</span>';
+                
+                let html = text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+                
+                return html;
+            },
+
+            formatTimeDisplay(timeStr) {
+                if (!timeStr) return 'No Time';
+                const parts = timeStr.split(':');
+                let h = parseInt(parts[0]);
+                let m = parts[1];
+                let suffix = h >= 12 ? 'PM' : 'AM';
+                let displayHour = h % 12 === 0 ? 12 : h % 12;
+                return `${displayHour.toString().padStart(2, '0')}:${m} ${suffix}`;
+            },
+
+            getDisplayHour(timeStr) {
+                if (!timeStr) return '09';
+                const parts = timeStr.split(':');
+                let h = parseInt(parts[0]) % 12;
+                if (h === 0) h = 12;
+                return h.toString().padStart(2, '0');
+            },
+
+            getDisplayMinute(timeStr) {
+                if (!timeStr) return '00';
+                const parts = timeStr.split(':');
+                return parts[1];
+            },
+
+            isAM(timeStr) {
+                if (!timeStr) return true;
+                const parts = timeStr.split(':');
+                let h = parseInt(parts[0]);
+                return h < 12;
+            },
+
+            incrementHour(isCreate) {
+                let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                if (!cur) cur = '09:00';
+                const parts = cur.split(':');
+                let h = (parseInt(parts[0]) + 1) % 24;
+                let newTime = `${h.toString().padStart(2, '0')}:${parts[1]}`;
+                if (isCreate) this.createTaskTime = newTime;
+                else this.selectedTask.dueDateTime = newTime;
+            },
+
+            decrementHour(isCreate) {
+                let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                if (!cur) cur = '09:00';
+                const parts = cur.split(':');
+                let h = (parseInt(parts[0]) - 1 + 24) % 24;
+                let newTime = `${h.toString().padStart(2, '0')}:${parts[1]}`;
+                if (isCreate) this.createTaskTime = newTime;
+                else this.selectedTask.dueDateTime = newTime;
+            },
+
+            incrementMinute(isCreate) {
+                let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                if (!cur) cur = '09:00';
+                const parts = cur.split(':');
+                let m = (parseInt(parts[1]) + 1) % 60;
+                let newTime = `${parts[0]}:${m.toString().padStart(2, '0')}`;
+                if (isCreate) this.createTaskTime = newTime;
+                else this.selectedTask.dueDateTime = newTime;
+            },
+
+            decrementMinute(isCreate) {
+                let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                if (!cur) cur = '09:00';
+                const parts = cur.split(':');
+                let m = (parseInt(parts[1]) - 1 + 60) % 60;
+                let newTime = `${parts[0]}:${m.toString().padStart(2, '0')}`;
+                if (isCreate) this.createTaskTime = newTime;
+                else this.selectedTask.dueDateTime = newTime;
+            },
+
+            setAM(isCreate) {
+                let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                if (!cur) cur = '09:00';
+                const parts = cur.split(':');
+                let h = parseInt(parts[0]);
+                if (h >= 12) h -= 12;
+                let newTime = `${h.toString().padStart(2, '0')}:${parts[1]}`;
+                if (isCreate) this.createTaskTime = newTime;
+                else this.selectedTask.dueDateTime = newTime;
+            },
+
+            setPM(isCreate) {
+                let cur = isCreate ? this.createTaskTime : this.selectedTask.dueDateTime;
+                if (!cur) cur = '09:00';
+                const parts = cur.split(':');
+                let h = parseInt(parts[0]);
+                if (h < 12) h += 12;
+                let newTime = `${h.toString().padStart(2, '0')}:${parts[1]}`;
+                if (isCreate) this.createTaskTime = newTime;
+                else this.selectedTask.dueDateTime = newTime;
+            },
+
+            get showCommentSuggestions() {
+                if (!this.newCommentContent) return null;
+                const words = this.newCommentContent.split(' ');
+                const lastWord = words[words.length - 1];
+                if (lastWord.startsWith('@@')) {
+                    return { type: '@@', query: lastWord.substring(1).toLowerCase() };
+                }
+                if (lastWord.startsWith('#')) {
+                    return { type: '#', query: lastWord.substring(1).toLowerCase() };
+                }
+                return null;
+            },
+
+            get filteredCommentMembers() {
+                const sug = this.showCommentSuggestions;
+                if (!sug || sug.type !== '@@') return [];
+                return this.federationMembers.filter(m => m.fullName.toLowerCase().includes(sug.query));
+            },
+
+            get filteredCommentTasks() {
+                const sug = this.showCommentSuggestions;
+                if (!sug || sug.type !== '#') return [];
+                return this.workspaceTasks.filter(t => t.title.toLowerCase().includes(sug.query));
+            },
+
+            get currentUserCanDeleteFile() {
+                const isOwnerOrPresident = this.currentUserRole === 'Owner' || this.currentUserRole === 'HeadPresident';
+                if (isOwnerOrPresident) return true;
+                if (!this.previewFile) return false;
+                return this.previewFile.userId === this.currentUserId;
+            },
+
+            get currentUserCanEditTask() {
+                const isOwnerOrPresident = this.currentUserRole === 'Owner' || this.currentUserRole === 'HeadPresident';
+                if (isOwnerOrPresident) return true;
+                if (!this.selectedTask) return false;
+                return this.selectedTask.assigneeId && this.selectedTask.assigneeId.toLowerCase() === this.currentUserId.toLowerCase();
+            },
+
+            get currentUserCanDeleteTask() {
+                return this.currentUserRole === 'Owner' || this.currentUserRole === 'HeadPresident';
+            },
+
+            insertCommentSuggestion(suggestionText) {
+                const words = this.newCommentContent.split(' ');
+                words[words.length - 1] = suggestionText + ' ';
+                this.newCommentContent = words.join(' ');
+                this.$nextTick(() => {
+                    const el = document.getElementById('task-comment-field');
+                    if (el) el.focus();
+                });
             },
 
             statusLabel(status) {

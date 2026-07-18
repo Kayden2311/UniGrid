@@ -117,9 +117,18 @@ namespace unigrid.Pages.Admin
             };
 
             await _context.WorkspaceFederations.AddAsync(federation);
-            await _context.SaveChangesAsync();
 
-            // Self-healing check: ensure a ChatRoom is created for this federation (as SignalR communications require it)
+            // The owner is also an explicit active member so member lists and
+            // federation-level authorization have one consistent source of truth.
+            await _context.WorkspaceFederationMembers.AddAsync(new WorkspaceFederationMember
+            {
+                FederationId = federation.Id,
+                UserId = user.Id,
+                JoinedAt = DateTime.UtcNow,
+                Role = "Owner",
+                Status = "Active"
+            });
+
             var room = new ChatRoom
             {
                 Id = Guid.NewGuid(),

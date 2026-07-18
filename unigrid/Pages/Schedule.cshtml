@@ -39,7 +39,7 @@
 }
 
 <link rel="stylesheet" href="~/css/schedule.css" asp-append-version="true" />
-<div class="space-y-4" x-data="scheduleComponent()">
+<div class="flex-1 min-h-0 flex flex-col space-y-4" x-data="scheduleComponent()">
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
@@ -75,10 +75,10 @@
     @Html.AntiForgeryToken()
 
     <!-- Main Grid and Widget Panel -->
-    <div class="flex gap-4">
+    <div class="flex gap-4 flex-1 min-h-0">
         
         <!-- Left Side: Interactive Calendar Sheet -->
-        <div class="flex-1 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm" style="max-height: calc(100vh - 220px);">
+        <div class="flex-1 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm h-full">
             <div style="min-width: 800px;">
                 <!-- Day Headers -->
                 <div class="sticky top-0 z-[50] border-b border-slate-200 bg-white"
@@ -120,8 +120,11 @@
                     @for (int dayIdx = 0; dayIdx < 7; dayIdx++)
                     {
                         var dIdx = dayIdx;
-                        <div class="border-r border-slate-200 last:border-r-0 relative h-full bg-white"
-                             :class="mode === 'moving' && movingTask && movingTask.sourceDayIdx === @dIdx ? 'overflow-visible z-[60]' : 'overflow-hidden z-0'">
+                        <div class="border-r border-slate-200 last:border-r-0 relative h-full bg-white transition-all"
+                             :class="[
+                                 (mode === 'moving' && movingTask && movingTask.sourceDayIdx === @dIdx) ? 'overflow-visible z-[60]' : 
+                                 (hoveredId && isEventInDay(hoveredId, @dIdx)) ? 'overflow-visible z-30' : 'overflow-hidden z-0'
+                             ]">
                              
                              <!-- Half-hour grid lines and triggers -->
                              @for (int slotIdx = 0; slotIdx < 48; slotIdx++)
@@ -376,13 +379,13 @@
             </div>
         </div>
         <!-- Right Side: Deadlines Widget Panel -->
-        <div class="w-72 shrink-0 self-start border border-slate-200 bg-white rounded-xl shadow-sm overflow-hidden">
-            <div class="p-4 border-b border-slate-100 flex items-center gap-2">
+        <div class="w-72 shrink-0 border border-slate-200 bg-white rounded-xl shadow-sm flex flex-col h-full overflow-hidden">
+            <div class="p-4 border-b border-slate-100 flex items-center gap-2 shrink-0">
                 <i data-lucide="clock" class="w-4 h-4 text-indigo-650 animate-pulse"></i>
                 <h3 class="text-sm font-semibold text-slate-800">Workspace Deadlines</h3>
             </div>
             
-            <div class="p-4 space-y-5 max-h-[600px] overflow-y-auto">
+            <div class="p-4 space-y-5 flex-1 overflow-y-auto">
                 <!-- Section 1: Due This Week -->
                 <div class="space-y-2.5">
                     <h4 class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Due This Week</h4>

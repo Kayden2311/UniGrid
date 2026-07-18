@@ -188,13 +188,13 @@ namespace unigrid.Controllers
                 targetName = invitation.Federation?.Name ?? "Federation";
                 returnJoinCode = invitation.Federation?.JoinCode;
 
-                // Create federation member link
-                var alreadyFedMember = await _context.WorkspaceFederationMembers
-                    .AnyAsync(wfm => wfm.FederationId == federationIdVal && wfm.UserId == user.Id);
+                // Create or reactivate a federation member link.
+                var fedMember = await _context.WorkspaceFederationMembers
+                    .FirstOrDefaultAsync(wfm => wfm.FederationId == federationIdVal && wfm.UserId == user.Id);
 
-                if (!alreadyFedMember)
+                if (fedMember == null)
                 {
-                    var fedMember = new WorkspaceFederationMember
+                    fedMember = new WorkspaceFederationMember
                     {
                         FederationId = federationIdVal,
                         UserId = user.Id,
@@ -204,6 +204,31 @@ namespace unigrid.Controllers
                         Status = "Active"
                     };
                     await _context.WorkspaceFederationMembers.AddAsync(fedMember);
+                }
+                else
+                {
+                    fedMember.IsDisabled = false;
+                    fedMember.JoinedAt = DateTime.UtcNow;
+                    fedMember.Role = invitation.Role ?? "Member";
+                    fedMember.Status = "Active";
+                    _context.WorkspaceFederationMembers.Update(fedMember);
+                }
+
+                // Repair federations created before chat-room provisioning existed.
+                var chatRoom = await _context.ChatRooms
+                    .FirstOrDefaultAsync(room => room.FederationId == federationIdVal);
+                if (chatRoom == null)
+                {
+                    await _context.ChatRooms.AddAsync(new ChatRoom
+                    {
+                        Id = Guid.NewGuid(),
+                        FederationId = federationIdVal,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+                else if (chatRoom.IsDisabled)
+                {
+                    chatRoom.IsDisabled = false;
                 }
             }
 

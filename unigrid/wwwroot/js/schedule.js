@@ -276,6 +276,12 @@ function scheduleComponent() {
             return (7 + Math.floor(slot / 2)) === hour && (slot % 2 === halfHour);
         },
 
+        isEventInDay(hoveredId, dayIdx) {
+            if (!hoveredId) return false;
+            let ev = this.events.find(x => x.id === hoveredId) || this.workspaceTasks.find(x => x.id === hoveredId);
+            return ev && ev.dayIdx === dayIdx;
+        },
+
         getWeekDates(offset) {
             let now = new Date();
             let monday = new Date(now);
@@ -755,12 +761,9 @@ function scheduleComponent() {
                 if (this.mode !== 'creating' || !this.dragCreate) return;
                 
                 let rectContainer = gridContainer.getBoundingClientRect();
-                let scrollContainer = gridContainer.closest('.overflow-auto');
-                let scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
-                let scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
                 
-                let relX = evMouse.clientX - rectContainer.left + scrollLeft;
-                let relY = evMouse.clientY - rectContainer.top + scrollTop;
+                let relX = evMouse.clientX - rectContainer.left;
+                let relY = evMouse.clientY - rectContainer.top;
                 
                 let dayWidth = (rectContainer.width - 80) / 7;
                 let day = 0;
@@ -870,6 +873,10 @@ function scheduleComponent() {
             this.dragTranslateY = 0;
             this.dragMoved = false;
 
+            let sContainer = gridContainer.closest('.overflow-auto');
+            this.startScrollTop = sContainer ? sContainer.scrollTop : 0;
+            this.startScrollLeft = sContainer ? sContainer.scrollLeft : 0;
+
             let cardEl = document.getElementById((ev.isTask ? 'task-' : 'ev-') + ev.id);
             let rectCard = cardEl.getBoundingClientRect();
             let offsetY = e.clientY - rectCard.top;
@@ -891,21 +898,24 @@ function scheduleComponent() {
                 let dx = evMouse.clientX - this.dragStartX;
                 let dy = evMouse.clientY - this.dragStartY;
 
-                // Update physical offset for absolute free-pixel coordinate moving
-                this.dragTranslateX = dx;
-                this.dragTranslateY = dy;
-
-                if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
-                    this.dragMoved = true;
-                }
-
                 let rectContainer = gridContainer.getBoundingClientRect();
                 let sContainer = gridContainer.closest('.overflow-auto');
                 let sTop = sContainer ? sContainer.scrollTop : 0;
                 let sLeft = sContainer ? sContainer.scrollLeft : 0;
 
-                let relX = evMouse.clientX - rectContainer.left + sLeft;
-                let relY = evMouse.clientY - rectContainer.top + sTop;
+                let dsTop = sTop - this.startScrollTop;
+                let dsLeft = sLeft - this.startScrollLeft;
+
+                // Update physical offset for absolute free-pixel coordinate moving, adjusting for scroll delta
+                this.dragTranslateX = dx + dsLeft;
+                this.dragTranslateY = dy + dsTop;
+
+                if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+                    this.dragMoved = true;
+                }
+
+                let relX = evMouse.clientX - rectContainer.left;
+                let relY = evMouse.clientY - rectContainer.top;
 
                 let dayWidth = (rectContainer.width - 80) / 7;
                 let day = 0;

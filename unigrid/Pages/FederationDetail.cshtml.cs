@@ -62,6 +62,21 @@ namespace unigrid.Pages
         [BindProperty]
         public Microsoft.AspNetCore.Http.IFormFile? UploadedFederationFile { get; set; }
 
+        [BindProperty]
+        public string? CommentContent { get; set; }
+
+        [BindProperty]
+        public Guid CommentTaskId { get; set; }
+
+        [BindProperty]
+        public Guid? CommentParentId { get; set; }
+
+        [BindProperty]
+        public Microsoft.AspNetCore.Http.IFormFile? CommentFile { get; set; }
+
+        [BindProperty]
+        public string? ChatContent { get; set; }
+
         public async System.Threading.Tasks.Task<IActionResult> OnGetAsync(string joinCode)
         {
             var accountIdClaim = User.FindFirst("AccountId")?.Value;
@@ -129,13 +144,55 @@ namespace unigrid.Pages
 
             CurrentUserRole = isOwner ? "Owner" : (memberRecord?.Role ?? "Member");
 
+            // Self-heal legacy federations so every owner appears in member
+            // management and every federation has a persistent chat room.
+            var ownerMember = Federation.WorkspaceFederationMembers
+                .FirstOrDefault(m => m.UserId == Federation.OwnerId);
+            if (ownerMember == null)
+            {
+                ownerMember = new WorkspaceFederationMember
+                {
+                    FederationId = Federation.Id,
+                    UserId = Federation.OwnerId,
+                    JoinedAt = Federation.CreatedAt,
+                    Role = "Owner",
+                    Status = "Active"
+                };
+                await _context.WorkspaceFederationMembers.AddAsync(ownerMember);
+                Federation.WorkspaceFederationMembers.Add(ownerMember);
+            }
+            else
+            {
+                ownerMember.IsDisabled = false;
+                ownerMember.Role = "Owner";
+                ownerMember.Status = "Active";
+            }
+
+            FederationChatRoom = await _context.ChatRooms
+                .FirstOrDefaultAsync(cr => cr.FederationId == Federation.Id);
+            if (FederationChatRoom == null)
+            {
+                FederationChatRoom = new ChatRoom
+                {
+                    Id = Guid.NewGuid(),
+                    FederationId = Federation.Id,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _context.ChatRooms.AddAsync(FederationChatRoom);
+            }
+            else
+            {
+                FederationChatRoom.IsDisabled = false;
+            }
+            await _context.SaveChangesAsync();
+
             // Symmetrically query child workspaces: 
             // 1. Direct children (Group/Business) where FederationId == federation.Id
             // 2. Personal workspaces linked via WorkspaceFederationMembers with status 'Active'
-            var directChildren = Federation.Workspaces.Where(w => !w.IsDisabled).ToList();
+            var directChildren = Federation.Workspaces.Where(w => !w.IsDisabled && w.FederationId == Federation.Id).ToList();
             var linkedPersonal = Federation.WorkspaceFederationMembers
-                .Where(m => !m.IsDisabled && m.PersonalWorkspace != null && !m.PersonalWorkspace.IsDisabled && m.Status == "Active")
-                .Select(m => m.PersonalWorkspace)
+                .Where(m => !m.IsDisabled && m.PersonalWorkspace != null && !m.PersonalWorkspace.IsDisabled && m.PersonalWorkspace.FederationId == Federation.Id && m.Status == "Active")
+                .Select(m => m.PersonalWorkspace!)
                 .ToList();
 
             ChildWorkspaces = directChildren.Concat(linkedPersonal)
@@ -198,6 +255,8 @@ namespace unigrid.Pages
 
             FederationTasks = await _context.Tasks
                 .Include(t => t.Assignee)
+                .Include(t => t.TaskComments).ThenInclude(tc => tc.User)
+                .Include(t => t.WorkspaceFiles)
                 .Where(t => !t.IsDisabled && t.FederationId == Federation.Id && t.WorkspaceId == null)
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
@@ -227,7 +286,6 @@ namespace unigrid.Pages
 
             // FederationUsers already loaded above
 
-            FederationChatRoom = await _context.ChatRooms.FirstOrDefaultAsync(cr => cr.FederationId == Federation.Id);
             if (FederationChatRoom != null)
             {
                 FederationChatMessages = await _context.ChatMessages
@@ -522,7 +580,8 @@ namespace unigrid.Pages
                     content = cleanContent,
                     rawContent = cm.Content,
                     sentAt = cm.SentAt,
-                    channel = channel
+                    channel = channel,
+                    parentId = cm.ParentId
                 };
             }).ToList();
 
@@ -834,7 +893,7 @@ namespace unigrid.Pages
                 Description = Helpers.InputSanitizer.SanitizeInput(description),
                 Priority = priority,
                 AssigneeId = assigneeId,
-                DueDate = dueDate,
+                DueDate = dueDate.HasValue ? DateTime.SpecifyKind(dueDate.Value, DateTimeKind.Utc) : null,
                 Status = status,
                 CreatedAt = DateTime.UtcNow,
                 IsCounterTask = isCounterTask,
@@ -933,8 +992,8 @@ namespace unigrid.Pages
                 UserId = targetUserId,
                 CategoryId = targetCategoryId,
                 PeriodType = periodType,
-                StartDate = startDate,
-                EndDate = endDate,
+                StartDate = startDate.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(startDate, DateTimeKind.Utc) : (startDate.Kind == DateTimeKind.Local ? startDate.ToUniversalTime() : startDate),
+                EndDate = endDate.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(endDate, DateTimeKind.Utc) : (endDate.Kind == DateTimeKind.Local ? endDate.ToUniversalTime() : endDate),
                 TargetValue = targetValue,
                 CreatedAt = DateTime.UtcNow
             };
@@ -969,10 +1028,13 @@ namespace unigrid.Pages
             return RedirectToPage("/FederationDetail", new { joinCode });
         }
 
-        public async System.Threading.Tasks.Task<IActionResult> OnPostSendFederationChatMessageAsync(string joinCode, string content, string activeChannel, Guid? selectedFileId = null)
+        public async System.Threading.Tasks.Task<IActionResult> OnPostSendFederationChatMessageAsync(string joinCode, string content, string activeChannel, Guid? selectedFileId = null, Guid? parentId = null)
         {
             var success = await LoadFederationDataAsync(joinCode);
             if (!success) return RedirectToPage("/Workspaces");
+
+            content ??= string.Empty;
+            activeChannel = string.IsNullOrWhiteSpace(activeChannel) ? "general" : activeChannel.Trim().ToLowerInvariant();
 
             bool canChat = IsMemberAllowed(CurrentUser.Id, "disabledChatUsers", CurrentUserRole);
             if (!canChat)
@@ -985,10 +1047,10 @@ namespace unigrid.Pages
                 return new BadRequestObjectResult(new { message = "Message content cannot be empty." });
             }
 
-            var chatRoom = await _context.ChatRooms.FirstOrDefaultAsync(cr => cr.FederationId == Federation.Id);
+            var chatRoom = FederationChatRoom;
             if (chatRoom == null)
             {
-                return new BadRequestObjectResult(new { message = "Federation chat room does not exist." });
+                return new BadRequestObjectResult(new { message = "Unable to initialize the federation chat room." });
             }
 
             if (content.StartsWith("[system:channel_rules]"))
@@ -1040,7 +1102,8 @@ namespace unigrid.Pages
                 SenderId = CurrentUser.Id,
                 Content = Helpers.InputSanitizer.SanitizeInput(contentWithChannel),
                 SentAt = DateTime.UtcNow,
-                IsDeleted = false
+                IsDeleted = false,
+                ParentId = parentId
             };
 
             await _context.ChatMessages.AddAsync(message);
@@ -1055,7 +1118,8 @@ namespace unigrid.Pages
                 content = content,
                 rawContent = message.Content,
                 sentAt = message.SentAt,
-                channel = string.IsNullOrEmpty(activeChannel) ? "general" : activeChannel
+                channel = string.IsNullOrEmpty(activeChannel) ? "general" : activeChannel,
+                parentId = message.ParentId
             };
 
             var hubContext = (IHubContext<ChatHub>)HttpContext.RequestServices.GetService(typeof(IHubContext<ChatHub>));
@@ -1078,7 +1142,7 @@ namespace unigrid.Pages
             if (!success) return RedirectToPage("/Workspaces");
 
             var message = await _context.ChatMessages.Include(cm => cm.Sender).FirstOrDefaultAsync(m => m.Id == messageId);
-            if (message == null)
+            if (message == null || FederationChatRoom == null || message.RoomId != FederationChatRoom.Id)
             {
                 return new BadRequestObjectResult(new { message = "Message not found." });
             }
@@ -1283,8 +1347,21 @@ namespace unigrid.Pages
                 return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "members" });
             }
 
+            var allowedRoles = new[] { "Member", "DepartmentManager", "HeadPresident" };
+            if (!allowedRoles.Contains(role))
+            {
+                TempData["ErrorMessage"] = "Invalid federation role.";
+                return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "members" });
+            }
+            if (CurrentUserRole != "Owner" && role == "HeadPresident")
+            {
+                TempData["ErrorMessage"] = "Only the Federation Owner can assign the Head President role.";
+                return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "members" });
+            }
+
             var member = await _context.WorkspaceFederationMembers
-                .FirstOrDefaultAsync(m => m.FederationId == Federation.Id && m.UserId == userId);
+                .FirstOrDefaultAsync(m => !m.IsDisabled && m.Status == "Active" &&
+                    m.FederationId == Federation.Id && m.UserId == userId);
 
             if (member == null)
             {
@@ -1399,6 +1476,372 @@ namespace unigrid.Pages
 
             TempData["SuccessMessage"] = "Removed member from the Federation and unlinked their child Workspaces.";
             return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
+        }
+
+        public async System.Threading.Tasks.Task<IActionResult> OnPostInviteFederationMemberAsync(string joinCode, string inviteEmail, string inviteRole, string inviteDisplayRole)
+        {
+            var success = await LoadFederationDataAsync(joinCode);
+            if (!success) return RedirectToPage("/Workspaces");
+
+            if (CurrentUserRole != "Owner" && CurrentUserRole != "HeadPresident")
+            {
+                TempData["ErrorMessage"] = "You do not have permission to invite members to this federation.";
+                return RedirectToPage("/FederationDetail", new { joinCode });
+            }
+
+            if (string.IsNullOrWhiteSpace(inviteEmail))
+            {
+                TempData["ErrorMessage"] = "Email is required.";
+                return RedirectToPage("/FederationDetail", new { joinCode });
+            }
+
+            var inviteEmailLower = inviteEmail.Trim().ToLower();
+
+            // check if already active member in WorkspaceFederationMembers
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Account.Email.ToLower() == inviteEmailLower);
+            if (user != null)
+            {
+                var existingMember = await _context.WorkspaceFederationMembers
+                    .FirstOrDefaultAsync(m => m.FederationId == Federation.Id && m.UserId == user.Id);
+                if (existingMember != null && !existingMember.IsDisabled && existingMember.Status == "Active")
+                {
+                    TempData["ErrorMessage"] = $"{inviteEmail} is already an active member of this federation.";
+                    return RedirectToPage("/FederationDetail", new { joinCode });
+                }
+            }
+
+            // check if there is already a pending invitation for this email to this federation
+            var existingInvite = await _context.WorkspaceInvitations
+                .FirstOrDefaultAsync(i => i.FederationId == Federation.Id && i.InviteeEmail.ToLower() == inviteEmailLower && i.Status == "Pending");
+            if (existingInvite != null)
+            {
+                TempData["ErrorMessage"] = $"An invitation has already been sent to {inviteEmail} and is currently pending.";
+                return RedirectToPage("/FederationDetail", new { joinCode });
+            }
+
+            // Create WorkspaceInvitation
+            var invitation = new WorkspaceInvitation
+            {
+                Id = Guid.NewGuid(),
+                WorkspaceId = null,
+                FederationId = Federation.Id,
+                InviterId = CurrentUser.Id,
+                InviteeEmail = inviteEmailLower,
+                Role = inviteRole,
+                DisplayRole = inviteDisplayRole,
+                Status = "Pending",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _context.WorkspaceInvitations.AddAsync(invitation);
+            await _context.SaveChangesAsync();
+
+            // Send notification/email
+            if (user != null)
+            {
+                var notificationService = HttpContext.RequestServices.GetRequiredService<unigrid.Services.INotificationService>();
+                // send real-time notification to the user in-app
+                await notificationService.CreateAndSendNotificationAsync(
+                    user.Id,
+                    $"You have been invited to join the Federation '{Federation.Name}' as '{inviteRole}'. Please check your invitations list.",
+                    "WorkspaceInvite",
+                    "/workspaces",
+                    invitation.Id
+                );
+            }
+
+            TempData["SuccessMessage"] = $"Invitation successfully sent to {inviteEmail}!";
+            return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "members" });
+        }
+
+        public async System.Threading.Tasks.Task<IActionResult> OnPostEditFederationTaskAsync(
+            string joinCode, Guid editTaskId, string editTaskTitle, string editTaskDescription, int editTaskPriority, Guid? editTaskAssigneeId, DateTime? editTaskDueDate, bool editIsCounterTask, int editTargetCount)
+        {
+            var success = await LoadFederationDataAsync(joinCode);
+            if (!success) return RedirectToPage("/Workspaces");
+
+            var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == editTaskId && t.FederationId == Federation.Id);
+            if (task == null)
+            {
+                TempData["ErrorMessage"] = "Federation task not found.";
+                return RedirectToPage("/FederationDetail", new { joinCode });
+            }
+
+            // Access check: only owner, head president, or assignee can edit
+            if (CurrentUserRole != "Owner" && CurrentUserRole != "HeadPresident" && task.AssigneeId != CurrentUser.Id)
+            {
+                TempData["ErrorMessage"] = "You do not have permission to edit this task.";
+                return RedirectToPage("/FederationDetail", new { joinCode });
+            }
+
+            if (string.IsNullOrWhiteSpace(editTaskTitle))
+            {
+                TempData["ErrorMessage"] = "Task title is required.";
+                return RedirectToPage("/FederationDetail", new { joinCode });
+            }
+
+            task.Title = Helpers.InputSanitizer.SanitizeInput(editTaskTitle);
+            task.Description = Helpers.InputSanitizer.SanitizeInput(editTaskDescription);
+            task.Priority = editTaskPriority;
+            task.AssigneeId = editTaskAssigneeId;
+            task.DueDate = editTaskDueDate.HasValue ? DateTime.SpecifyKind(editTaskDueDate.Value, DateTimeKind.Utc) : null;
+            task.IsCounterTask = editIsCounterTask;
+            task.TargetCount = editTargetCount;
+
+            _context.Tasks.Update(task);
+            await _context.SaveChangesAsync();
+
+            var hubContext = (IHubContext<ChatHub>)HttpContext.RequestServices.GetService(typeof(IHubContext<ChatHub>));
+            if (hubContext != null)
+            {
+                await hubContext.Clients.Group(Federation.Id.ToString()).SendAsync("ReceiveTaskUpdate", new { 
+                    id = task.Id.ToString(), 
+                    title = task.Title, 
+                    description = task.Description, 
+                    status = task.Status,
+                    assigneeId = task.AssigneeId.HasValue ? task.AssigneeId.Value.ToString().ToLower() : null,
+                    dueDate = task.DueDate.HasValue ? task.DueDate.Value.ToString("yyyy-MM-dd") : null,
+                    priority = task.Priority,
+                    isCounterTask = task.IsCounterTask,
+                    targetCount = task.TargetCount,
+                    currentCount = task.CurrentCount
+                });
+            }
+
+            TempData["SuccessMessage"] = "Federation task updated successfully.";
+            return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "tasks" });
+        }
+
+        public async System.Threading.Tasks.Task<IActionResult> OnPostAddFederationTaskCommentAsync(string joinCode)
+        {
+            var success = await LoadFederationDataAsync(joinCode);
+            if (!success)
+            {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return new BadRequestObjectResult(new { message = "Federation not found or unauthorized." });
+                }
+                return RedirectToPage("/Workspaces");
+            }
+
+            string finalContent = CommentContent ?? string.Empty;
+            object? uploadedFilePayload = null;
+
+            if (CommentFile != null && CommentFile.Length > 0)
+            {
+                const long maxFileSize = 10L * 1024 * 1024;
+                if (CommentFile.Length > maxFileSize)
+                {
+                    if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    {
+                        return new BadRequestObjectResult(new { message = "File size exceeds the 10 MB limit." });
+                    }
+                    TempData["ErrorMessage"] = "File size exceeds the 10 MB limit.";
+                    return RedirectToPage(new { joinCode });
+                }
+
+                string originalFileName = CommentFile.FileName;
+                string baseName = Path.GetFileNameWithoutExtension(originalFileName);
+                string extension = Path.GetExtension(originalFileName).TrimStart('.').ToLower();
+                
+                string fileType = "doc";
+                if (extension == "pdf") fileType = "pdf";
+                else if (extension == "xls" || extension == "xlsx" || extension == "csv") fileType = "spreadsheet";
+                else if (extension == "png" || extension == "jpg" || extension == "jpeg" || extension == "gif" || extension == "svg") fileType = "image";
+
+                string uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "files", "federations", Federation.Id.ToString());
+                if (!Directory.Exists(uploadDir))
+                {
+                    Directory.CreateDirectory(uploadDir);
+                }
+
+                string safeFileName = Guid.NewGuid() + "_" + originalFileName.ToLower().Replace(" ", "_");
+                string physicalPath = Path.Combine(uploadDir, safeFileName);
+
+                using (var stream = new FileStream(physicalPath, FileMode.Create))
+                {
+                    await CommentFile.CopyToAsync(stream);
+                }
+
+                var fileRecord = new WorkspaceFile
+                {
+                    Id = Guid.NewGuid(),
+                    WorkspaceId = null,
+                    FederationId = Federation.Id,
+                    UserId = CurrentUser.Id,
+                    TaskId = CommentTaskId,
+                    FileName = originalFileName,
+                    FileUrl = $"files/federations/{Federation.Id}/{safeFileName}",
+                    FileType = fileType,
+                    FileSize = CommentFile.Length,
+                    IsPublic = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _context.WorkspaceFiles.AddAsync(fileRecord);
+                await _context.SaveChangesAsync();
+
+                finalContent = $"[file:{fileRecord.Id}]{finalContent}";
+                uploadedFilePayload = new
+                {
+                    id = fileRecord.Id.ToString(),
+                    fileName = fileRecord.FileName,
+                    fileUrl = fileRecord.FileUrl,
+                    fileSize = fileRecord.FileSize,
+                    fileType = fileRecord.FileType
+                };
+            }
+
+            var comment = new TaskComment
+            {
+                Id = Guid.NewGuid(),
+                TaskId = CommentTaskId,
+                UserId = CurrentUser.Id,
+                Content = Helpers.InputSanitizer.SanitizeInput(finalContent),
+                CreatedAt = DateTime.UtcNow,
+                ParentId = CommentParentId
+            };
+
+            await _context.TaskComments.AddAsync(comment);
+            await _context.SaveChangesAsync();
+
+            var hubContext = (IHubContext<ChatHub>)HttpContext.RequestServices.GetService(typeof(IHubContext<ChatHub>));
+            if (hubContext != null)
+            {
+                await hubContext.Clients.Group(Federation.Id.ToString()).SendAsync("ReceiveTaskComment", new
+                {
+                    id = comment.Id,
+                    taskId = comment.TaskId,
+                    userId = comment.UserId,
+                    userName = CurrentUser.FullName,
+                    content = comment.Content,
+                    createdAt = comment.CreatedAt,
+                    parentId = comment.ParentId,
+                    uploadedFile = uploadedFilePayload
+                });
+            }
+
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return new JsonResult(new
+                {
+                    id = comment.Id,
+                    taskId = comment.TaskId,
+                    userId = comment.UserId,
+                    userName = CurrentUser.FullName,
+                    content = comment.Content,
+                    createdAt = comment.CreatedAt,
+                    parentId = comment.ParentId,
+                    uploadedFile = uploadedFilePayload
+                });
+            }
+
+            return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "tasks" });
+        }
+
+        public async System.Threading.Tasks.Task<IActionResult> OnPostDeleteFederationFileAsync(string joinCode, Guid fileId)
+        {
+            var success = await LoadFederationDataAsync(joinCode);
+            if (!success) return RedirectToPage("/Workspaces");
+
+            var file = await _context.WorkspaceFiles.FirstOrDefaultAsync(f => f.Id == fileId && f.FederationId == Federation.Id);
+            if (file == null)
+            {
+                TempData["ErrorMessage"] = "File not found.";
+                return RedirectToPage("/FederationDetail", new { joinCode });
+            }
+
+            if (CurrentUserRole != "Owner" && CurrentUserRole != "HeadPresident" && file.UserId != CurrentUser.Id)
+            {
+                TempData["ErrorMessage"] = "You do not have permission to delete this file.";
+                return RedirectToPage("/FederationDetail", new { joinCode });
+            }
+
+            try
+            {
+                string physicalPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", file.FileUrl.Replace('/', Path.DirectorySeparatorChar));
+                if (System.IO.File.Exists(physicalPath))
+                {
+                    System.IO.File.Delete(physicalPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting physical file: {FileUrl}", file.FileUrl);
+            }
+
+            _context.WorkspaceFiles.Remove(file);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "File deleted successfully.";
+            return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "files" });
+        }
+
+        public string SerializeTask(unigrid.Models.Task task)
+        {
+            var finalDueDate = task.DueDate;
+            if (finalDueDate.HasValue && finalDueDate.Value.Hour == 0 && finalDueDate.Value.Minute == 0 && finalDueDate.Value.Second == 0)
+            {
+                finalDueDate = finalDueDate.Value.Date.AddHours(23).AddMinutes(50);
+            }
+            var cleanTask = new {
+                id = task.Id,
+                title = task.Title,
+                description = task.Description,
+                status = task.Status,
+                priority = task.Priority,
+                dueDate = finalDueDate,
+                isCounterTask = task.IsCounterTask,
+                targetCount = task.TargetCount,
+                currentCount = task.CurrentCount,
+                assignee = task.Assignee != null ? new { id = task.Assignee.Id, fullName = task.Assignee.FullName } : null,
+                taskComments = task.TaskComments.Select(tc => new {
+                    id = tc.Id,
+                    content = tc.Content,
+                    createdAt = tc.CreatedAt,
+                    user = new { fullName = tc.User.FullName },
+                    parentId = tc.ParentId
+                }).ToList(),
+                files = task.WorkspaceFiles?.Select(f => new {
+                    id = f.Id,
+                    fileName = f.FileName,
+                    fileUrl = f.FileUrl,
+                    fileType = f.FileType,
+                    fileSize = f.FileSize
+                }).ToList()
+            };
+            return System.Text.Json.JsonSerializer.Serialize(cleanTask, new System.Text.Json.JsonSerializerOptions {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+            });
+        }
+
+        public string SerializeTaskBase64(unigrid.Models.Task task)
+        {
+            var json = SerializeTask(task);
+            return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
+        }
+
+        public string SerializeFile(WorkspaceFile file)
+        {
+            var cleanFile = new {
+                id = file.Id,
+                fileName = file.FileName,
+                fileUrl = file.FileUrl,
+                fileType = file.FileType,
+                fileSize = file.FileSize,
+                isPublic = file.IsPublic,
+                createdAt = file.CreatedAt,
+                user = new { fullName = file.User.FullName }
+            };
+            return System.Text.Json.JsonSerializer.Serialize(cleanFile, new System.Text.Json.JsonSerializerOptions {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+            });
+        }
+
+        public string SerializeFileBase64(WorkspaceFile file)
+        {
+            var json = SerializeFile(file);
+            return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
         }
     }
 }

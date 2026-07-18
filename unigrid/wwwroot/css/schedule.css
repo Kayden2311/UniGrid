@@ -71,3 +71,10 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
     scrollbar-width: thin;
     scrollbar-color: #cbd5e1 transparent;
 }
+
+/* Prevent main layout scroll and make it a flex container on Schedule page */
+main.flex-1.overflow-y-auto {
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
