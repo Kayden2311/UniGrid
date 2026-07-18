@@ -960,13 +960,13 @@
                         </form>
                     </div>
 
-                    <!-- Link Personal Workspace by Invite Code -->
+                    <!-- Link Business Workspace by Invite Code -->
                     <div class="glass p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-4">
                         <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
                             <i data-lucide="key" class="w-5 h-5 text-emerald-500"></i>
-                            <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Link Personal Portal</h4>
+                            <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Link Business Workspace</h4>
                         </div>
-                        <p class="text-[10px] text-slate-400 leading-relaxed">Personal plan workspaces must be connected by manually entering their private invite code. Requires approval from the Federation Owner.</p>
+                        <p class="text-[10px] text-slate-400 leading-relaxed">Business plan workspaces can connect by entering their private invite code. Requires approval from the Federation Owner.</p>
 
                         <form method="post" asp-page-handler="LinkPersonalWorkspaceByCode" asp-route-joinCode="@Model.Federation.JoinCode" class="space-y-3.5">
                             @Html.AntiForgeryToken()
@@ -997,7 +997,7 @@
                             </li>
                             <li class="flex items-start gap-2">
                                 <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5"></i>
-                                <span>Personal collaboration is completely isolated to secure workspace child environments.</span>
+                                <span>Business workspace collaboration remains isolated within secure organization environments.</span>
                             </li>
                         </ul>
                     </div>

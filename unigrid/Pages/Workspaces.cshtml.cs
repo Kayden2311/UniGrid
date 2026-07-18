@@ -90,7 +90,7 @@ public class WorkspacesModel : PageModel
                     .ToListAsync();
 
                 PersonalWorkspaces = await _context.Workspaces
-                    .Where(w => !w.IsDisabled && w.OwnerId == profile.Id)
+                    .Where(w => !w.IsDisabled && w.OwnerId == profile.Id && w.PackageTier == "Business")
                     .OrderByDescending(w => w.CreatedAt)
                     .ToListAsync();
 
@@ -186,13 +186,13 @@ public class WorkspacesModel : PageModel
 
         if (string.IsNullOrWhiteSpace(FedJoinCode) || SelectedPersonalWorkspaceId == Guid.Empty)
         {
-            TempData["ErrorMessage"] = "Please enter a Federation code and select a Personal Workspace to link.";
+            TempData["ErrorMessage"] = "Please enter a Federation code and select a Business Workspace to link.";
             return RedirectToPage("/Workspaces");
         }
 
-        var normalizedCode = FedJoinCode.Trim().ToUpper();
+        var normalizedCode = FedJoinCode.Trim().ToUpperInvariant();
         var federation = await _context.WorkspaceFederations
-            .FirstOrDefaultAsync(f => f.JoinCode == normalizedCode);
+            .FirstOrDefaultAsync(f => !f.IsDisabled && f.JoinCode.Trim().ToUpper() == normalizedCode);
 
         if (federation == null)
         {
@@ -200,54 +200,64 @@ public class WorkspacesModel : PageModel
             return RedirectToPage("/Workspaces");
         }
 
-        // Verify if user is already a member of this federation
-        var isAlreadyMember = await _context.WorkspaceFederationMembers
-            .AnyAsync(m => m.FederationId == federation.Id && m.UserId == profile.Id);
+        // Owners are inserted as Federation members when Admin creates a
+        // Federation. Keep that membership and allow this flow to attach their
+        // Business Workspace instead of rejecting them as already joined.
+        var existingMember = await _context.WorkspaceFederationMembers
+            .FirstOrDefaultAsync(m => m.FederationId == federation.Id && m.UserId == profile.Id);
 
-        if (isAlreadyMember)
-        {
-            TempData["ErrorMessage"] = "You have already joined this Federation.";
-            return RedirectToPage("/Workspaces");
-        }
-
-        // Verify that the personal workspace is owned by this user
+        // Verify that the Business workspace is owned by this user
         var personalWorkspace = await _context.Workspaces
             .FirstOrDefaultAsync(w => w.Id == SelectedPersonalWorkspaceId && w.OwnerId == profile.Id);
 
         if (personalWorkspace == null)
         {
-            TempData["ErrorMessage"] = "The selected Personal Workspace is invalid or you are not the owner.";
+            TempData["ErrorMessage"] = "The selected Business Workspace is invalid or you are not the owner.";
             return RedirectToPage("/Workspaces");
         }
 
-        // ENFORCE BUSINESS RULE: Link only allowed when BOTH users possess a workspace with subscription as "Personal" plan
-        // 1. Check joiner's selected workspace package tier
-        if (personalWorkspace.PackageTier != "Personal")
+        if (existingMember?.PersonalWorkspaceId != null)
         {
-            TempData["ErrorMessage"] = "Link failed! The selected Workspace is not on the Personal plan. Only Personal plan Workspaces can be connected to a Federation.";
+            TempData["ErrorMessage"] = "You have already connected a Business Workspace to this Federation.";
             return RedirectToPage("/Workspaces");
         }
 
-        // 2. Check federation creator (owner) package tier (must have at least one workspace with 'Personal' plan)
+        // ENFORCE BUSINESS RULE: only Business-plan workspaces can join a Federation.
+        // 1. Check joiner's selected workspace package tier
+        if (personalWorkspace.PackageTier != "Business")
+        {
+            TempData["ErrorMessage"] = "Link failed! Only Business plan Workspaces can be connected to a Federation.";
+            return RedirectToPage("/Workspaces");
+        }
+
+        // Federation owners must also operate at least one Business workspace.
         var creatorHasPersonalWorkspace = await _context.Workspaces
-            .AnyAsync(w => w.OwnerId == federation.OwnerId && w.PackageTier == "Personal");
+            .AnyAsync(w => !w.IsDisabled && w.OwnerId == federation.OwnerId && w.PackageTier == "Business");
 
         if (!creatorHasPersonalWorkspace)
         {
-            TempData["ErrorMessage"] = "Link failed! The Federation creator does not own any Personal plan Workspace. Federation rules require both members to own a Personal plan Workspace.";
+            TempData["ErrorMessage"] = "Link failed! The Federation owner does not own an active Business plan Workspace.";
             return RedirectToPage("/Workspaces");
         }
 
-        // Add user as a member of the federation
-        var fedMember = new WorkspaceFederationMember
+        if (existingMember == null)
         {
-            FederationId = federation.Id,
-            UserId = profile.Id,
-            PersonalWorkspaceId = personalWorkspace.Id,
-            JoinedAt = DateTime.UtcNow
-        };
-
-        await _context.WorkspaceFederationMembers.AddAsync(fedMember);
+            await _context.WorkspaceFederationMembers.AddAsync(new WorkspaceFederationMember
+            {
+                FederationId = federation.Id,
+                UserId = profile.Id,
+                PersonalWorkspaceId = personalWorkspace.Id,
+                JoinedAt = DateTime.UtcNow,
+                Role = "Member",
+                Status = "Active"
+            });
+        }
+        else
+        {
+            existingMember.PersonalWorkspaceId = personalWorkspace.Id;
+            existingMember.IsDisabled = false;
+            existingMember.Status = "Active";
+        }
         
         // Symmetrically set FederationId at the database level for the workspace
         personalWorkspace.FederationId = federation.Id;

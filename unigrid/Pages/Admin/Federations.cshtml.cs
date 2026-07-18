@@ -82,16 +82,27 @@ namespace unigrid.Pages.Admin
                 return RedirectToPage();
             }
 
+            var normalizedJoinCode = joinCode.Trim().ToUpperInvariant();
+            var normalizedName = name.Trim();
+            var normalizedOwnerEmail = ownerEmail.Trim().ToLowerInvariant();
+
+            if (normalizedJoinCode.Length > 20)
+            {
+                TempData["FedError"] = "Join Code must not exceed 20 characters.";
+                return RedirectToPage();
+            }
+
             // Check if join code is unique
-            var codeExists = await _context.WorkspaceFederations.AnyAsync(f => f.JoinCode.ToLower() == joinCode.ToLower());
+            var codeExists = await _context.WorkspaceFederations
+                .AnyAsync(f => f.JoinCode.Trim().ToUpper() == normalizedJoinCode);
             if (codeExists)
             {
-                TempData["FedError"] = $"Join Code '{joinCode}' is already in use by another federation.";
+                TempData["FedError"] = $"Join Code '{normalizedJoinCode}' is already in use by another federation.";
                 return RedirectToPage();
             }
 
             // Find account
-            var account = await _context.Accounts.FirstOrDefaultAsync(a => a.Email.ToLower() == ownerEmail.ToLower());
+            var account = await _context.Accounts.FirstOrDefaultAsync(a => a.Email.ToLower() == normalizedOwnerEmail);
             if (account == null)
             {
                 TempData["FedError"] = $"Account with email '{ownerEmail}' not found.";
@@ -110,8 +121,8 @@ namespace unigrid.Pages.Admin
             var federation = new WorkspaceFederation
             {
                 Id = Guid.NewGuid(),
-                Name = name,
-                JoinCode = joinCode,
+                Name = normalizedName,
+                JoinCode = normalizedJoinCode,
                 OwnerId = user.Id,
                 CreatedAt = DateTime.UtcNow
             };

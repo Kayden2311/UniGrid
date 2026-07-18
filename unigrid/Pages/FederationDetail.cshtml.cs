@@ -102,6 +102,8 @@ namespace unigrid.Pages
         {
             if (string.IsNullOrWhiteSpace(joinCode)) return false;
 
+            var normalizedJoinCode = joinCode.Trim().ToUpperInvariant();
+
             var accountIdClaim = User.FindFirst("AccountId")?.Value;
             if (string.IsNullOrEmpty(accountIdClaim)) return false;
 
@@ -127,7 +129,7 @@ namespace unigrid.Pages
                 .Include(f => f.WorkspaceFederationMembers)
                     .ThenInclude(m => m.User)
                         .ThenInclude(u => u.Account)
-                .FirstOrDefaultAsync(f => !f.IsDisabled && f.JoinCode == joinCode.Trim().ToUpper());
+                .FirstOrDefaultAsync(f => !f.IsDisabled && f.JoinCode.Trim().ToUpper() == normalizedJoinCode);
 
             if (Federation == null) return false;
 
@@ -188,7 +190,7 @@ namespace unigrid.Pages
 
             // Symmetrically query child workspaces: 
             // 1. Direct children (Group/Business) where FederationId == federation.Id
-            // 2. Personal workspaces linked via WorkspaceFederationMembers with status 'Active'
+            // 2. Business workspaces linked via the legacy PersonalWorkspaceId mapping with status 'Active'
             var directChildren = Federation.Workspaces.Where(w => !w.IsDisabled && w.FederationId == Federation.Id).ToList();
             var linkedPersonal = Federation.WorkspaceFederationMembers
                 .Where(m => !m.IsDisabled && m.PersonalWorkspace != null && !m.PersonalWorkspace.IsDisabled && m.PersonalWorkspace.FederationId == Federation.Id && m.Status == "Active")
@@ -320,12 +322,13 @@ namespace unigrid.Pages
         public async System.Threading.Tasks.Task<System.Text.Json.Nodes.JsonObject> GetFederationSettingsAsync(string joinCode)
         {
             if (string.IsNullOrEmpty(joinCode)) return new System.Text.Json.Nodes.JsonObject();
-            
-            string cacheKey = $"FedSettings_{joinCode.Trim().ToUpper()}";
+
+            var normalizedJoinCode = joinCode.Trim().ToUpperInvariant();
+            string cacheKey = $"FedSettings_{normalizedJoinCode}";
             if (!_cache.TryGetValue(cacheKey, out System.Text.Json.Nodes.JsonObject? settings))
             {
                 var fed = await _context.WorkspaceFederations
-                    .Where(f => f.JoinCode == joinCode)
+                    .Where(f => f.JoinCode.Trim().ToUpper() == normalizedJoinCode)
                     .Select(f => new { f.SettingsJson })
                     .FirstOrDefaultAsync();
 
@@ -617,9 +620,9 @@ namespace unigrid.Pages
                 return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
             }
 
-            if (workspace.WorkspaceType == "Personal")
+            if (workspace.PackageTier != "Business")
             {
-                TempData["ErrorMessage"] = "This workspace is Personal. Please use the Personal Workspace link form.";
+                TempData["ErrorMessage"] = "Only Business plan Workspaces can be linked to a Federation.";
                 return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
             }
 
@@ -667,7 +670,7 @@ namespace unigrid.Pages
 
             if (string.IsNullOrWhiteSpace(inviteCode))
             {
-                TempData["ErrorMessage"] = "Please enter the personal workspace invite code.";
+                TempData["ErrorMessage"] = "Please enter the Business workspace invite code.";
                 return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
             }
 
@@ -683,19 +686,19 @@ namespace unigrid.Pages
 
             if (workspace == null)
             {
-                TempData["ErrorMessage"] = "Personal workspace with this invite code does not exist.";
+                TempData["ErrorMessage"] = "Business workspace with this invite code does not exist.";
                 return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
             }
 
-            if (workspace.WorkspaceType != "Personal")
+            if (workspace.PackageTier != "Business")
             {
-                TempData["ErrorMessage"] = "This invite code belongs to a Group workspace. Only Personal workspaces can be linked manually.";
+                TempData["ErrorMessage"] = "Only Business plan Workspaces can be linked to a Federation.";
                 return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
             }
 
             if (workspace.FederationId != null)
             {
-                TempData["ErrorMessage"] = "This personal workspace already belongs to another federation.";
+                TempData["ErrorMessage"] = "This Business workspace already belongs to another federation.";
                 return RedirectToPage("/FederationDetail", new { joinCode, activeTab = "settings" });
             }
 
