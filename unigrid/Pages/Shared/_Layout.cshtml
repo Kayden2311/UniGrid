@@ -1,15 +1,18 @@
+@inject IWebHostEnvironment HostEnvironment
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-[#fafafa]">
 <head>
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-1JW9TXZ0CD"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-1JW9TXZ0CD');
-</script>
+@if (HostEnvironment.IsProduction())
+{
+    <!-- Google Analytics is production-only so local test traffic is excluded. -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1JW9TXZ0CD"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1JW9TXZ0CD');
+    </script>
+}
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - UniGrid</title>
