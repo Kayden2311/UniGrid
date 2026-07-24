@@ -3489,7 +3489,6 @@
                 saveKpiState() {
                     const wsCode = '@Model.Workspace.JoinCode';
                     localStorage.setItem('unigrid_kpi_targets_' + wsCode, JSON.stringify(this.kpiTargets));
-                    localStorage.setItem('unigrid_kpi_requests_' + wsCode, JSON.stringify(this.kpiRequests));
                     localStorage.setItem('unigrid_kpi_categories_' + wsCode, JSON.stringify(this.demoCategories));
                 },
                 getMemberKpiMetrics(memberId, periodFilter, timeframe, categoryFilter = 'all') {
@@ -3610,10 +3609,9 @@
                         advice
                     };
                 },
-                initKpiData() {
+                async initKpiData() {
                     const wsCode = '@Model.Workspace.JoinCode';
                     const savedTargets = localStorage.getItem('unigrid_kpi_targets_' + wsCode);
-                    const savedRequests = localStorage.getItem('unigrid_kpi_requests_' + wsCode);
                     const savedCategories = localStorage.getItem('unigrid_kpi_categories_' + wsCode);
 
                     if (savedCategories) {
@@ -3659,20 +3657,13 @@
                         }
                     }
 
-                    if (savedRequests) {
-                        try {
-                            this.kpiRequests = JSON.parse(savedRequests);
-                        } catch(e) {}
-                    } else {
-                        const assignable = this.workspaceMembers.filter(m => m.id.toLowerCase() !== this.workspaceOwnerId.toLowerCase() && m.role !== 'Owner');
-                        if (assignable.length >= 1) {
-                            const m1 = assignable[0];
-                            this.kpiRequests = [
-                                { id: 'kr-1', userId: m1.id, userName: m1.fullName, categoryId: 'cat-1', periodType: 'Weekly', requestType: 'increment', incrementValue: 2, timestamp: '10 mins ago', status: 'pending' }
-                            ];
-                        } else {
-                            this.kpiRequests = [];
-                        }
+                    try {
+                        const response = await fetch('/api/kpi/requests/workspace/@Model.Workspace.Id');
+                        if (!response.ok) throw new Error('Unable to load pending KPI requests.');
+                        this.kpiRequests = await response.json();
+                    } catch (error) {
+                        console.error(error);
+                        this.kpiRequests = [];
                     }
 
                     this.saveKpiState();
@@ -3713,26 +3704,33 @@
                         this.kpiFormMembers = [...assignable];
                     }
                 },
-                handleRequestKpiUpdate(userId, categoryId, periodType, type, incrementValue) {
+                async handleRequestKpiUpdate(userId, categoryId, periodType, type, incrementValue) {
                     const member = this.workspaceMembers.find(m => m.id === userId);
                     if (!member) return;
                     const existing = this.kpiRequests.find(r => r.userId === userId && r.categoryId === categoryId && r.periodType === periodType && r.status === 'pending');
                     if (existing) return;
                     const val = incrementValue || 1;
-                    this.kpiRequests.push({
-                        id: 'kr-' + Date.now(),
+                    const request = {
                         userId: userId,
                         userName: member.fullName,
                         categoryId: categoryId,
                         periodType: periodType,
                         requestType: type,
                         incrementValue: val,
-                        timestamp: 'Just now',
-                        status: 'pending'
+                    };
+                    const response = await fetch('/api/kpi/requests/workspace/@Model.Workspace.Id', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(request)
                     });
-                    this.saveKpiState();
+                    if (!response.ok) {
+                        const error = await response.json().catch(() => ({}));
+                        alert(error.message || 'Unable to submit KPI request.');
+                        return;
+                    }
+                    this.kpiRequests.push(await response.json());
                 },
-                handleApproveKpi(reqId) {
+                async handleApproveKpi(reqId) {
                     const req = this.kpiRequests.find(r => r.id === reqId);
                     if (!req) return;
                     const targetIdx = this.kpiTargets.findIndex(t => t.userId === req.userId && t.categoryId === req.categoryId && t.periodType === req.periodType);
@@ -3744,12 +3742,15 @@
                             target.achievedValue = target.targetValue;
                         }
                     }
+                    const response = await fetch(`/api/kpi/requests/workspace/@Model.Workspace.Id/${reqId}`, { method: 'DELETE' });
+                    if (!response.ok) return alert('Unable to approve KPI request.');
                     this.kpiRequests = this.kpiRequests.filter(r => r.id !== reqId);
                     this.saveKpiState();
                 },
-                handleRejectKpi(reqId) {
+                async handleRejectKpi(reqId) {
+                    const response = await fetch(`/api/kpi/requests/workspace/@Model.Workspace.Id/${reqId}`, { method: 'DELETE' });
+                    if (!response.ok) return alert('Unable to reject KPI request.');
                     this.kpiRequests = this.kpiRequests.filter(r => r.id !== reqId);
-                    this.saveKpiState();
                 },
 
                 get canCurrentUserCreateChannel() {

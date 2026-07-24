@@ -3209,6 +3209,7 @@
 
             init() {
                 this.parseSystemRules();
+                this.initKpiRequests();
                 this.scrollChatToBottom();
                 this.$watch('activeTab', value => {
                     localStorage.setItem('unigrid_fed_tab_' + '@Model.Federation.JoinCode', value);
@@ -4172,17 +4173,17 @@
                 return html;
             },
 
-            initKpiRequests() {
+            async initKpiRequests() {
                 const fedCode = '@Model.Federation.JoinCode';
-                const savedRequests = localStorage.getItem('unigrid_fed_kpi_requests_' + fedCode);
                 const savedOverrides = localStorage.getItem('unigrid_fed_kpi_overrides_' + fedCode);
-                
-                if (savedRequests) {
-                    try {
-                        this.kpiRequests = JSON.parse(savedRequests);
-                    } catch(e) {
-                        this.kpiRequests = [];
-                    }
+                 
+                try {
+                    const response = await fetch('/api/kpi/requests/federation/@Model.Federation.Id');
+                    if (!response.ok) throw new Error('Unable to load pending federation KPI requests.');
+                    this.kpiRequests = await response.json();
+                } catch (error) {
+                    console.error(error);
+                    this.kpiRequests = [];
                 }
                 
                 if (savedOverrides) {
@@ -4203,8 +4204,6 @@
             },
             saveKpiState() {
                 const fedCode = '@Model.Federation.JoinCode';
-                localStorage.setItem('unigrid_fed_kpi_requests_' + fedCode, JSON.stringify(this.kpiRequests));
-                
                 // Save overrides list
                 const overrides = this.kpiTargets.map(t => ({
                     userId: t.userId,
@@ -4214,7 +4213,7 @@
                 }));
                 localStorage.setItem('unigrid_fed_kpi_overrides_' + fedCode, JSON.stringify(overrides));
             },
-            handleRequestKpiUpdate(userId, categoryId, periodType, type, incrementValue) {
+            async handleRequestKpiUpdate(userId, categoryId, periodType, type, incrementValue) {
                 const member = this.federationMembers.find(m => m.id.toLowerCase() === userId.toLowerCase());
                 if (!member) return;
                 
@@ -4227,20 +4226,27 @@
                 if (existing) return;
                 
                 const val = incrementValue || 1;
-                this.kpiRequests.push({
-                    id: 'kr-' + Date.now(),
+                const request = {
                     userId: userId,
                     userName: member.fullName,
                     categoryId: categoryId,
                     periodType: periodType,
                     requestType: type,
                     incrementValue: val,
-                    timestamp: 'Just now',
-                    status: 'pending'
+                };
+                const response = await fetch('/api/kpi/requests/federation/@Model.Federation.Id', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(request)
                 });
-                this.saveKpiState();
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    alert(error.message || 'Unable to submit KPI request.');
+                    return;
+                }
+                this.kpiRequests.push(await response.json());
             },
-            handleApproveKpi(reqId) {
+            async handleApproveKpi(reqId) {
                 const req = this.kpiRequests.find(r => r.id === reqId);
                 if (!req) return;
                 
@@ -4255,12 +4261,15 @@
                         target.achievedValue = Math.min(target.targetValue, target.achievedValue + (req.incrementValue || 1));
                     }
                 }
+                const response = await fetch(`/api/kpi/requests/federation/@Model.Federation.Id/${reqId}`, { method: 'DELETE' });
+                if (!response.ok) return alert('Unable to approve KPI request.');
                 this.kpiRequests = this.kpiRequests.filter(r => r.id !== reqId);
                 this.saveKpiState();
             },
-            handleRejectKpi(reqId) {
+            async handleRejectKpi(reqId) {
+                const response = await fetch(`/api/kpi/requests/federation/@Model.Federation.Id/${reqId}`, { method: 'DELETE' });
+                if (!response.ok) return alert('Unable to reject KPI request.');
                 this.kpiRequests = this.kpiRequests.filter(r => r.id !== reqId);
-                this.saveKpiState();
             },
             get canManageKpi() {
                 const isOwnerOrPresident = this.currentUserRole === 'Owner' || this.currentUserRole === 'HeadPresident';

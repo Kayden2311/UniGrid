@@ -4,6 +4,9 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+using unigrid.Data;
 using unigrid.Data.Repositories;
 using unigrid.Services;
 using unigrid.Models;
@@ -19,18 +22,166 @@ namespace unigrid.Controllers
         private readonly IMemberRepository _memberRepo;
         private readonly IWorkspaceRepository _workspaceRepo;
         private readonly ILogger<KpiController> _logger;
+        private readonly UniGridDbContext _context;
 
         public KpiController(
             ITaskService taskService,
             IMemberRepository memberRepo,
             IWorkspaceRepository workspaceRepo,
+            UniGridDbContext context,
             ILogger<KpiController> logger)
         {
             _taskService = taskService;
             _memberRepo = memberRepo;
             _workspaceRepo = workspaceRepo;
+            _context = context;
             _logger = logger;
         }
+
+        // KPI verification requests are server-side so requesters and managers
+        // see the same pending queue across accounts, browsers, and devices.
+        [HttpGet("requests/workspace/{workspaceId}")]
+        public async Task<IActionResult> GetWorkspaceKpiRequests(Guid workspaceId)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+            if (!await IsUserInWorkspaceAsync(workspaceId, user.Id)) return Forbid();
+
+            return Ok((await LoadRequestsAsync(WorkspaceRequestKey(workspaceId)))
+                .Where(r => r.Status == "pending"));
+        }
+
+        [HttpPost("requests/workspace/{workspaceId}")]
+        public async Task<IActionResult> CreateWorkspaceKpiRequest(Guid workspaceId, [FromBody] KpiVerificationRequest request)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+            if (!await IsUserInWorkspaceAsync(workspaceId, user.Id)) return Forbid();
+            if (request.UserId != user.Id) return Forbid();
+
+            return await CreateRequestAsync(WorkspaceRequestKey(workspaceId), request, user);
+        }
+
+        [HttpDelete("requests/workspace/{workspaceId}/{requestId}")]
+        public async Task<IActionResult> ResolveWorkspaceKpiRequest(Guid workspaceId, string requestId)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+            if (!await CanManageWorkspaceKpiAsync(workspaceId, user.Id)) return Forbid();
+
+            return await RemoveRequestAsync(WorkspaceRequestKey(workspaceId), requestId);
+        }
+
+        [HttpGet("requests/federation/{federationId}")]
+        public async Task<IActionResult> GetFederationKpiRequests(Guid federationId)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+            if (!await IsUserInFederationAsync(federationId, user.Id)) return Forbid();
+
+            return Ok((await LoadRequestsAsync(FederationRequestKey(federationId)))
+                .Where(r => r.Status == "pending"));
+        }
+
+        [HttpPost("requests/federation/{federationId}")]
+        public async Task<IActionResult> CreateFederationKpiRequest(Guid federationId, [FromBody] KpiVerificationRequest request)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+            if (!await IsUserInFederationAsync(federationId, user.Id)) return Forbid();
+            if (request.UserId != user.Id) return Forbid();
+
+            return await CreateRequestAsync(FederationRequestKey(federationId), request, user);
+        }
+
+        [HttpDelete("requests/federation/{federationId}/{requestId}")]
+        public async Task<IActionResult> ResolveFederationKpiRequest(Guid federationId, string requestId)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+            if (!await CanManageFederationKpiAsync(federationId, user.Id)) return Forbid();
+
+            return await RemoveRequestAsync(FederationRequestKey(federationId), requestId);
+        }
+
+        private async Task<IActionResult> CreateRequestAsync(string key, KpiVerificationRequest request, unigrid.Models.User user)
+        {
+            if (string.IsNullOrWhiteSpace(request.CategoryId) || !new[] { "Daily", "Weekly", "Monthly" }.Contains(request.PeriodType) ||
+                !new[] { "increment", "complete" }.Contains(request.RequestType))
+            {
+                return BadRequest(new { message = "Invalid KPI verification request." });
+            }
+
+            var requests = await LoadRequestsAsync(key);
+            if (requests.Any(r => r.Status == "pending" && r.UserId == user.Id && r.CategoryId == request.CategoryId && r.PeriodType == request.PeriodType))
+            {
+                return Conflict(new { message = "A pending request already exists for this KPI." });
+            }
+
+            request.Id = Guid.NewGuid().ToString("N");
+            request.UserId = user.Id;
+            request.UserName = user.FullName;
+            request.IncrementValue = Math.Max(1, request.IncrementValue);
+            request.CreatedAt = DateTime.UtcNow;
+            request.Timestamp = "Just now";
+            request.Status = "pending";
+            requests.Add(request);
+            await SaveRequestsAsync(key, requests);
+            return Ok(request);
+        }
+
+        private async Task<IActionResult> RemoveRequestAsync(string key, string requestId)
+        {
+            var requests = await LoadRequestsAsync(key);
+            var removed = requests.RemoveAll(r => r.Id == requestId);
+            if (removed == 0) return NotFound(new { message = "KPI request not found." });
+            await SaveRequestsAsync(key, requests);
+            return Ok(new { success = true });
+        }
+
+        private async System.Threading.Tasks.Task<List<KpiVerificationRequest>> LoadRequestsAsync(string key)
+        {
+            var json = await _context.SystemSettings.AsNoTracking()
+                .Where(s => s.SettingKey == key).Select(s => s.SettingValue).FirstOrDefaultAsync();
+            if (string.IsNullOrWhiteSpace(json)) return new();
+            try { return JsonSerializer.Deserialize<List<KpiVerificationRequest>>(json) ?? new(); }
+            catch { return new(); }
+        }
+
+        private async System.Threading.Tasks.Task SaveRequestsAsync(string key, List<KpiVerificationRequest> requests)
+        {
+            var setting = await _context.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == key);
+            if (setting == null)
+            {
+                setting = new SystemSetting { SettingKey = key, CreatedAt = DateTime.UtcNow };
+                await _context.SystemSettings.AddAsync(setting);
+            }
+            setting.SettingValue = JsonSerializer.Serialize(requests);
+            setting.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task<bool> CanManageWorkspaceKpiAsync(Guid workspaceId, Guid userId)
+        {
+            var workspace = await _context.Workspaces.AsNoTracking().FirstOrDefaultAsync(w => !w.IsDisabled && w.Id == workspaceId);
+            if (workspace?.OwnerId == userId) return true;
+            return await _context.WorkspaceMembers.AnyAsync(m => !m.IsDisabled && m.WorkspaceId == workspaceId && m.UserId == userId &&
+                (m.Role == "Manager" || m.Role == "Vice Manager"));
+        }
+
+        private async Task<bool> IsUserInFederationAsync(Guid federationId, Guid userId) =>
+            await _context.WorkspaceFederations.AnyAsync(f => !f.IsDisabled && f.Id == federationId && f.OwnerId == userId) ||
+            await _context.WorkspaceFederationMembers.AnyAsync(m => !m.IsDisabled && m.Status == "Active" && m.FederationId == federationId && m.UserId == userId);
+
+        private async Task<bool> CanManageFederationKpiAsync(Guid federationId, Guid userId)
+        {
+            if (await _context.WorkspaceFederations.AnyAsync(f => !f.IsDisabled && f.Id == federationId && f.OwnerId == userId)) return true;
+            return await _context.WorkspaceFederationMembers.AnyAsync(m => !m.IsDisabled && m.Status == "Active" && m.FederationId == federationId &&
+                m.UserId == userId && (m.Role == "HeadPresident" || m.Role == "DepartmentManager"));
+        }
+
+        private static string WorkspaceRequestKey(Guid id) => $"KpiRequests:Workspace:{id:N}";
+        private static string FederationRequestKey(Guid id) => $"KpiRequests:Federation:{id:N}";
 
         // =========================================================================
         // CATEGORY API
@@ -258,5 +409,19 @@ namespace unigrid.Controllers
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public int TargetValue { get; set; }
+    }
+
+    public class KpiVerificationRequest
+    {
+        public string Id { get; set; } = string.Empty;
+        public Guid UserId { get; set; }
+        public string UserName { get; set; } = string.Empty;
+        public string CategoryId { get; set; } = string.Empty;
+        public string PeriodType { get; set; } = "Weekly";
+        public string RequestType { get; set; } = "increment";
+        public int IncrementValue { get; set; } = 1;
+        public string Timestamp { get; set; } = string.Empty;
+        public string Status { get; set; } = "pending";
+        public DateTime CreatedAt { get; set; }
     }
 }
