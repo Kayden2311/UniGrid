@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="unigrid/wwwroot/assets/official-logo-256.png" alt="UniGrid logo" width="120" />
+<img src="docs/assets/banner.svg" alt="UniGrid — Một điểm chạm, trọn hiệu năng" width="100%" />
 
-# UniGrid
+<br/><br/>
 
-### One workspace for tasks, deadlines, files and team chat.
+### One workspace for tasks, deadlines, files, team chat — and an AI that plans your week.
 
 **Built for student teams, academic clubs and small startups (3–10 people) who are tired of juggling Zalo, Messenger, Google Docs and a spreadsheet nobody updates.**
 
@@ -16,12 +16,17 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Alpine.js](https://img.shields.io/badge/Alpine.js-3-8BC0D0?style=for-the-badge&logo=alpinedotjs&logoColor=white)](https://alpinejs.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Render-46E3B7?style=for-the-badge&logo=docker&logoColor=white)](https://render.com/)
+<br/>
+[![LangChain](https://img.shields.io/badge/LangChain-Agent-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white)](https://www.langchain.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Groq](https://img.shields.io/badge/LLM-gpt--oss--120b%20on%20Groq-F55036?style=for-the-badge)](https://groq.com/)
+[![payOS](https://img.shields.io/badge/Payments-payOS-00B14F?style=for-the-badge)](https://payos.vn/)
 
-[**🌐 Live demo**](https://unigrid.onrender.com) · [**✨ Features**](#-features) · [**🚀 Quick start**](#-quick-start) · [**☁️ Deploy**](#️-deploy-render--supabase) · [**🏗️ Architecture**](#️-architecture)
+[**🌐 Live demo**](https://unigrid.onrender.com) · [**✨ Features**](#-features) · [**🤖 AI Scheduler**](#-ai-scheduler) · [**🚀 Quick start**](#-quick-start) · [**☁️ Deploy**](#️-deploy-render--supabase) · [**🏗️ Architecture**](#️-architecture)
 
 <br/>
 
-<img src="unigrid/wwwroot/assets/hero-dashboard.png" alt="UniGrid dashboard" width="90%" />
+<img src="docs/assets/workspace.svg" alt="UniGrid workspace: Kanban board, contribution chart and AI assistant" width="100%" />
 
 </div>
 
@@ -41,6 +46,13 @@ UniGrid puts all of it in one place:
 | 💬 Chat chaos | **One focused real-time group chat** per workspace |
 | 📂 "Where is that file?" | A **shared file repository** next to the tasks it belongs to |
 | 🏢 Many teams, no overview | **Federations** roll several workspaces up into one executive dashboard |
+| 🤯 "When do I even do this?" | The **AI Scheduler** finds a free slot before the deadline and books it |
+
+### ⚡ The killer feature: deadlines that follow you
+
+<img src="docs/assets/deadline-sync.svg" alt="Assigning a task in a workspace drops the deadline into the assignee's personal calendar" width="100%" />
+
+When a leader assigns a task, the deadline lands on the assignee's personal calendar right next to their classes, gym and club meetings. No copy-paste, no "did you see my message?".
 
 ---
 
@@ -113,10 +125,10 @@ UniGrid puts all of it in one place:
 </td>
 <td valign="top">
 
-### 🤖 AI assistant *(optional)*
-- Chat widget backed by a Python **FastAPI + LangChain** service
-- Reads your schedule and tasks to answer and plan
-- Runs on Groq or a local Ollama model
+### 🤖 AI Scheduler
+- Chat in plain Vietnamese or English: *"tuần sau mình bận gì?"*
+- Books unscheduled tasks into free slots before their due date
+- Tool-using LangChain agent, [details below ↓](#-ai-scheduler)
 
 </td>
 </tr>
@@ -130,6 +142,39 @@ UniGrid puts all of it in one place:
 | **Member** | Join via code, work on assigned tasks, chat, upload files, manage their calendar |
 | **Workspace owner** | Create workspaces, invite/remove members, assign and review tasks, upgrade plans |
 | **Admin** | Manage users and subscriptions, lock accounts, review federations, traffic and costs |
+
+---
+
+## 🤖 AI Scheduler
+
+<img src="docs/assets/ai-assistant.svg" alt="AI Scheduler flow: chat widget → ASP.NET Core → FastAPI LangChain agent → tools → Supabase Postgres" width="100%" />
+
+UniGrid ships with **Scheduler**, an AI agent that lives in a chat bubble on the **Schedule** page and works directly on your personal calendar.
+
+**What you can ask**
+
+| You say | Scheduler does |
+| :--- | :--- |
+| *"Tuần này mình có gì?"* | Reads your week and summarises it in UTC+7 |
+| *"Mình còn task nào chưa xếp lịch?"* | Lists tasks assigned to you that aren't on your calendar yet |
+| *"Xếp task báo cáo vào sáng thứ 5"* | Finds the task, checks the due date and conflicts, books a slot |
+| *"Dời buổi họp nhóm sang thứ 6"* | Moves the event and confirms the new time |
+| *"Bạn tự chọn giờ đi"* | Picks a sensible slot instead of asking again |
+
+**How it works**
+
+1. The chat widget posts to **`/api/assistant/ask`** on the ASP.NET Core app.
+2. The app resolves the logged-in user from the auth cookie and forwards the request to the Python service with an **`X-User-Id`** header. The user id never comes from the chat text.
+3. The **FastAPI + LangChain** agent runs a tool-calling loop (up to 10 steps) on **`openai/gpt-oss-120b` via Groq**, or a local **Ollama** model.
+4. Five tools read and write **Supabase Postgres** directly: `get_schedule_for_week`, `get_unscheduled_tasks`, `get_event_details`, `schedule_task`, `reschedule_event`.
+
+**Guardrails built into the agent**
+
+- 🔒 Only ever touches **the current user's own** schedule; requests about other people are declined.
+- 🙈 Never shows or asks for internal IDs; it resolves them itself through tools.
+- ⛔ Refuses to schedule a task **after its due date** and reports conflicts instead of overwriting.
+- 🧮 Never does date math in its head: relative dates ("next week") go through the week tool.
+- 🌐 Answers in the language you wrote in.
 
 ---
 

@@ -1,0 +1,214 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="740" viewBox="0 0 1280 740" role="img" aria-label="UniGrid workspace: Kanban board, contribution chart and AI assistant">
+  <defs>
+    <linearGradient id="side" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b2a6f"/>
+      <stop offset="1" stop-color="#06163f"/>
+    </linearGradient>
+    <linearGradient id="ai" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="stage" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#dbeafe"/>
+      <stop offset="1" stop-color="#ede9fe"/>
+    </linearGradient>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#0b2a6f" flood-opacity="0.22"/>
+    </filter>
+    <filter id="sh2" x="-10%" y="-10%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <style>
+      .t { font-family: 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif; }
+      .drag { animation: drag 5s ease-in-out infinite; }
+      .typing circle { animation: blink 1.2s infinite; }
+      .typing circle:nth-child(2) { animation-delay: .2s; }
+      .typing circle:nth-child(3) { animation-delay: .4s; }
+      @keyframes drag { 0%,20% { transform: translate(0,0); } 45%,70% { transform: translate(232px,-6px) rotate(2deg); } 95%,100% { transform: translate(0,0); } }
+      @keyframes blink { 0%,100% { opacity: .25; } 50% { opacity: 1; } }
+    </style>
+  </defs>
+
+  <rect width="1280" height="740" rx="24" fill="url(#stage)"/>
+
+  <g filter="url(#sh)">
+    <rect x="40" y="36" width="1200" height="668" rx="18" fill="#ffffff"/>
+  </g>
+
+  <!-- window chrome -->
+  <circle cx="66" cy="60" r="6" fill="#f87171"/><circle cx="86" cy="60" r="6" fill="#fbbf24"/><circle cx="106" cy="60" r="6" fill="#34d399"/>
+  <rect x="440" y="50" width="400" height="22" rx="11" fill="#f1f5f9"/>
+  <text x="640" y="65" text-anchor="middle" class="t" font-size="11" fill="#64748b">unigrid.onrender.com/WorkspaceDetail</text>
+
+  <!-- sidebar -->
+  <path d="M40 84h200v602a18 18 0 0 1-18 18H58a18 18 0 0 1-18-18z" fill="url(#side)"/>
+  <text x="64" y="122" class="t" font-size="20" font-weight="800" letter-spacing="1" fill="#ffffff">UNI<tspan fill="#5eb8ff">GRID</tspan></text>
+  <g class="t" font-size="13" fill="#a9c4ec">
+    <text x="84" y="172">Dashboard</text>
+    <rect x="56" y="190" width="168" height="34" rx="8" fill="#1e88e5"/>
+    <text x="84" y="212" fill="#ffffff" font-weight="600">Workspaces</text>
+    <text x="84" y="252">Schedule</text>
+    <text x="84" y="292">Federations</text>
+    <text x="84" y="332">Pricing</text>
+    <text x="84" y="372">Profile</text>
+  </g>
+  <g fill="#5eb8ff">
+    <rect x="64" y="162" width="12" height="12" rx="3"/>
+    <rect x="64" y="202" width="12" height="12" rx="3" fill="#ffffff"/>
+    <rect x="64" y="242" width="12" height="12" rx="3"/>
+    <rect x="64" y="282" width="12" height="12" rx="3"/>
+    <rect x="64" y="322" width="12" height="12" rx="3"/>
+    <rect x="64" y="362" width="12" height="12" rx="3"/>
+  </g>
+  <rect x="56" y="610" width="168" height="66" rx="12" fill="#ffffff" fill-opacity="0.08"/>
+  <text x="72" y="634" class="t" font-size="11" fill="#a9c4ec">Plan</text>
+  <text x="72" y="656" class="t" font-size="15" font-weight="700" fill="#ffffff">Pro+ ✦</text>
+  <rect x="150" y="644" width="60" height="6" rx="3" fill="#ffffff" fill-opacity="0.2"/>
+  <rect x="150" y="644" width="38" height="6" rx="3" fill="#5eb8ff"/>
+
+  <!-- header -->
+  <text x="268" y="122" class="t" font-size="22" font-weight="800" fill="#0b1b3f">EXE201 · Team Alpha</text>
+  <text x="268" y="144" class="t" font-size="12" fill="#64748b">5 members · Join code <tspan font-weight="700" fill="#1257c4">UG-7K2Q</tspan></text>
+  <g transform="translate(1040 106)">
+    <circle cx="0" cy="12" r="15" fill="#c7d2fe" stroke="#fff" stroke-width="3"/>
+    <circle cx="22" cy="12" r="15" fill="#bae6fd" stroke="#fff" stroke-width="3"/>
+    <circle cx="44" cy="12" r="15" fill="#fbcfe8" stroke="#fff" stroke-width="3"/>
+    <circle cx="66" cy="12" r="15" fill="#bbf7d0" stroke="#fff" stroke-width="3"/>
+    <circle cx="88" cy="12" r="15" fill="#1e88e5" stroke="#fff" stroke-width="3"/>
+    <text x="88" y="16" text-anchor="middle" class="t" font-size="11" font-weight="700" fill="#fff">+1</text>
+  </g>
+  <!-- tabs -->
+  <g class="t" font-size="13">
+    <text x="268" y="186" fill="#64748b">Overview</text>
+    <text x="354" y="186" fill="#1257c4" font-weight="700">Tasks</text>
+    <rect x="350" y="194" width="44" height="3" rx="1.5" fill="#1e88e5"/>
+    <text x="420" y="186" fill="#64748b">Chat</text>
+    <text x="478" y="186" fill="#64748b">Files</text>
+    <text x="534" y="186" fill="#64748b">Members</text>
+    <text x="620" y="186" fill="#64748b">KPI</text>
+  </g>
+  <line x1="268" y1="198" x2="1216" y2="198" stroke="#e2e8f0"/>
+
+  <!-- kanban columns -->
+  <g class="t">
+    <g>
+      <rect x="268" y="216" width="220" height="460" rx="14" fill="#f8fafc"/>
+      <circle cx="288" cy="240" r="5" fill="#94a3b8"/>
+      <text x="300" y="245" font-size="13" font-weight="700" fill="#334155">Todo</text>
+      <text x="470" y="245" text-anchor="end" font-size="12" fill="#94a3b8">3</text>
+    </g>
+    <g>
+      <rect x="500" y="216" width="220" height="460" rx="14" fill="#f8fafc"/>
+      <circle cx="520" cy="240" r="5" fill="#1e88e5"/>
+      <text x="532" y="245" font-size="13" font-weight="700" fill="#334155">In Progress</text>
+      <text x="702" y="245" text-anchor="end" font-size="12" fill="#94a3b8">2</text>
+    </g>
+    <g>
+      <rect x="732" y="216" width="220" height="460" rx="14" fill="#f8fafc"/>
+      <circle cx="752" cy="240" r="5" fill="#f59e0b"/>
+      <text x="764" y="245" font-size="13" font-weight="700" fill="#334155">Review</text>
+      <text x="934" y="245" text-anchor="end" font-size="12" fill="#94a3b8">1</text>
+    </g>
+  </g>
+
+  <!-- Todo cards -->
+  <g class="t">
+    <g filter="url(#sh2)">
+      <rect x="280" y="262" width="196" height="96" rx="10" fill="#fff"/>
+      <rect x="292" y="274" width="48" height="16" rx="8" fill="#ffe4e6"/>
+      <text x="316" y="286" text-anchor="middle" font-size="9" font-weight="700" fill="#e11d48">HIGH</text>
+      <text x="292" y="310" font-size="13" font-weight="700" fill="#0b1b3f">Survey 50 sinh viên</text>
+      <text x="292" y="328" font-size="11" fill="#64748b">📅 Mon 20 · Research</text>
+      <circle cx="456" cy="340" r="10" fill="#fbcfe8"/>
+    </g>
+    <g filter="url(#sh2)">
+      <rect x="280" y="370" width="196" height="84" rx="10" fill="#fff"/>
+      <rect x="292" y="382" width="58" height="16" rx="8" fill="#fef3c7"/>
+      <text x="321" y="394" text-anchor="middle" font-size="9" font-weight="700" fill="#b45309">MEDIUM</text>
+      <text x="292" y="418" font-size="13" font-weight="700" fill="#0b1b3f">Thiết kế logo v2</text>
+      <text x="292" y="436" font-size="11" fill="#64748b">📅 Wed 22 · Design</text>
+    </g>
+    <!-- dragged card -->
+    <g class="drag" filter="url(#sh2)">
+      <rect x="280" y="466" width="196" height="96" rx="10" fill="#fff" stroke="#1e88e5" stroke-width="2"/>
+      <rect x="292" y="478" width="40" height="16" rx="8" fill="#dcfce7"/>
+      <text x="312" y="490" text-anchor="middle" font-size="9" font-weight="700" fill="#15803d">LOW</text>
+      <text x="292" y="514" font-size="13" font-weight="700" fill="#0b1b3f">Viết user stories</text>
+      <text x="292" y="532" font-size="11" fill="#64748b">📅 Fri 24 · Planning</text>
+      <circle cx="456" cy="544" r="10" fill="#bbf7d0"/>
+    </g>
+  </g>
+
+  <!-- In progress cards -->
+  <g class="t">
+    <g filter="url(#sh2)">
+      <rect x="512" y="262" width="196" height="110" rx="10" fill="#fff"/>
+      <rect x="524" y="274" width="48" height="16" rx="8" fill="#ffe4e6"/>
+      <text x="548" y="286" text-anchor="middle" font-size="9" font-weight="700" fill="#e11d48">HIGH</text>
+      <text x="524" y="310" font-size="13" font-weight="700" fill="#0b1b3f">Báo cáo giữa kỳ</text>
+      <text x="524" y="328" font-size="11" fill="#64748b">☑ 3/5 · 💬 4</text>
+      <rect x="524" y="346" width="140" height="6" rx="3" fill="#e2e8f0"/>
+      <rect x="524" y="346" width="84" height="6" rx="3" fill="#1e88e5"/>
+      <circle cx="688" cy="349" r="10" fill="#c7d2fe"/>
+    </g>
+    <g filter="url(#sh2)">
+      <rect x="512" y="384" width="196" height="84" rx="10" fill="#fff"/>
+      <rect x="524" y="396" width="58" height="16" rx="8" fill="#fef3c7"/>
+      <text x="553" y="408" text-anchor="middle" font-size="9" font-weight="700" fill="#b45309">MEDIUM</text>
+      <text x="524" y="432" font-size="13" font-weight="700" fill="#0b1b3f">Landing page</text>
+      <text x="524" y="450" font-size="11" fill="#64748b">📎 2 files · Dev</text>
+    </g>
+  </g>
+
+  <!-- Review card -->
+  <g class="t" filter="url(#sh2)">
+    <rect x="744" y="262" width="196" height="124" rx="10" fill="#fff"/>
+    <text x="756" y="290" font-size="13" font-weight="700" fill="#0b1b3f">Pitch deck draft</text>
+    <text x="756" y="308" font-size="11" fill="#64748b">Waiting for leader review</text>
+    <rect x="756" y="324" width="84" height="26" rx="8" fill="#1e88e5"/>
+    <text x="798" y="341" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">Approve ✓</text>
+    <rect x="846" y="324" width="82" height="26" rx="8" fill="#fff" stroke="#e2e8f0"/>
+    <text x="887" y="341" text-anchor="middle" font-size="10" font-weight="600" fill="#475569">Rework ↺</text>
+    <text x="756" y="372" font-size="10" fill="#94a3b8">Submitted 2h ago</text>
+  </g>
+
+  <!-- right panel: contribution -->
+  <g class="t">
+    <rect x="968" y="216" width="248" height="208" rx="14" fill="#f8fafc"/>
+    <text x="988" y="244" font-size="13" font-weight="700" fill="#334155">Contribution</text>
+    <g transform="translate(1040 330)" fill="none" stroke-width="18">
+      <circle r="48" stroke="#e2e8f0"/>
+      <circle r="48" stroke="#1e88e5" stroke-dasharray="105 302" transform="rotate(-90)"/>
+      <circle r="48" stroke="#8b5cf6" stroke-dasharray="75 302" stroke-dashoffset="-105" transform="rotate(-90)"/>
+      <circle r="48" stroke="#22c55e" stroke-dasharray="60 302" stroke-dashoffset="-180" transform="rotate(-90)"/>
+      <circle r="48" stroke="#f59e0b" stroke-dasharray="45 302" stroke-dashoffset="-240" transform="rotate(-90)"/>
+    </g>
+    <text x="1040" y="335" text-anchor="middle" font-size="18" font-weight="800" fill="#0b1b3f">86%</text>
+    <g font-size="11" fill="#475569">
+      <circle cx="1112" cy="294" r="4" fill="#1e88e5"/><text x="1122" y="298">An · 35%</text>
+      <circle cx="1112" cy="318" r="4" fill="#8b5cf6"/><text x="1122" y="322">Bình · 25%</text>
+      <circle cx="1112" cy="342" r="4" fill="#22c55e"/><text x="1122" y="346">Chi · 20%</text>
+      <circle cx="1112" cy="366" r="4" fill="#f59e0b"/><text x="1122" y="370">Dũng · 15%</text>
+    </g>
+  </g>
+
+  <!-- right panel: AI assistant -->
+  <g class="t">
+    <rect x="968" y="436" width="248" height="240" rx="14" fill="#0f1730"/>
+    <rect x="968" y="436" width="248" height="240" rx="14" fill="none" stroke="url(#ai)" stroke-width="2"/>
+    <circle cx="994" cy="464" r="12" fill="url(#ai)"/>
+    <path d="M994 456l2.4 5.6 5.6 2.4-5.6 2.4-2.4 5.6-2.4-5.6-5.6-2.4 5.6-2.4z" fill="#fff"/>
+    <text x="1014" y="469" font-size="13" font-weight="700" fill="#e0e7ff">AI Scheduler</text>
+    <rect x="1040" y="490" width="160" height="44" rx="12" fill="#1e88e5"/>
+    <text x="1052" y="508" font-size="11" fill="#fff">Tuần này mình rảnh</text>
+    <text x="1052" y="524" font-size="11" fill="#fff">lúc nào?</text>
+    <rect x="984" y="544" width="190" height="78" rx="12" fill="#1e293b"/>
+    <text x="996" y="563" font-size="11" fill="#c7d2fe">Bạn trống:</text>
+    <text x="996" y="580" font-size="11" fill="#e2e8f0">• Thu 09:00–11:00</text>
+    <text x="996" y="597" font-size="11" fill="#e2e8f0">• Fri 14:00–17:00</text>
+    <text x="996" y="614" font-size="11" fill="#7dd3fc">Xếp "Landing page" vào?</text>
+    <g class="typing" fill="#a5b4fc">
+      <circle cx="998" cy="648" r="3.5"/><circle cx="1010" cy="648" r="3.5"/><circle cx="1022" cy="648" r="3.5"/>
+    </g>
+  </g>
+</svg>

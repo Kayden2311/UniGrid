@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="600" viewBox="0 0 1280 600" role="img" aria-label="AI Scheduler request flow: chat widget to ASP.NET Core to FastAPI LangChain agent with tools on PostgreSQL">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1026"/>
+      <stop offset="1" stop-color="#151a3d"/>
+    </linearGradient>
+    <linearGradient id="ai" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="dot" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#ffffff" fill-opacity="0.07"/>
+    </pattern>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#8b5cf6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#7dd3fc"/>
+    </marker>
+    <style>
+      .t { font-family: 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif; }
+      .m { font-family: 'Cascadia Code', Consolas, 'SFMono-Regular', Menlo, monospace; }
+      .flow { stroke-dasharray: 5 7; animation: flow 1.6s linear infinite; }
+      .orb { animation: orb 3s ease-in-out infinite; transform-origin: 640px 300px; }
+      .spin { animation: spin 14s linear infinite; transform-origin: 640px 300px; }
+      @keyframes flow { to { stroke-dashoffset: -24; } }
+      @keyframes orb { 0%,100% { opacity: .65; } 50% { opacity: 1; } }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </defs>
+
+  <rect width="1280" height="600" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="600" rx="24" fill="url(#grid)"/>
+  <circle cx="640" cy="300" r="260" fill="url(#glow)" class="orb"/>
+
+  <text x="48" y="62" class="t" font-size="13" font-weight="700" letter-spacing="3" fill="#7dd3fc">AI INTEGRATION</text>
+  <text x="48" y="96" class="t" font-size="28" font-weight="800" fill="#ffffff">Scheduler — a tool-using agent that plans your week</text>
+
+  <!-- 1. Chat widget -->
+  <g class="t">
+    <rect x="48" y="140" width="300" height="380" rx="18" fill="#ffffff"/>
+    <rect x="48" y="140" width="300" height="52" rx="18" fill="#0b2a6f"/>
+    <rect x="48" y="174" width="300" height="18" fill="#0b2a6f"/>
+    <circle cx="76" cy="166" r="11" fill="url(#ai)"/>
+    <path d="M76 159l2.2 5 5 2.2-5 2.2-2.2 5-2.2-5-5-2.2 5-2.2z" fill="#fff"/>
+    <text x="96" y="171" font-size="14" font-weight="700" fill="#fff">UniGrid Assistant</text>
+
+    <rect x="128" y="210" width="204" height="48" rx="14" fill="#1e88e5"/>
+    <text x="142" y="230" font-size="12" fill="#fff">Xếp task "Báo cáo giữa kỳ"</text>
+    <text x="142" y="247" font-size="12" fill="#fff">vào sáng thứ 5 giúp mình</text>
+
+    <rect x="64" y="272" width="250" height="118" rx="14" fill="#f1f5f9"/>
+    <text x="78" y="294" font-size="12" font-weight="700" fill="#0b1b3f">✓ Đã xếp lịch</text>
+    <text x="78" y="314" font-size="12" fill="#334155">Báo cáo giữa kỳ</text>
+    <text x="78" y="332" font-size="12" fill="#334155">Thu, 09:00–10:00 (UTC+7)</text>
+    <text x="78" y="354" font-size="11" fill="#64748b">Trước hạn chót 14:00 cùng ngày,</text>
+    <text x="78" y="370" font-size="11" fill="#64748b">không trùng lịch nào khác.</text>
+
+    <rect x="128" y="404" width="204" height="30" rx="14" fill="#1e88e5"/>
+    <text x="142" y="424" font-size="12" fill="#fff">Tuần sau mình bận gì?</text>
+
+    <rect x="64" y="470" width="268" height="34" rx="17" fill="#fff" stroke="#e2e8f0"/>
+    <text x="82" y="492" font-size="12" fill="#94a3b8">Hỏi về lịch của bạn…</text>
+    <circle cx="314" cy="487" r="12" fill="#1e88e5"/>
+    <path d="M309 487h10M315 482l5 5-5 5" stroke="#fff" stroke-width="2" fill="none"/>
+  </g>
+
+  <!-- arrow 1 -->
+  <path d="M356 262 H 440" stroke="#7dd3fc" stroke-width="2" fill="none" class="flow" marker-end="url(#arr)"/>
+  <text x="398" y="250" text-anchor="middle" class="m" font-size="10" fill="#7dd3fc">POST</text>
+
+  <!-- 2. ASP.NET Core -->
+  <g class="t">
+    <rect x="448" y="206" width="170" height="112" rx="14" fill="#1b1f4a" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="466" y="234" font-size="14" font-weight="700" fill="#e0e7ff">ASP.NET Core</text>
+    <text x="466" y="256" class="m" font-size="10" fill="#a5b4fc">/api/assistant/ask</text>
+    <text x="466" y="280" font-size="11" fill="#cbd5e1">Cookie auth → user id</text>
+    <text x="466" y="298" class="m" font-size="10" fill="#7dd3fc">+ X-User-Id header</text>
+  </g>
+
+  <!-- arrow 2 -->
+  <path d="M626 262 C 680 262, 690 262, 706 262" stroke="#7dd3fc" stroke-width="2" fill="none" class="flow" marker-end="url(#arr)"/>
+
+  <!-- 3. Agent core -->
+  <g class="t">
+    <rect x="714" y="150" width="260" height="226" rx="18" fill="#12163a" stroke="url(#ai)" stroke-width="2"/>
+    <circle cx="744" cy="182" r="14" fill="url(#ai)"/>
+    <path d="M744 173l2.8 6.2 6.2 2.8-6.2 2.8-2.8 6.2-2.8-6.2-6.2-2.8 6.2-2.8z" fill="#fff"/>
+    <text x="768" y="180" font-size="15" font-weight="800" fill="#fff">Scheduler agent</text>
+    <text x="768" y="198" font-size="11" fill="#a5b4fc">Python · FastAPI · LangChain</text>
+
+    <rect x="732" y="214" width="224" height="40" rx="10" fill="#1e2350"/>
+    <text x="746" y="231" font-size="10" fill="#94a3b8">LLM</text>
+    <text x="746" y="246" class="m" font-size="11" fill="#e0e7ff">openai/gpt-oss-120b · Groq</text>
+
+    <text x="732" y="280" font-size="11" font-weight="700" fill="#c4b5fd">Agent loop</text>
+    <text x="732" y="298" font-size="11" fill="#cbd5e1">think → call tool → read result</text>
+    <text x="732" y="314" font-size="11" fill="#cbd5e1">→ repeat (≤ 10 steps) → answer</text>
+    <text x="732" y="340" font-size="11" font-weight="700" fill="#c4b5fd">Guardrails</text>
+    <text x="732" y="358" font-size="11" fill="#cbd5e1">own schedule only · no IDs shown</text>
+  </g>
+
+  <!-- arrow 3 to tools -->
+  <path d="M982 262 H 1022" stroke="#7dd3fc" stroke-width="2" fill="none" class="flow" marker-end="url(#arr)"/>
+
+  <!-- 4. Tools -->
+  <g class="t">
+    <rect x="1030" y="128" width="202" height="270" rx="16" fill="#0f1730" stroke="#334155"/>
+    <text x="1048" y="154" font-size="12" font-weight="700" letter-spacing="1" fill="#7dd3fc">TOOLS</text>
+    <g class="m" font-size="11">
+      <rect x="1044" y="168" width="174" height="38" rx="8" fill="#1e293b"/>
+      <text x="1056" y="186" fill="#e0e7ff">get_schedule_for_week</text>
+      <text x="1056" y="199" class="t" font-size="9.5" fill="#94a3b8">“this week”, “next week”…</text>
+      <rect x="1044" y="212" width="174" height="38" rx="8" fill="#1e293b"/>
+      <text x="1056" y="230" fill="#e0e7ff">get_unscheduled_tasks</text>
+      <text x="1056" y="243" class="t" font-size="9.5" fill="#94a3b8">assigned tasks, not yet planned</text>
+      <rect x="1044" y="256" width="174" height="38" rx="8" fill="#1e293b"/>
+      <text x="1056" y="274" fill="#e0e7ff">get_event_details</text>
+      <text x="1056" y="287" class="t" font-size="9.5" fill="#94a3b8">one event, in depth</text>
+      <rect x="1044" y="300" width="174" height="38" rx="8" fill="#2a1f5c"/>
+      <text x="1056" y="318" fill="#ddd6fe">schedule_task</text>
+      <text x="1056" y="331" class="t" font-size="9.5" fill="#a5b4fc">checks due date + conflicts</text>
+      <rect x="1044" y="344" width="174" height="38" rx="8" fill="#2a1f5c"/>
+      <text x="1056" y="362" fill="#ddd6fe">reschedule_event</text>
+      <text x="1056" y="375" class="t" font-size="9.5" fill="#a5b4fc">move an event safely</text>
+    </g>
+  </g>
+
+  <!-- arrow to DB -->
+  <path d="M1131 406 V 440" stroke="#7dd3fc" stroke-width="2" fill="none" class="flow" marker-end="url(#arr)"/>
+
+  <!-- 5. PostgreSQL -->
+  <g class="t">
+    <g transform="translate(1076 448)">
+      <ellipse cx="55" cy="10" rx="55" ry="12" fill="#3ecf8e"/>
+      <path d="M0 10v56c0 7 25 12 55 12s55-5 55-12V10c0 7-25 12-55 12S0 17 0 10z" fill="#2fb57a"/>
+      <path d="M0 38c0 7 25 12 55 12s55-5 55-12" fill="none" stroke="#0b1026" stroke-opacity="0.3"/>
+    </g>
+    <text x="1131" y="548" text-anchor="middle" font-size="12" font-weight="700" fill="#e2e8f0">Supabase Postgres</text>
+    <text x="1131" y="566" text-anchor="middle" font-size="10" fill="#94a3b8">PersonalSchedules · Tasks</text>
+  </g>
+
+  <!-- feature chips -->
+  <g class="t" font-size="12">
+    <rect x="448" y="420" width="190" height="34" rx="17" fill="#1e2350"/>
+    <text x="543" y="442" text-anchor="middle" fill="#e0e7ff">🌐 Replies in your language</text>
+    <rect x="648" y="420" width="164" height="34" rx="17" fill="#1e2350"/>
+    <text x="730" y="442" text-anchor="middle" fill="#e0e7ff">🕖 UTC+7 aware</text>
+    <rect x="822" y="420" width="190" height="34" rx="17" fill="#1e2350"/>
+    <text x="917" y="442" text-anchor="middle" fill="#e0e7ff">🔒 Scoped to current user</text>
+    <rect x="448" y="466" width="240" height="34" rx="17" fill="#1e2350"/>
+    <text x="568" y="488" text-anchor="middle" fill="#e0e7ff">⛔ Never schedules past a deadline</text>
+    <rect x="698" y="466" width="314" height="34" rx="17" fill="#1e2350"/>
+    <text x="855" y="488" text-anchor="middle" fill="#e0e7ff">🔁 Swap LLM: Groq cloud ⇄ local Ollama</text>
+  </g>
+</svg>

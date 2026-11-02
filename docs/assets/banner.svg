@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-label="UniGrid — Một điểm chạm, trọn hiệu năng">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06163f"/>
+      <stop offset="0.55" stop-color="#0b2a6f"/>
+      <stop offset="1" stop-color="#1257c4"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#8fd0ff"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5eb8ff"/>
+      <stop offset="1" stop-color="#1e88e5"/>
+    </linearGradient>
+    <linearGradient id="ai" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="glow" cx="0.78" cy="0.35" r="0.55">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#020818" flood-opacity="0.45"/>
+    </filter>
+    <style>
+      .t { font-family: 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif; }
+      .f1 { animation: float 6s ease-in-out infinite; }
+      .f2 { animation: float 7s ease-in-out infinite; animation-delay: -2s; }
+      .f3 { animation: float 8s ease-in-out infinite; animation-delay: -4s; }
+      .pulse { animation: pulse 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+      .dash { stroke-dasharray: 6 8; animation: dash 3s linear infinite; }
+      @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+      @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .55; transform: scale(1.25); } }
+      @keyframes dash { to { stroke-dashoffset: -28; } }
+    </style>
+  </defs>
+
+  <rect width="1280" height="420" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="420" rx="24" fill="url(#grid)"/>
+  <rect width="1280" height="420" rx="24" fill="url(#glow)"/>
+
+  <!-- Logo mark: U + G with grid core -->
+  <g transform="translate(80 96)">
+    <path d="M0 0h26v74a44 44 0 0 0 88 0V58H76V36h62v38a69 69 0 0 1-138 0z" fill="#ffffff"/>
+    <path d="M70 0a69 69 0 0 1 64 42h-28A44 44 0 0 0 70 25z" fill="url(#mark)"/>
+    <g fill="url(#mark)">
+      <rect x="52" y="44" width="12" height="12" rx="2"/>
+      <rect x="67" y="44" width="12" height="12" rx="2" fill="#ffffff"/>
+      <rect x="52" y="59" width="12" height="12" rx="2" fill="#ffffff"/>
+      <rect x="67" y="59" width="12" height="12" rx="2"/>
+    </g>
+    <path d="M65 8v28M65 79v32M18 60h30" stroke="#8fd0ff" stroke-width="2.5"/>
+    <circle cx="65" cy="8" r="5" fill="#8fd0ff"/>
+    <circle cx="65" cy="111" r="5" fill="#8fd0ff"/>
+    <circle cx="18" cy="60" r="5" fill="#8fd0ff"/>
+  </g>
+
+  <text x="80" y="285" class="t" font-size="76" font-weight="800" letter-spacing="2" fill="url(#brand)">UNIGRID</text>
+  <g transform="translate(82 318)">
+    <circle cx="0" cy="-6" r="3.5" fill="#5eb8ff"/>
+    <line x1="10" y1="-6" x2="46" y2="-6" stroke="#5eb8ff" stroke-width="1.5"/>
+    <text x="56" y="0" class="t" font-size="17" font-weight="600" letter-spacing="3" fill="#cfe6ff">MỘT ĐIỂM CHẠM · TRỌN HIỆU NĂNG</text>
+  </g>
+  <text x="80" y="362" class="t" font-size="18" fill="#a9c4ec">Tasks · Deadlines · Files · Chat · AI — one workspace.</text>
+
+  <!-- connector lines between floating cards -->
+  <path d="M760 150 C 820 120, 880 120, 930 150" fill="none" stroke="#8fd0ff" stroke-opacity="0.5" stroke-width="2" class="dash"/>
+  <path d="M870 260 C 920 300, 980 300, 1030 270" fill="none" stroke="#8fd0ff" stroke-opacity="0.5" stroke-width="2" class="dash"/>
+
+  <!-- Card 1: Kanban task -->
+  <g class="f1" filter="url(#shadow)">
+    <rect x="600" y="80" width="250" height="140" rx="16" fill="#ffffff"/>
+    <rect x="620" y="100" width="64" height="20" rx="10" fill="#e0efff"/>
+    <text x="652" y="114" text-anchor="middle" class="t" font-size="11" font-weight="700" fill="#1257c4">IN PROGRESS</text>
+    <rect x="770" y="100" width="60" height="20" rx="10" fill="#ffe4e6"/>
+    <text x="800" y="114" text-anchor="middle" class="t" font-size="11" font-weight="700" fill="#e11d48">HIGH</text>
+    <text x="620" y="148" class="t" font-size="16" font-weight="700" fill="#0b1b3f">Báo cáo giữa kỳ EXE201</text>
+    <text x="620" y="170" class="t" font-size="12" fill="#64748b">Due Thu, 14:00 · 3/5 subtasks</text>
+    <rect x="620" y="186" width="160" height="6" rx="3" fill="#e2e8f0"/>
+    <rect x="620" y="186" width="96" height="6" rx="3" fill="#1e88e5"/>
+    <circle cx="806" cy="189" r="12" fill="#c7d2fe"/>
+    <text x="806" y="193" text-anchor="middle" class="t" font-size="10" font-weight="700" fill="#3730a3">AN</text>
+  </g>
+
+  <!-- Card 2: Calendar sync -->
+  <g class="f2" filter="url(#shadow)">
+    <rect x="930" y="60" width="270" height="170" rx="16" fill="#ffffff"/>
+    <text x="950" y="92" class="t" font-size="14" font-weight="700" fill="#0b1b3f">📅 This week</text>
+    <g class="t" font-size="11" fill="#94a3b8" text-anchor="middle">
+      <text x="962" y="118">M</text><text x="996" y="118">T</text><text x="1030" y="118">W</text>
+      <text x="1064" y="118">T</text><text x="1098" y="118">F</text><text x="1132" y="118">S</text><text x="1166" y="118">S</text>
+    </g>
+    <g>
+      <rect x="950" y="128" width="24" height="24" rx="6" fill="#f1f5f9"/>
+      <rect x="984" y="128" width="24" height="24" rx="6" fill="#f1f5f9"/>
+      <rect x="1018" y="128" width="24" height="24" rx="6" fill="#dbeafe"/>
+      <rect x="1052" y="128" width="24" height="24" rx="6" fill="#1e88e5"/>
+      <rect x="1086" y="128" width="24" height="24" rx="6" fill="#f1f5f9"/>
+      <rect x="1120" y="128" width="24" height="24" rx="6" fill="#ede9fe"/>
+      <rect x="1154" y="128" width="24" height="24" rx="6" fill="#f1f5f9"/>
+    </g>
+    <rect x="950" y="166" width="230" height="22" rx="6" fill="#e0efff"/>
+    <rect x="950" y="166" width="4" height="22" rx="2" fill="#1e88e5"/>
+    <text x="962" y="181" class="t" font-size="11" fill="#0b2a6f">Team deadline → synced to you</text>
+    <rect x="950" y="194" width="230" height="22" rx="6" fill="#f5f3ff"/>
+    <rect x="950" y="194" width="4" height="22" rx="2" fill="#8b5cf6"/>
+    <text x="962" y="209" class="t" font-size="11" fill="#4c1d95">Personal · Gym 18:00</text>
+  </g>
+
+  <!-- Card 3: Chat -->
+  <g class="f3" filter="url(#shadow)">
+    <rect x="660" y="248" width="230" height="120" rx="16" fill="#ffffff"/>
+    <text x="680" y="276" class="t" font-size="13" font-weight="700" fill="#0b1b3f"># general</text>
+    <circle cx="866" cy="272" r="4" fill="#22c55e" class="pulse"/>
+    <rect x="680" y="290" width="150" height="26" rx="13" fill="#f1f5f9"/>
+    <text x="692" y="307" class="t" font-size="11" fill="#334155">Slide xong rồi nhé 🎉</text>
+    <rect x="730" y="324" width="140" height="26" rx="13" fill="#1e88e5"/>
+    <text x="742" y="341" class="t" font-size="11" fill="#ffffff">Ok, mình review ngay!</text>
+  </g>
+
+  <!-- Card 4: AI scheduler -->
+  <g class="f1" filter="url(#shadow)">
+    <rect x="1000" y="250" width="220" height="118" rx="16" fill="#0f1730"/>
+    <rect x="1000" y="250" width="220" height="118" rx="16" fill="none" stroke="url(#ai)" stroke-width="2"/>
+    <circle cx="1028" cy="278" r="12" fill="url(#ai)"/>
+    <path d="M1028 270l2.4 5.6 5.6 2.4-5.6 2.4-2.4 5.6-2.4-5.6-5.6-2.4 5.6-2.4z" fill="#ffffff"/>
+    <text x="1048" y="283" class="t" font-size="13" font-weight="700" fill="#e0e7ff">AI Scheduler</text>
+    <text x="1020" y="312" class="t" font-size="11" fill="#c4b5fd">“Xếp task báo cáo vào thứ 5”</text>
+    <text x="1020" y="338" class="t" font-size="11" fill="#7dd3fc">✓ Đã xếp Thu 09:00–10:00</text>
+    <text x="1020" y="356" class="t" font-size="10" fill="#64748b">before the 14:00 deadline</text>
+  </g>
+</svg>

@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="340" viewBox="0 0 1280 340" role="img" aria-label="Native deadline sync: assigning a task in a workspace adds it to the assignee's personal calendar">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#eff6ff"/>
+      <stop offset="1" stop-color="#f5f3ff"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1e88e5"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0b2a6f" flood-opacity="0.15"/>
+    </filter>
+    <style>
+      .t { font-family: 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif; }
+      .packet { animation: travel 3.2s ease-in-out infinite; }
+      .land { animation: land 3.2s ease-in-out infinite; }
+      @keyframes travel { 0% { transform: translateX(0); opacity: 0; } 10% { opacity: 1; } 70% { transform: translateX(330px); opacity: 1; } 80%,100% { transform: translateX(330px); opacity: 0; } }
+      @keyframes land { 0%,65% { opacity: .15; } 78%,100% { opacity: 1; } }
+    </style>
+  </defs>
+
+  <rect width="1280" height="340" rx="24" fill="url(#bg)"/>
+
+  <!-- Workspace side -->
+  <g class="t" filter="url(#sh)">
+    <rect x="48" y="48" width="400" height="244" rx="18" fill="#fff"/>
+  </g>
+  <g class="t">
+    <text x="72" y="84" font-size="12" font-weight="700" letter-spacing="2" fill="#1e88e5">WORKSPACE · LEADER</text>
+    <text x="72" y="114" font-size="18" font-weight="800" fill="#0b1b3f">Assign task</text>
+    <rect x="72" y="132" width="352" height="40" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="86" y="157" font-size="13" fill="#0b1b3f">Báo cáo giữa kỳ</text>
+    <rect x="72" y="182" width="170" height="40" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+    <circle cx="94" cy="202" r="10" fill="#c7d2fe"/>
+    <text x="112" y="207" font-size="12" fill="#334155">An Nguyễn</text>
+    <rect x="254" y="182" width="170" height="40" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="268" y="207" font-size="12" fill="#334155">📅 Thu · 14:00</text>
+    <rect x="72" y="238" width="352" height="36" rx="10" fill="#1e88e5"/>
+    <text x="248" y="261" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">Assign</text>
+  </g>
+
+  <!-- beam -->
+  <g>
+    <path d="M462 170 H 818" stroke="url(#beam)" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 10"/>
+    <g class="packet">
+      <rect x="470" y="152" width="120" height="36" rx="18" fill="url(#beam)"/>
+      <text x="530" y="175" text-anchor="middle" class="t" font-size="12" font-weight="700" fill="#fff">⚡ deadline</text>
+    </g>
+    <text x="640" y="140" text-anchor="middle" class="t" font-size="13" font-weight="700" fill="#4338ca">Automatic sync</text>
+    <text x="640" y="214" text-anchor="middle" class="t" font-size="12" fill="#64748b">no copy-paste, no reminders to set</text>
+  </g>
+
+  <!-- Personal calendar -->
+  <g class="t" filter="url(#sh)">
+    <rect x="832" y="48" width="400" height="244" rx="18" fill="#fff"/>
+  </g>
+  <g class="t">
+    <text x="856" y="84" font-size="12" font-weight="700" letter-spacing="2" fill="#8b5cf6">AN'S PERSONAL CALENDAR</text>
+    <g font-size="11" fill="#94a3b8" text-anchor="middle">
+      <text x="886" y="116">Mon</text><text x="954" y="116">Tue</text><text x="1022" y="116">Wed</text><text x="1090" y="116">Thu</text><text x="1158" y="116">Fri</text>
+    </g>
+    <g fill="#f8fafc" stroke="#eef2f7">
+      <rect x="856" y="126" width="60" height="148" rx="8"/>
+      <rect x="924" y="126" width="60" height="148" rx="8"/>
+      <rect x="992" y="126" width="60" height="148" rx="8"/>
+      <rect x="1060" y="126" width="60" height="148" rx="8"/>
+      <rect x="1128" y="126" width="60" height="148" rx="8"/>
+    </g>
+    <rect x="862" y="140" width="48" height="40" rx="6" fill="#ede9fe"/>
+    <text x="886" y="164" text-anchor="middle" font-size="10" fill="#5b21b6">Gym</text>
+    <rect x="930" y="190" width="48" height="50" rx="6" fill="#ede9fe"/>
+    <text x="954" y="219" text-anchor="middle" font-size="10" fill="#5b21b6">Class</text>
+    <rect x="1134" y="150" width="48" height="36" rx="6" fill="#ede9fe"/>
+    <text x="1158" y="172" text-anchor="middle" font-size="10" fill="#5b21b6">Club</text>
+    <g class="land">
+      <rect x="1064" y="176" width="52" height="58" rx="6" fill="#1e88e5"/>
+      <text x="1090" y="198" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">Báo cáo</text>
+      <text x="1090" y="212" text-anchor="middle" font-size="10" fill="#dbeafe">giữa kỳ</text>
+      <text x="1090" y="226" text-anchor="middle" font-size="9" fill="#bfdbfe">14:00</text>
+    </g>
+  </g>
+</svg>
