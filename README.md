@@ -1,246 +1,364 @@
-# ✨ UniGrid — Unified Workspace & Team Management
+<div align="center">
 
-[![Framework: .NET Core](https://img.shields.io/badge/Framework-.NET%20Core%2010.0-blueviolet?style=for-the-badge&logo=dotnet)](https://dotnet.microsoft.com/)
-[![Database: SQL Server](https://img.shields.io/badge/Database-SQL%20Server-red?style=for-the-badge&logo=microsoft-sql-server)](https://www.microsoft.com/sql-server)
-[![UI: Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind%20CSS-blue?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
-[![Interactions: Alpine.js](https://img.shields.io/badge/Interactions-Alpine.js-turquoise?style=for-the-badge&logo=alpine.js)](https://alpinejs.dev/)
+<img src="unigrid/wwwroot/assets/official-logo-256.png" alt="UniGrid logo" width="120" />
 
-> **A premium, high-visibility Workspace and Task Management platform designed specifically for students, academic clubs, and agile startup teams (3–10 members).**
+# UniGrid
 
----
+### One workspace for tasks, deadlines, files and team chat.
 
-## 📖 Table of Contents
-1. [Project Overview](#-project-overview)
-2. [Target Audience & System Actors](#-target-audience--system-actors)
-3. [Key Features](#-key-features)
-4. [Tech Stack Architecture](#-tech-stack-architecture)
-5. [Database Schema](#-database-schema)
-6. [Getting Started & Local Setup](#-getting-started--local-setup)
-7. [Security & gitignore Configuration](#-security--gitignore-configuration)
+**Built for student teams, academic clubs and small startups (3–10 people) who are tired of juggling Zalo, Messenger, Google Docs and a spreadsheet nobody updates.**
 
----
+<br/>
 
-## 🚀 Project Overview
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
+[![SignalR](https://img.shields.io/badge/Realtime-SignalR-0078D4?style=for-the-badge&logo=microsoft&logoColor=white)](https://learn.microsoft.com/aspnet/core/signalr/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Alpine.js](https://img.shields.io/badge/Alpine.js-3-8BC0D0?style=for-the-badge&logo=alpinedotjs&logoColor=white)](https://alpinejs.dev/)
+[![Docker](https://img.shields.io/badge/Docker-Render-46E3B7?style=for-the-badge&logo=docker&logoColor=white)](https://render.com/)
 
-**UniGrid** addresses the fragmentation that teams experience when working across scattered task sheets, isolated Google Docs, and messy messaging channels (Zalo, Messenger). It consolidates tasks, deadlines, shared files, and real-time chat into **one premium, highly loveable workspace interface**, solving accountability issues and missing timeline visibility.
+[**🌐 Live demo**](https://unigrid.onrender.com) · [**✨ Features**](#-features) · [**🚀 Quick start**](#-quick-start) · [**☁️ Deploy**](#️-deploy-render--supabase) · [**🏗️ Architecture**](#️-architecture)
 
-### 💡 The Competitive Edge
-* **Centralized Workspaces:** Combines Kanban boards, shared file repositories, and real-time SignalR chat rooms.
-* **Native Deadline Sync:** Assigning a task inside a workspace automatically propagates that deadline directly into the assignee's personal dashboard calendar.
-* **Transparent Contribution Metrics:** Computes real-time workspace member completion rates, helping prevent unequal workloads and the "free-rider" effect.
-* **Vibrant Glassmorphic Aesthetics:** Built using premium color palettes, soft HSL gradients, and reactive hover animations.
+<br/>
+
+<img src="unigrid/wwwroot/assets/hero-dashboard.png" alt="UniGrid dashboard" width="90%" />
+
+</div>
 
 ---
 
-## 👥 Target Audience & System Actors
+## 💡 Why UniGrid?
 
-### Target Audience
-* **Students:** Managing semester-long group work, research circles, or thesis cohorts.
-* **Small Startups:** Agile teams of 3–10 people demanding high speed without enterprise weight.
-* **Student Clubs:** Teams looking for a setup lighter than Jira but more structured and action-oriented than Notion.
+Group work usually breaks down the same way: tasks get lost in chat threads, deadlines live in someone's head, files are scattered across drives, and nobody can tell who actually did the work.
 
-### Core Actors
-1. **Guest:** Unauthenticated user. Can view the landing layout, read pricing comparisons, and register/login.
-2. **User (Member):** Authenticated collaborator. Joins workspaces via secure codes, acts on assigned tasks, registers schedules, and chats.
-3. **Workspace Owner (Leader):** Creates elevated workspaces, manages membership, creates/assigns tasks, and controls board reviews.
-4. **Admin (System):** Manages users, locking configurations, billing packages, and global transactions.
+UniGrid puts all of it in one place:
+
+| Problem | UniGrid's answer |
+| :--- | :--- |
+| 📌 "Who is doing this?" | Every task has **one assignee, one deadline, one status** |
+| 📅 "I forgot the deadline" | Assigned deadlines **sync straight into each member's personal calendar** |
+| 🫥 Free-riders | **Contribution metrics** show each member's completion rate |
+| 💬 Chat chaos | **One focused real-time group chat** per workspace |
+| 📂 "Where is that file?" | A **shared file repository** next to the tasks it belongs to |
+| 🏢 Many teams, no overview | **Federations** roll several workspaces up into one executive dashboard |
 
 ---
 
-## 🛠️ Key Features
+## ✨ Features
 
-### 📅 Native Calendar Sync & Dashboard
-* Core metric indicators summarizing total, overdue, and pending workloads.
-* Personalized calendar dynamically overlaying team deadlines onto personal events.
+<table>
+<tr>
+<td width="50%" valign="top">
 
-### 📋 Interactive Task Engine & Kanban Board
-* 4-state workflow board: `Todo` ➔ `In Progress` ➔ `Review` ➔ `Done`.
-* Dialog triggers displaying checkable checklists (subtasks), markdown descriptions, and collaborative comment feeds.
-* Elevates workspace leaders to review task completions, supporting **Approve & Close** or **Request Rework** pathways.
+### 📋 Kanban task engine
+- 4-stage board: `Todo` → `In Progress` → `Review` → `Done`
+- Drag-and-drop status changes
+- Priorities, deadlines, categories, comments
+- Leader review flow: **Approve & Close** or **Request Rework**
 
-### 💬 Real-Time Group Chat Room
-* Powered by ASP.NET Core SignalR for real-time messaging updates.
-* Restricted to exactly one group chat (`#general`) per Workspace to maximize focus and maintain MVP agility.
+</td>
+<td width="50%" valign="top">
 
-### 📂 Workspace File Repository
-* Shared document repository categorizing PDF Specs, Documents, Spreadsheets, and Image Assets.
-* Tracks storage metrics against standard billing limits, providing file details and click-to-download controls.
+### 📅 Native calendar sync
+- Personal schedule + team deadlines on one calendar
+- Assigning a task drops the deadline into the assignee's calendar automatically
+- Dashboard cards for total, pending and overdue work
 
-### 🌐 Federated Workspace Architecture (Enterprise Unified Governance)
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-The **Federated Workspace Architecture** provides senior executives, general managers, and administrative leads with a unified, high-level administrative viewpoint over multiple agile spaces.
+### 💬 Real-time chat
+- Powered by **ASP.NET Core SignalR** (WebSockets)
+- One `#general` room per workspace to keep teams focused
+- In-app notifications with a background worker
+
+</td>
+<td valign="top">
+
+### 📂 File repository
+- Shared workspace files, optionally attached to tasks
+- Storage quota per plan
+- Downloads gated by workspace membership
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🌐 Workspace federations
+- Link Business-tier workspaces into one federation
+- Aggregated progress, workload and activity for managers
+- No duplicated files: one source of truth
+
+</td>
+<td valign="top">
+
+### 📈 KPIs & analytics
+- Per-member KPI targets and completion tracking
+- Admin dashboard: users, subscriptions, traffic, monthly costs
+- Privacy-friendly page-view counts (no IPs, no cookies)
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 💳 Plans & payments
+- Tiers: **Free · Personal · Pro · Pro+ · Business**
+- Checkout via **payOS** with webhook confirmation
+- Billing history per workspace
+
+</td>
+<td valign="top">
+
+### 🤖 AI assistant *(optional)*
+- Chat widget backed by a Python **FastAPI + LangChain** service
+- Reads your schedule and tasks to answer and plan
+- Runs on Groq or a local Ollama model
+
+</td>
+</tr>
+</table>
+
+### 👥 Who uses it
+
+| Role | Can do |
+| :--- | :--- |
+| **Guest** | Browse the landing and pricing pages, sign up, log in (email or Google) |
+| **Member** | Join via code, work on assigned tasks, chat, upload files, manage their calendar |
+| **Workspace owner** | Create workspaces, invite/remove members, assign and review tasks, upgrade plans |
+| **Admin** | Manage users and subscriptions, lock accounts, review federations, traffic and costs |
+
+---
+
+## 🏗️ Architecture
 
 ```mermaid
-graph TD
-    subgraph CorporateWorkspaces["Enterprise Workspaces (Business / Federation Tier)"]
-        WS_DeptA["Workspace Department A<br>(Agile Team A)"]
-        WS_DeptB["Workspace Department B<br>(Agile Team B)"]
-        WS_DeptC["Workspace Department C<br>(Agile Team C)"]
+flowchart LR
+    subgraph Client["🖥️ Browser"]
+        UI["Razor Pages<br/>Tailwind + Alpine.js"]
+        WS["SignalR client"]
     end
 
-    subgraph ExecutiveLayer["Virtual Collaboration Layer (Executive Unified Governance)"]
-        FedPortal["Workspace Federation<br>(Executive Viewpoint & Aggregator)"]
+    subgraph App["⚙️ ASP.NET Core 10 (Docker)"]
+        Pages["Razor Pages"]
+        API["REST controllers<br/>/api/*"]
+        Hub["ChatHub<br/>/chatHub"]
+        Svc["Services<br/>Task · Workspace · File · Chat · Auth"]
+        Repo["Repositories + Unit of Work"]
+        Worker["Notification<br/>background worker"]
     end
 
-    subgraph ExecutiveViews["Senior Management / CEO Dashboard"]
-        MetricCards["Unified Task Progress & Burn-down"]
-        ActivityLogs["Cross-Workspace Activity Streams"]
-        ResourceAlloc["Resource Allocation & Bandwidth"]
+    subgraph Data["🗄️ Data"]
+        PG[("PostgreSQL<br/>Supabase")]
     end
 
-    WS_DeptA -->|Link Status & Metrics| FedPortal
-    WS_DeptB -->|Link Status & Metrics| FedPortal
-    WS_DeptC -->|Link Status & Metrics| FedPortal
+    subgraph Ext["🔌 External"]
+        Google["Google OAuth"]
+        PayOS["payOS"]
+        AI["AI assistant<br/>FastAPI + LangChain"]
+    end
 
-    FedPortal -->|Aggregates| MetricCards
-    FedPortal -->|Aggregates| ActivityLogs
-    FedPortal -->|Aggregates| ResourceAlloc
+    UI --> Pages
+    UI --> API
+    WS <--> Hub
+    Pages --> Svc
+    API --> Svc
+    Hub --> Svc
+    Svc --> Repo --> PG
+    Worker --> PG
+    Pages -.-> Google
+    API -.-> PayOS
+    API -.-> AI
+    AI -.-> PG
 ```
 
-* **Concept:** Connects independent workspaces of the **Federation or Business tier** into a unified workspace federation, providing a high-level viewpoint for senior management, general managers, and administrative leads.
-* **Executive Unified Governance:** Aggregates task progress metrics, workloads, resources allocation, and cross-workspace activity logs into a single centralized executive dashboard without duplicating physical file copies.
-* **Storage Regulations:** Workspaces share standard storage quotas. The "Personal Plan" functions as a single-user workspace. There are no private/non-private files functionalities in shared workspaces; all assets are visible under the workspace registry.
+**Layers**
+
+- **Presentation:** Razor Pages render the views, REST controllers (`Tasks`, `Events`, `Kpi`, `Notifications`, `Billing`, `Assistant`, `Auth`) power the interactive parts, and `ChatHub` handles real-time chat.
+- **Business logic:** `TaskService`, `WorkspaceService`, `FileService`, `ChatService`, `NotificationService`, `AuthService`, `AIAssistantService`.
+- **Data access:** EF Core with Npgsql, typed repositories and a Unit of Work, and retry policies for cloud database cold starts.
+
+### 🧰 Tech stack
+
+| Layer | Technology |
+| :--- | :--- |
+| Backend | ASP.NET Core 10 · Razor Pages · Web API · SignalR |
+| Database | PostgreSQL (Supabase) · Entity Framework Core 10 · Npgsql |
+| Frontend | Tailwind CSS · Alpine.js · Lucide icons |
+| Auth | Cookie auth · JWT bearer · Google OAuth |
+| Payments | payOS |
+| AI service | Python · FastAPI · LangChain · Groq / Ollama |
+| Hosting | Docker · Render · Supabase |
 
 ---
 
-## 💻 Tech Stack Architecture
+## 🗄️ Data model
 
-UniGrid is built on a unified, high-performance **SPA-hybrid** architecture leveraging Razor Pages, client-side reactive components, and a decoupled **Controller-Services-Pages-Repositories** layered clean design pattern:
-
-### 🏗️ Layered Clean Architecture
-* **Presentation Layer (Razor Pages & API Controllers):**
-  * ASP.NET Core 10.0 Razor Pages serving as light view-controllers for initial HTML rendering.
-  * High-speed REST API Controllers (`api/tasks`, `api/chat`, `api/files`, `api/members`) supporting AJAX dynamic components and drag-and-drop Kanban updates.
-* **Business Logic Layer (Services):**
-  * `IWorkspaceService` & `WorkspaceService`: Controls succession, invites, plan constraints, settings virtualization, and caches.
-  * `ITaskService` & `TaskService`: Oversees task creations, comment feeds, schedules cleanup, and SignalR socket dispatches.
-  * `IFileService` & `FileService`: Governs disk I/O, filename traversals security, and tier-based quota limit checks.
-  * `IChatService` & `ChatService`: Coordinates real-time group timelines and channel moderation boundaries.
-* **Data Access Layer (Repositories & Unit of Work):**
-  * Entity Framework Core (EF Core) utilizing SQL Server connection retry policies.
-  * Strongly-typed Repositories (`IWorkspaceRepository`, `ITaskRepository`, `IFileRepository`, `IMemberRepository`, `IChatRepository`) isolating EF queries.
-  * `IUnitOfWork` (Unit of Work pattern) securing atomic transactional commits.
-
-### 🛠️ Core Technology Stack
-* **Database:** Microsoft SQL Server (LocalDB / Express).
-* **Real-time Engine:** ASP.NET Core SignalR (WebSockets with fallback).
-* **Caching Layer:** `IMemoryCache` with central invalidation routines.
-* **Frontend Scripting:** Alpine.js (reactive state management, dynamic tab-swaps, calendar overlays).
-* **Styling & Assets:** Vanilla CSS, Tailwind CSS CDN responsive layouts, Lucide Icons.
-
----
-
-## 📊 Database Schema
-
-UniGrid utilizes a highly normalized SQL Server relational database. The Entity-Relationship Diagram (ERD) below illustrates how accounts, profiles, workspaces, members, tasks, and file storage map together:
-
-### 🧩 Entity-Relationship Diagram (ERD)
+The schema has 23 tables. These are the core relationships:
 
 ```mermaid
 erDiagram
-    Accounts ||--o{ Users : "owns user profiles"
-    Accounts ||--o{ Admins : "owns admin profiles"
-    Accounts ||--o{ Moderators : "owns mod profiles"
-    
-    Users ||--o{ Workspaces : "creates/owns workspaces (OwnerId)"
-    Users ||--o{ WorkspaceMembers : "joins as workspace member"
-    Workspaces ||--o{ WorkspaceMembers : "has members mapped"
-    
-    Workspaces ||--o{ Tasks : "contains tasks"
-    Users ||--o{ Tasks : "assigned tasks (AssigneeId)"
-    Tasks ||--o{ Subtasks : "contains checklists"
-    Tasks ||--o{ TaskComments : "has feedback comments"
-    Users ||--o{ TaskComments : "posts comments"
-    
-    Workspaces ||--o{ WorkspaceFiles : "stores files"
-    Users ||--o{ WorkspaceFiles : "uploads files"
-    Tasks ||--o{ WorkspaceFiles : "attaches files (optional)"
-    
-    Workspaces ||--o{ ChatRooms : "maps 1:1 chat room"
-    ChatRooms ||--o{ ChatMessages : "contains messages"
-    Users ||--o{ ChatMessages : "sends messages"
-    
-    Users ||--o{ PersonalSchedules : "registers custom events"
-    Tasks ||--o{ PersonalSchedules : "syncs deadlines to events"
-    Users ||--o{ Notifications : "receives alerts"
-    
-    Workspaces ||--o{ WorkspaceInvitations : "has invites"
-    Users ||--o{ WorkspaceInvitations : "invites users"
-    
-    Users ||--o{ WorkspaceFederations : "owns federations"
-    WorkspaceFederations ||--o{ WorkspaceFederationMembers : "maps members"
-    Users ||--o{ WorkspaceFederationMembers : "belongs to federations"
-    Workspaces ||--o{ WorkspaceFederationMembers : "maps personal workspace"
-    WorkspaceFederations ||--o{ WorkspaceFiles : "maps projected files"
+    Accounts ||--o{ Users : has
+    Accounts ||--o{ Admins : has
+    Accounts ||--o{ Moderators : has
+    Users ||--o{ Workspaces : owns
+    Users ||--o{ WorkspaceMembers : joins
+    Workspaces ||--o{ WorkspaceMembers : has
+    Workspaces ||--o{ Tasks : contains
+    Workspaces ||--o{ TaskCategories : defines
+    Tasks ||--o{ TaskComments : has
+    Workspaces ||--o{ WorkspaceFiles : stores
+    Workspaces ||--|| ChatRooms : has
+    ChatRooms ||--o{ ChatMessages : contains
+    Users ||--o{ PersonalSchedules : plans
+    Tasks ||--o{ PersonalSchedules : "syncs to"
+    Users ||--o{ Notifications : receives
+    Workspaces ||--o{ WorkspaceInvitations : issues
+    Workspaces ||--o{ Billings : pays
+    Workspaces ||--o{ KpiTargets : tracks
+    WorkspaceFederations ||--o{ WorkspaceFederationMembers : links
+    Workspaces ||--o{ WorkspaceFederationMembers : "belongs to"
 ```
 
-### 📋 Core Tables Metadata
-| Table | Description | Key Fields & Relationships |
-| :--- | :--- | :--- |
-| **Accounts** | Core security authentication identities | `Id` (PK), `Email` (Unique), `PasswordHash`, `Role` (Admin/User/Mod) |
-| **Users** | Core profiles of registered users | `Id` (PK), `AccountId` (FK), `FullName`, `SubscriptionTier` (Free/Pro/ProPlus) |
-| **Workspaces** | Team collaborative boundaries | `Id` (PK), `Name`, `JoinCode` (Unique), `OwnerId` (FK $\rightarrow$ Users), `PackageTier`, `SettingsJson` (virtual locks) |
-| **WorkspaceMembers**| Membership map and standard RBAC roles | `WorkspaceId` (PK/FK), `UserId` (PK/FK), `Role` (Owner/Manager/Member/Viewer), `DisplayRole`, custom permissions |
-| **Tasks** | Assignable deliverables & Kanban cards | `Id` (PK), `WorkspaceId` (FK), `AssigneeId` (FK), `Status` (0-Todo, 1-InProg, 2-Review, 3-Done), `Priority` |
-| **Subtasks** | Granular checkable checklist items | `Id` (PK), `TaskId` (FK), `Content`, `IsDone` (bool) |
-| **TaskComments** | Collaborative feedback feeds for tasks | `Id` (PK), `TaskId` (FK), `UserId` (FK), `Content`, `CreatedAt` |
-| **WorkspaceFiles** | Shared documents storage registry | `Id` (PK), `WorkspaceId` (FK), `UserId` (FK), `TaskId` (FK, optional), `FileName`, `FileType`, `FileSize`, `IsPublic` |
-| **ChatRooms** | 1:1 Workspace room association | `Id` (PK), `WorkspaceId` (FK, Unique) |
-| **ChatMessages** | Group real-time timeline logs | `Id` (PK), `RoomId` (FK), `SenderId` (FK), `Content` (channels/rules prefixed), `SentAt`, `IsDeleted` |
-| **PersonalSchedules**| Individual calendar dates and synced tasks | `Id` (PK), `UserId` (FK), `TaskId` (FK, optional), `Title`, `EventDate`, `TimeZone` |
-| **WorkspaceFederations**| Parent portal logical records | `Id` (PK), `Name`, `JoinCode` (Unique), `OwnerId` (FK) |
-| **WorkspaceFederationMembers**| Maps member nodes to parent portals | `FederationId` (PK/FK), `UserId` (PK/FK), `PersonalWorkspaceId` (FK $\rightarrow$ Workspaces) |
+The full PostgreSQL schema is in [`unigrid/Data/SupabaseSchema.sql`](unigrid/Data/SupabaseSchema.sql). You can also skip it: the app creates any missing tables on first start.
 
 ---
 
-## ⚙️ Getting Started & Local Setup
+## 🚀 Quick start
 
 ### Prerequisites
-* **.NET SDK 10.0** or higher
-* **Microsoft SQL Server** (LocalDB or Express)
-* **Visual Studio / VS Code** (with C# extensions)
 
-### 1. Database Initialization & Seeding
-1. Open your SQL Server terminal or management studio (SSMS).
-2. Connect to your database engine (default connection uses `localhost` with SQL authentication).
-3. Execute the dense mock seeding script located at:
-   ```bash
-   sqlcmd -S localhost -U sa -P 123 -i ../UniGridDB.sql
-   ```
-   *(Note: This seeds 5 core users (Alice, Bob, Charlie, Diana, Eve) with the password `password123`, 3 collaborative workspaces, 15 high-priority tasks, schedules, chat logs, and files).*
+- [.NET SDK 10](https://dotnet.microsoft.com/download)
+- A PostgreSQL database. A free [Supabase](https://supabase.com/) project works.
+- *(Optional)* Python 3.11+ for the AI assistant
 
-### 2. Configure the Backend Connection
-Ensure your connection strings in the inner project folder [appsettings.json](file:///e:/FPT/SE%20Semester%208/EXE201/UniGrid/unigrid/unigrid/appsettings.json) are properly configured:
+### 1. Clone
+
+```bash
+git clone https://github.com/Kayden2311/UniGrid.git
+```
+
+```bash
+cd UniGrid/unigrid
+```
+
+### 2. Configure local secrets
+
+Copy `appsettings.local.json.example` to `appsettings.local.json` and fill it in. This file is git-ignored and is only loaded in Development.
+
 ```json
-"ConnectionStrings": {
-  "DefaultConnection": "Server=localhost;Database=UniGridDb;User ID=sa;Password=123;TrustServerCertificate=True;MultipleActiveResultSets=true"
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=<pooler-host>;Port=5432;Database=postgres;Username=postgres.<project-ref>;Password=<password>;SSL Mode=Require;Trust Server Certificate=true"
+  },
+  "Authentication": {
+    "Google": { "ClientId": "<client-id>", "ClientSecret": "<client-secret>" }
+  },
+  "PayOS": {
+    "ClientId": "<id>", "ApiKey": "<key>", "ChecksumKey": "<checksum>",
+    "ReturnUrl": "http://localhost:5181/Pricing?payment=returned",
+    "CancelUrl": "http://localhost:5181/Pricing?payment=cancelled"
+  }
 }
 ```
 
-### 3. Restore and Run
-Navigate into the inner project workspace and execute the project:
+> 💡 In Supabase, click **Connect** → **Session pooler** to get the host and username.
+
+### 3. Run
+
 ```bash
-cd unigrid
-dotnet restore
 dotnet run
 ```
-Access the application on: **`http://localhost:5181`**
 
-### 🧪 Standard Login Credentials (Testing)
-* **Email:** `alice@student.edu`
-* **Password:** `password123`
+Open **http://localhost:5181**. On first start the app creates the database tables and default plan settings.
+
+### 4. *(Optional)* AI assistant
+
+```bash
+cd Python && pip install -r requirements.txt && uvicorn runeterra.api:app --port 8000
+```
+
+The web app calls it at `ChatbotService:BaseUrl` (default `http://127.0.0.1:8000/`).
 
 ---
 
-## 🔒 Security & gitignore Configuration
+## ☁️ Deploy (Render + Supabase)
 
-To protect database files, development environment secrets, and passwords, a robust `.gitignore` file has been added to the root directory.
+Both services have free tiers.
 
-It guarantees that the following elements are **never** committed to version control:
-* `.vs/` & `.vscode/` (user-specific workspace environments)
-* `bin/` & `obj/` (compiled binary builds)
-* `*.mdf` & `*.ldf` (active SQL Server attached database files)
-* `secrets.json`, `appsettings.local.json` & `.env` (local secret vaults)
+**1. Database: Supabase**
 
-> [!WARNING]
-> Always use environment variables or **User Secrets (`dotnet user-secrets`)** when deploying UniGrid to staging/production. Never hardcode passwords or production database credentials inside `appsettings.json`.
+Create a project, then run [`SupabaseSchema.sql`](unigrid/Data/SupabaseSchema.sql) in the **SQL Editor** (or let the app create the tables).
+
+**2. App: Render (Docker)**
+
+Create a **Web Service** from this repo:
+
+| Setting | Value |
+| :--- | :--- |
+| Language | Docker |
+| Root Directory | *(empty)* |
+| Dockerfile Path | `unigrid/Dockerfile` |
+| Docker Build Context | `unigrid` |
+| Health Check Path | `/` |
+
+**3. Environment variables**
+
+| Key | Required | Notes |
+| :--- | :---: | :--- |
+| `ConnectionStrings__DefaultConnection` | ✅ | Supabase session-pooler connection string |
+| `Jwt__Key` | ✅ | Random string, 32+ characters |
+| `Authentication__Google__ClientId` | ➖ | Google login |
+| `Authentication__Google__ClientSecret` | ➖ | Google login |
+| `PayOS__ClientId` · `PayOS__ApiKey` · `PayOS__ChecksumKey` | ➖ | Payments |
+| `PayOS__ReturnUrl` · `PayOS__CancelUrl` · `PayOS__WebhookUrl` | ➖ | `https://<app>.onrender.com/...` |
+| `ChatbotService__BaseUrl` | ➖ | URL of the deployed AI service |
+
+**4. After the first deploy**
+
+- Add `https://<app>.onrender.com/signin-google` to your Google OAuth redirect URIs.
+- Register `https://<app>.onrender.com/api/billing/payos-webhook` as the payOS webhook.
+
+> ⚠️ **Free tier limits:** Render free instances sleep after ~15 minutes of inactivity, so the first request is slow. The container disk is temporary, so uploaded files and data-protection keys are reset on each redeploy.
+
+---
+
+## 📁 Project structure
+
+```
+UniGrid/
+├── README.md
+├── unigrid.slnx
+└── unigrid/
+    ├── Controllers/      # REST API endpoints
+    ├── Data/             # DbContext, initializer, repositories, SQL schema
+    ├── Hubs/             # SignalR ChatHub
+    ├── Models/           # EF Core entities
+    ├── Pages/            # Razor Pages (Dashboard, Workspaces, Admin, ...)
+    ├── Services/         # Business logic + background worker
+    ├── Python/           # AI assistant (FastAPI + LangChain)
+    ├── wwwroot/          # CSS, JS, images
+    ├── Dockerfile
+    └── Program.cs
+```
+
+---
+
+## 🔒 Security notes
+
+- Secrets never go in `appsettings.json`. Use `appsettings.local.json` locally (git-ignored) and environment variables in production.
+- File downloads under `/files/{workspaceId}/...` check workspace ownership or membership.
+- Traffic analytics store only aggregated page-view counts per day and path.
+
+---
+
+<div align="center">
+
+Made with 💜 by the **UniGrid** team at FPT University
+
+⭐ If UniGrid helps your team, give the repo a star!
+
+</div>
